@@ -15,7 +15,11 @@ async function writeHtml(metafile) {
   if (!entry) throw new Error('No se encontró el bundle principal');
   const [jsPath, info] = entry;
   const cssPath = info.cssBundle;
-  const { site } = await import(resolve(root, 'shared/site.config.ts') + `?t=${Date.now()}`).catch(() => ({ site: null }));
+  const siteUrl = pathToFileURL(resolve(root, 'shared/site.config.ts')).href + `?t=${Date.now()}`;
+  const { site } = await import(siteUrl).catch((err) => {
+    console.error('Could not load shared/site.config.ts; HTML placeholders will not be replaced:', err);
+    return { site: null };
+  });
   let html = await readFile(resolve(root, 'client/index.html'), 'utf8');
   html = html
     .replace('<!--CSS-->', cssPath ? `<link rel="stylesheet" href="/assets/${basename(cssPath)}">` : '')
