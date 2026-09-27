@@ -106,6 +106,25 @@ export function buildRig(root: THREE.Object3D): ElevatorRig {
   };
 }
 
+/** Nodos de nivel superior que no forman parte de la fachada visible desde el lobby. */
+const FACADE_EXCLUDE = new Set(['Ground', 'OccluderWall', 'Cabin']);
+
+/**
+ * Extensión (ancho/alto, en unidades del mundo) de la fachada del ascensor: arco, puertas,
+ * indicador, escalones, botonera. Se calcula una vez tras cargar el modelo (no se hardcodea:
+ * sirve igual para el placeholder que para un futuro GLB) excluyendo el piso, la pared
+ * oculta y el interior de la cabina, que no son parte de lo que se ve desde afuera.
+ */
+export function computeFacadeBounds(root: THREE.Object3D): { width: number; height: number } {
+  const box = new THREE.Box3();
+  for (const child of root.children) {
+    if (FACADE_EXCLUDE.has(child.name)) continue;
+    box.expandByObject(child);
+  }
+  if (box.isEmpty()) box.expandByObject(root); // resguardo: nada reconocible, usamos todo
+  return { width: box.max.x - box.min.x, height: box.max.y - box.min.y };
+}
+
 /** Carga un GLB (solo si está configurado). GLTFLoader se descarga recién acá. */
 export async function loadGlb(url: string): Promise<THREE.Object3D> {
   const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');

@@ -267,6 +267,7 @@ export function buildPlaceholder(): THREE.Group {
 
   // Piso exterior
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshStandardMaterial({ color: 0x0f0f12, roughness: 1 }));
+  ground.name = 'Ground'; // se excluye del cálculo de bounds de la fachada (ver rig.ts)
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.36;
   ground.position.z = 3;

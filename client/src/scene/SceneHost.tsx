@@ -4,6 +4,7 @@ import { useExperience } from '../core/experience.ts';
 import { usePlayer } from '../core/player/hooks.ts';
 import { report3DFailure, usePrefs } from '../core/preferences.ts';
 import { useRelease } from '../core/release.ts';
+import { useSceneFrame } from '../core/sceneFrame.ts';
 import { Scene2D } from './two/Scene2D.tsx';
 import type { SceneProps } from './types.ts';
 
@@ -45,6 +46,7 @@ export function SceneHost() {
   const player = usePlayer();
   const prefs = usePrefs();
   const layout = useLayout();
+  const frame = useSceneFrame();
   const [load3D, setLoad3D] = useState(false);
   const [ready3D, setReady3D] = useState(false);
 
@@ -70,6 +72,7 @@ export function SceneHost() {
     playing: player.status === 'playing',
     reducedMotion: prefs.reducedMotion,
     layout,
+    frame,
   };
 
   const use3D = prefs.scene === '3d' && load3D;

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { SceneProps } from '../types.ts';
 import { BG, buildPlaceholder } from './placeholder.ts';
-import { buildRig, loadGlb, type ElevatorRig, type Pose } from './rig.ts';
+import { buildRig, computeFacadeBounds, loadGlb, type ElevatorRig, type Pose } from './rig.ts';
 
 /**
  * Escena 3D del ascensor (three.js, sin dependencias extra).
@@ -46,6 +46,8 @@ export class ElevatorStage {
   private prisma = false;
   private camPose: Pose;
   private invalidated = true;
+  /** Ancho/alto de la fachada del ascensor (unidades del mundo); se mide una vez tras cargar el modelo. */
+  private facade = { width: 1.6, height: 2.6 };
 
   // rendimiento
   private slowFrames = 0;
@@ -84,6 +86,8 @@ export class ElevatorStage {
     if (this.disposed) return;
     this.rig = buildRig(root);
     this.scene.add(root);
+    root.updateMatrixWorld(true);
+    this.facade = computeFacadeBounds(root);
 
     // Luces
     this.scene.add(new THREE.AmbientLight(0x8890a8, 0.35));
@@ -279,7 +283,7 @@ export class ElevatorStage {
       }
     } else this.cabinLight.position.y = 2.6;
     cam.fov = pose.fov;
-    this.applyFraming(p.layout, p.view);
+    this.applyFraming(p.layout, p.view, p.frame, pose);
     cam.lookAt(pose.target);
 
     // Polvo en suspensión
@@ -298,17 +302,36 @@ export class ElevatorStage {
   }
 
   /** Encuadre: en celular el ascensor va arriba (abajo está el formulario); en escritorio, a la izquierda. */
-  private applyFraming(layout: SceneProps['layout'], view: SceneProps['view']) {
+  private applyFraming(layout: SceneProps['layout'], view: SceneProps['view'], frame: SceneProps['frame'], pose: Pose) {
     const { w, h } = this.size;
     const cam = this.camera;
     cam.aspect = w / h;
     if (view === 'lobby' || view === 'entering') {
       const fade = view === 'entering' && this.enterStart >= 0 ? 1 - clamp01((performance.now() - this.enterStart) / 700) : 1;
       if (layout === 'mobile') {
-        // alejamos la cámara en pantallas verticales para que entre la puerta completa
-        const portrait = w / h < 0.8;
-        if (portrait) cam.position.z *= 1 + 0.9 * fade;
-        cam.setViewOffset(w, h, 0, h * 0.2 * fade, w, h);
+        if (frame && frame.height > 0) {
+          // Encuadramos contra el rect real del stage-window (medido por el Lobby) en vez de
+          // asumir que el header entra en ~7vh: alejamos la cámara lo que haga falta para que
+          // el ascensor entre en el hueco, y desplazamos verticalmente la vista para centrarlo ahí.
+          const TARGET_FRACTION = 0.88;
+          const tanHalfFov = Math.tan((cam.fov * Math.PI) / 360);
+          const distForHeight = (this.facade.height * h) / (TARGET_FRACTION * frame.height * 2 * tanHalfFov);
+          const distForWidth = this.facade.width / (TARGET_FRACTION * 2 * tanHalfFov * cam.aspect);
+          const distNeeded = Math.max(distForHeight, distForWidth);
+          const baseDist = pose.pos.z - pose.target.z;
+          const rawFactor = baseDist > 0 ? distNeeded / baseDist : 1;
+          const clampedFactor = Math.min(3.5, Math.max(1, rawFactor));
+          const factor = 1 + (clampedFactor - 1) * fade; // vuelve a neutro (1) cuando fade → 0
+          cam.position.z = pose.target.z + baseDist * factor;
+
+          const frameCenterY = frame.top + frame.height / 2;
+          cam.setViewOffset(w, h, 0, (h / 2 - frameCenterY) * fade, w, h);
+        } else {
+          // Sin medición del stage-window: comportamiento previo (asume header ~7vh).
+          const portrait = w / h < 0.8;
+          if (portrait) cam.position.z *= 1 + 0.9 * fade;
+          cam.setViewOffset(w, h, 0, h * 0.2 * fade, w, h);
+        }
       } else {
         cam.setViewOffset(w, h, w * 0.2 * fade, 0, w, h);
       }

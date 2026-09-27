@@ -1,8 +1,10 @@
+import { useEffect, useRef } from 'react';
 import { site } from '../../../shared/site.config.ts';
 import { formatRelease, splitCountdown } from '../../../shared/time.ts';
 import { enterElevator } from '../core/experience.ts';
 import { usePrefs } from '../core/preferences.ts';
 import { useCountdown, useRelease } from '../core/release.ts';
+import { setSceneFrame } from '../core/sceneFrame.ts';
 import { DevBadge, Links, PrefsBar, toast } from './common.tsx';
 import { SubscribeForm } from './SubscribeForm.tsx';
 
@@ -34,16 +36,40 @@ export function Lobby({ leaving }: { leaving: boolean }) {
   const prefs = usePrefs();
   const t = site.texts;
   const released = r.phase === 'open';
+  const headRef = useRef<HTMLElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+
+  // Publicamos el rect del stage-window para que la escena (2D/3D) encuadre el ascensor
+  // sin taparlo con el header. El header cambia de alto con el ancho/tipografía, así que
+  // también lo observamos a él (mueve al stage-window aunque su propio tamaño no cambie).
+  useEffect(() => {
+    const stageEl = stageRef.current;
+    if (!stageEl) return;
+    const measure = () => {
+      const rect = stageEl.getBoundingClientRect();
+      setSceneFrame({ top: rect.top + window.scrollY, height: rect.height });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(stageEl);
+    if (headRef.current) ro.observe(headRef.current);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+      setSceneFrame(null);
+    };
+  }, []);
 
   return (
     <div className={`lobby${leaving ? ' is-leaving' : ''}`}>
-      <header className="lobby__head">
+      <header className="lobby__head" ref={headRef}>
         <p className="band">{site.band}</p>
         <h1 className="album">{site.album}</h1>
       </header>
 
       {/* Espacio donde se ve la escena (el ascensor) */}
-      <div className="stage-window" aria-hidden="true" />
+      <div className="stage-window" ref={stageRef} aria-hidden="true" />
 
       <section className="lobby__status" aria-live="polite">
         {r.phase === 'loading' && <p className="status-line">Consultando al ascensorista…</p>}

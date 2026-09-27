@@ -14,10 +14,14 @@ export function Scene2D(p: SceneProps & { hidden?: boolean }) {
     p.mood?.special === 'prisma' ? 'is-prisma' : '',
     p.hidden ? 'is-hidden' : '',
   ].join(' ');
+  // En mobile, si ya medimos el stage-window del Lobby, encuadramos el ascensor ahí en vez de
+  // usar los vh fijos (que asumen un header más bajo del que en verdad ocupa).
+  const frame = p.layout === 'mobile' ? p.frame : null;
+  const lobbyStyle = frame ? { top: frame.top, height: frame.height } : undefined;
   return (
     <div className={cls} style={{ ['--mood' as string]: p.mood?.color ?? '#fff2cc', ['--mood-glow' as string]: p.mood?.glow ?? '#5a4d2a' }}>
       {/* Exterior */}
-      <svg className="scene2d__lobby" viewBox="0 0 400 400" aria-hidden="true">
+      <svg className="scene2d__lobby" style={lobbyStyle} viewBox="0 0 400 400" aria-hidden="true">
         <defs>
           <linearGradient id="spill" x1="1" x2="0" y1="0" y2="0">
             <stop offset="0" stopColor="#fff6d0" stopOpacity="0.75" />

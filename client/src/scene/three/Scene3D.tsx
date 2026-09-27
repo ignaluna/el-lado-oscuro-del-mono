@@ -56,6 +56,7 @@ export default function Scene3D(props: SceneProps & Scene3DCallbacks) {
     props.playing,
     props.reducedMotion,
     props.layout,
+    props.frame,
   ]);
 
   return <canvas ref={canvasRef} className="stage__canvas" />;

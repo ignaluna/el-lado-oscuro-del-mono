@@ -17,6 +17,8 @@ export type SceneProps = {
   playing: boolean;
   reducedMotion: boolean;
   layout: 'mobile' | 'desktop';
+  /** Rect (px, documento) del stage-window del Lobby; null si no se pudo medir. Solo se usa en mobile. */
+  frame: { top: number; height: number } | null;
 };
 
 export type Scene3DCallbacks = {
