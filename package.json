@@ -1,0 +1,38 @@
+{
+  "name": "el-lado-oscuro-del-mono",
+  "private": true,
+  "version": "0.1.0",
+  "description": "MVP web de lanzamiento de 'El Lado Oscuro del Mono' — Monos del Ambiente",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env server/index.ts",
+    "dev:cerrado": "tsx watch server/index.ts --dev-release=closed",
+    "dev:abierto": "tsx watch server/index.ts --dev-release=open",
+    "dev:estreno30": "tsx server/index.ts --dev-release=in:30",
+    "build": "tsx scripts/build-client.mjs",
+    "start": "tsx --env-file-if-exists=.env server/index.ts --production",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "verify:e2e": "tsx scripts/verify-e2e.mjs",
+    "demo-audio": "node scripts/generate-demo-audio.mjs",
+    "export:inscripciones": "tsx scripts/export-subscribers.ts"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "three": "^0.184.0",
+    "tsx": "^4.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/three": ">=0.170.0",
+    "esbuild": "^0.27.0",
+    "playwright": "^1.56.0",
+    "typescript": "^5.9.0"
+  }
+}

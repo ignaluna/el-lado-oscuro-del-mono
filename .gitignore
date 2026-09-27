@@ -1,0 +1,7 @@
+node_modules/
+client/dist/
+data/
+.env
+# Audios reales: NUNCA al repo público
+server/private-audio/*
+!server/private-audio/LEEME.md
