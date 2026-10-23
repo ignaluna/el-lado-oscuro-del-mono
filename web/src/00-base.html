@@ -223,7 +223,7 @@ button{font-family:inherit;color:inherit}
 .conf-sub{margin:0;font-family:var(--f-mono);font-size:13px;line-height:1.45;color:rgba(235,229,213,.65)}
 @media (max-width:720px){
   #plate-wrap{align-items:flex-end;justify-content:center;padding:0 8px calc(env(safe-area-inset-bottom,0px) + 8px)}
-  #plate{width:100%;min-width:0;max-height:76vh;padding:22px 20px 20px;transform:none}
+  #plate{width:100%;min-width:0;max-height:min(76vh, calc(100% - 16px - var(--mini-reserve, 0px)));padding:22px 20px 20px;transform:none} /* room above it for a minimized player */
   #plate.folded{transform:scale(.04)}
 }
 #privacy{position:fixed;z-index:25;left:50%;top:50%;width:min(460px,calc(100vw - 32px));max-height:80vh;overflow:auto;transform:translate(-50%,-50%);padding:26px 28px 22px;background-color:#0d0d10;background-image:var(--metal-noise,none);
@@ -1240,7 +1240,7 @@ class PlayerPortal {
     }
     // Spotify: a track player also offers the whole album; link mode always offers it (the album is the fallback).
     if (!yt && (this.o.trackUri || this.mode === 'link')) this.links.append(h('a', { href: this.albumUrl(), target: '_blank', rel: 'noopener', text: COPY.openAlbum }));
-    if (this.kind === 'floor') this.links.append(h('button', { class: 'portal-mini', type: 'button', 'aria-pressed': String(!!this.mini),
+    if (PlayerPortal.canMini(this.kind)) this.links.append(h('button', { class: 'portal-mini', type: 'button', 'aria-pressed': String(!!this.mini),
       'aria-label': this.mini ? COPY.playerMaxAria : COPY.playerMinAria, text: this.mini ? COPY.playerMax : COPY.playerMin, onclick: () => this.setMini(!this.mini) }));
     if (this.o.closable) this.links.append(h('button', { class: 'portal-close', type: 'button', text: COPY.close, onclick: () => this.o.onClose && this.o.onClose() }));
   }
@@ -1350,7 +1350,10 @@ class PlayerPortal {
     requestAnimationFrame(() => f.remove());
   }
 
-  /** Pauses (never destroys) when the tab is hidden. */
+  /** The page went out of sight (another tab or app). YouTube pauses: its rules allow no background player.
+   *  Spotify goes on. Never destroyed on hide. */
+  pageHidden() { if (this.provider === 'youtube') this.pause(); }
+
   pause() {
     if (!this.iframe) return;
     try {
@@ -1372,10 +1375,15 @@ class PlayerPortal {
     this.el.classList.toggle('mini', !!this.mini);
     const blockH = 22 + m.ih + 2 * m.pad + 8 + 46;
     if (slim) { // minimized or slim: anchored to the lower right corner, out of the way of the walking thumb; a note
-      // grows it upwards and its row of controls (on top of the frame) always stays on screen
-      s.left = Math.round(m.W - m.blockW - 10) + 'px';
-      s.top = 'auto';
-      s.bottom = `calc(env(safe-area-inset-bottom, 0px) + ${m.phone ? 12 : m.H < 520 ? 8 : 40}px)`; // wide: clear of the DEV chip
+      // grows it upwards and its row of controls (on top of the frame) always stays on screen. The page may place a
+      // minimized player elsewhere (o.place) to keep it clear of its own buttons and panels.
+      const at = (this.mini && this.o.place && this.o.place(m, this.el.offsetHeight)) || {};
+      s.left = Math.round(at.left != null ? at.left : m.W - m.blockW - 10) + 'px';
+      if (at.top != null) { s.top = `calc(env(safe-area-inset-top, 0px) + ${Math.round(at.top)}px)`; s.bottom = 'auto'; }
+      else {
+        s.top = 'auto';
+        s.bottom = `calc(env(safe-area-inset-bottom, 0px) + ${Math.round(at.bottom != null ? at.bottom : m.phone ? 12 : m.H < 520 ? 8 : 40)}px)`; // wide: clear of the DEV chip
+      }
     } else if (m.phone) {
       s.left = Math.round((m.W - m.blockW) / 2) + 'px';
       s.top = 'auto';
@@ -1395,17 +1403,20 @@ class PlayerPortal {
   /** 'compact' tucks the player into the lower right corner on wide screens: same frame, never reloaded. */
   setDock(d) { if (this.dock === d || this.destroyed) return; this.dock = d; this.layout(); }
 
-  /** Minimized: same frame, never reloaded or hidden, so the song goes on; the choice holds for the visit. */
+  /** Minimized: same frame, never reloaded or hidden, so the song goes on. On the worlds the choice holds for the
+   *  visit; "Mientras esperás" opens full size every time. */
   setMini(v) {
-    if (this.destroyed || this.kind !== 'floor' || !!this.mini === !!v) return;
+    if (this.destroyed || !PlayerPortal.canMini(this.kind) || !!this.mini === !!v) return;
     this.mini = !!v;
-    store.session.set('eldom.mini', v ? '1' : '0');
+    if (this.kind === 'floor') store.session.set('eldom.mini', v ? '1' : '0');
     this.renderLinks();
+    if (this.o.onMini) this.o.onMini(this.mini); // the page frees (or takes back) its view before the player moves
     this.layout();
     const b = this.links.querySelector('.portal-mini');
     if (b) b.focus({ preventScroll: true });
     this.emit();
   }
+  static canMini(kind) { return kind === 'floor' || kind === 'listen'; }
 
   /** Rectangle the iframe will occupy for a given kind/provider/alignment (same maths as layout()). */
   static expectedRect(kind, provider, align) {

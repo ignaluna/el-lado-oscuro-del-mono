@@ -82,6 +82,12 @@ function syncUI() {
   note.hidden = !(p === 'prelaunch' && pend); go.hidden = !(p === 'open' && pend);
   if (pend) { note.textContent = `Te invitaron a «${pend.title}». Abre cuando llegue el ascensor.`; go.textContent = `Te invitaron a «${pend.title}» — entrar`; }
   $('#captions').classList.toggle('busy', !!ov);
+  { // a minimized "Mientras esperás" follows what is open; on phones the sign-up plate makes room below it
+    const lp = Listen.portal(), mini = !!(lp && lp.mini);
+    document.documentElement.style.setProperty('--mini-reserve', mini && ov === 'form' && window.innerWidth <= 720 ? Listen.TOP + lp.el.offsetHeight + 12 + 'px' : '0px');
+    $('#captions').style.paddingRight = '';
+    if (mini) lp.layout();
+  }
   $('#book-open').hidden = !(Book.state.found && !ov && (ext || p === 'cabin' || p === 'floor' || p === 'gallery'));
   Hot.enable((id) => {
     if (id === 'call') return p === 'prelaunch' && !ov;
@@ -224,7 +230,11 @@ const Register = {
 };
 
 const Listen = {
+  /** The "Mientras esperás" player, when it is on screen (full size or minimized). */
+  portal() { const p = PlayerPortal.current; return p && p.kind === 'listen' ? p : null; },
   ask() {
+    const playing = this.portal();
+    if (playing && playing.mini && !App.overlay) { playing.setMini(false); return; } // already sounding: bring it back
     if (world.phase !== 'prelaunch' || App.overlay) return;
     App.overlay = 'question';
     this.restore = document.activeElement;
@@ -236,18 +246,56 @@ const Listen = {
     if (world.phase !== 'prelaunch') return;
     $('#question').hidden = true;
     App.overlay = 'listen';
-    openPortal({ provider, kind: 'listen', videoId: DEMO_ALBUM.youtubeVideoId, start: 0, trackUri: null, albumId: DEMO_ALBUM.spotifyAlbumId, title: DEMO_ALBUM.title, closable: true, onClose: () => Listen.close() }, '#ebe5d5');
+    openPortal({ provider, kind: 'listen', videoId: DEMO_ALBUM.youtubeVideoId, start: 0, trackUri: null, albumId: DEMO_ALBUM.spotifyAlbumId, title: DEMO_ALBUM.title, closable: true,
+      onClose: () => Listen.close(), onMini: (v) => Listen.minimized(v), place: (m, h) => Listen.place(m, h) }, '#ebe5d5');
     bakeWalk();
-    Seq.run('cam', async (c) => { c.spawn((cc) => cc.to(world, { exposure: 0.86 }, 1)); c.spawn((cc) => cc.to(world.countdown, { dim: aspectNow() < 1.2 ? 0 : 0.45 }, 1)); await toPose(c, poseFromShot(Shots.listen(aspectNow())), rm(1.6)); });
+    this.view(true);
     syncUI();
   },
+  /** Minimized, the song goes on and the entrance is free again (sign up, look around); expanded, the listening view. */
+  minimized(v) {
+    if (world.phase !== 'prelaunch') return;
+    if (v && App.overlay === 'listen') { App.overlay = null; this.view(false); }
+    else if (!v && !App.overlay) { App.overlay = 'listen'; this.view(true); }
+    syncUI();
+  },
+  /** Where the minimized player waits: clear of the entrance buttons, of the sign-up plate and of the DEV chip. */
+  place(m, h) {
+    const left = m.W - m.blockW - 10, caps = $('#captions');
+    caps.style.paddingRight = '';
+    if (App.overlay === 'form') return window.innerWidth <= 720 ? { left, top: Listen.TOP } : { left: 10, bottom: 40 }; // phones: above the plate
+    const base = m.phone ? 12 : m.H < 520 ? 8 : 40;
+    const lifted = () => { // above any entrance button it would cover
+      let bottom = base;
+      for (const el of caps.children) {
+        if (el.hidden) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width && r.right > left && r.left < left + m.blockW && r.bottom > m.H - bottom - h) bottom = Math.max(bottom, m.H - r.top + 8);
+      }
+      return bottom;
+    };
+    let bottom = lifted();
+    if (m.H - bottom - h < Listen.TOP) { caps.style.paddingRight = m.blockW + 20 + 'px'; bottom = lifted(); } // no room above them (a phone lying down): they step aside
+    return { left, bottom };
+  },
+  /** Least distance from the top of the screen: below the sound toggle. */
+  TOP: 46,
+  /** The camera: the listening framing while the player is open full size, the entrance otherwise. */
+  view(on) {
+    if (on) Seq.run('cam', async (c) => { c.spawn((cc) => cc.to(world, { exposure: 0.86 }, 1)); c.spawn((cc) => cc.to(world.countdown, { dim: aspectNow() < 1.2 ? 0 : 0.45 }, 1)); await toPose(c, poseFromShot(Shots.listen(aspectNow())), rm(1.6)); });
+    else if (world.phase === 'prelaunch') Seq.run('cam', async (c) => { c.spawn((cc) => cc.to(world, { exposure: 1 }, 1)); c.spawn((cc) => cc.to(world.countdown, { dim: 1 }, 1)); await toPose(c, poseFromShot(Shots.spawn(aspectNow())), rm(1.4)); });
+  },
+  /** Ends it from any state: the question, the listening view, or minimized while the visitor does something else. */
   close() {
-    if (App.overlay !== 'question' && App.overlay !== 'listen') return;
+    const viewing = App.overlay === 'question' || App.overlay === 'listen';
+    if (!viewing && !this.portal()) return;
     $('#question').hidden = true;
-    closePortal();
-    App.overlay = null;
-    if (this.restore && this.restore.focus && document.contains(this.restore)) this.restore.focus({ preventScroll: true });
-    if (world.phase === 'prelaunch') Seq.run('cam', async (c) => { c.spawn((cc) => cc.to(world, { exposure: 1 }, 1)); c.spawn((cc) => cc.to(world.countdown, { dim: 1 }, 1)); await toPose(c, poseFromShot(Shots.spawn(aspectNow())), rm(1.4)); });
+    if (viewing || this.portal()) closePortal();
+    if (viewing) {
+      App.overlay = null;
+      if (this.restore && this.restore.focus && document.contains(this.restore)) this.restore.focus({ preventScroll: true });
+      this.view(false);
+    }
     syncUI();
   },
 };
@@ -1003,7 +1051,7 @@ function initUI() {
   let rz = 0;
   window.addEventListener('resize', () => { cancelAnimationFrame(rz); rz = requestAnimationFrame(() => { R.resize(); reframe(); if (App.overlay === 'invite') Invite.place(); if (App.overlay === 'book') Book.place(); if (!$('#lv-tip').hidden) Level.place($('#lv-tip')); if (App.overlay === 'level') Level.place($('#lv-card')); }); });
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { stopLoop(); Sound.suspend(); if (PlayerPortal.current) PlayerPortal.current.pause(); }
+    if (document.hidden) { stopLoop(); Sound.suspend(); if (PlayerPortal.current) PlayerPortal.current.pageHidden(); }
     else { Sound.resume(); startLoop(); }
   });
   const mq = matchMedia('(prefers-reduced-motion: reduce)');
