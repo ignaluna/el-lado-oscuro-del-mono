@@ -27,7 +27,7 @@ or look around while it plays, and any hidden tab paused it (our own rule, `visi
       back; plate room on phones; DESIGN.md lifecycle line.
 - [x] L2 Checks: harness `waiting` scenario (desktop, mobile, landscape) + regression of the affected scenarios
       (listen, form, mini, integrations listen part, tour, smoke) + dist.
-- [ ] L3 Commit, PR, Netlify preview.
+- [x] L3 Commit, PR, Netlify preview.
 
 ## Acceptance criteria
 Minimized, the demo keeps sounding while the visitor signs up; the player never covers the entrance buttons or the
@@ -52,5 +52,9 @@ plate; AMPLIAR and CERRAR work from the minimized state; a hidden page leaves Sp
   (landscape, roam, tour, level, mini, waiting) 6/6, own-domain build `--dist` on mobile (selftest, waiting,
   integrations floor 1) green, no CSP violations.
 
+- L3: commit f0ae32e (+221 −19). Review assess (base 9e21782): medium (executable change), 240 lines → not due
+  (`under_budget`). Branch `feat/listen-mini` → PR to `main`.
+
 ## Next step
-L3: commit, PR, Netlify preview.
+User: look at the Netlify preview on a phone (Spotify sample → "CONTINUAR EN SPOTIFY"; minimized while signing up),
+then merge.
