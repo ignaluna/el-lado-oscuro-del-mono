@@ -22,8 +22,8 @@ hand. Changes need a reviewable path: PR → preview → merge → live.
 
 ## Tasks
 - [x] G1 Branch + `web/` with the website (src, tools, docs), repo-relative Playwright, `.gitignore`, README.
-- [ ] G2 Netlify: root `netlify.toml` (contexts production / deploy-preview / branch-deploy), docs, root README link.
-- [ ] G3 Verify: builds as Netlify will run them (production and preview), harness from the repo, then push + PR.
+- [x] G2 Netlify: root `netlify.toml` (contexts production / deploy-preview / branch-deploy), docs, root README link.
+- [x] G3 Verify: builds as Netlify will run them (production and preview), harness from the repo, then push + PR.
 
 ## Acceptance criteria
 From the repo: `node web/tools/build.cjs` reproduces the published page; the harness runs with the repo's Playwright;
@@ -33,5 +33,14 @@ From the repo: `node web/tools/build.cjs` reproduces the published page; the har
 - 2026-10-23: document created (3 tasks). G1: website copied from `el-lado-oscuro-del-mono-web` (the permanent copy of
   the v10 project), local absolute paths removed (check.cjs, sheet.cjs → `require('playwright')`; DESIGN.md root).
 
+- G1 checks (from the repo, worktree `el-lado-oscuro-del-mono-wt-web`): `node web/tools/build.cjs` → artifact
+  identical to v10 (`cmp`); `check.cjs --syntax` OK; `--scenario smoke,cabin,mini --viewport mobile` green with the
+  repo's Playwright. Commit 61e2b61 (31 files, +9771).
+- G2/G3 checks: production build (`URL=https://el-lado-oscuro.netlify.app`) → DEV hidden, invitations and og:image on
+  that address; preview build (`DEPLOY_PRIME_URL=https://deploy-preview-1--…`) → DEV shown, both on the preview; empty
+  `$URL` falls back to the page address. Preview build with its `_headers` (`--dist`): smoke, selftest (18/18
+  players), mini green on desktop. TOML not machine-validated (no parser available locally): plain tables and strings.
+
 ## Next step
-G2.
+User: connect Netlify to the repo (Import an existing project → GitHub), then a first small PR to see the preview.
+Railway: if it deploys from this repo, set Watch Paths so web/ changes do not redeploy the app.

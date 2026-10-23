@@ -32,13 +32,27 @@ las pruebas.
    node web/tools/check.cjs --scenario smoke,cabin,mini --viewport both
    ```
 
-3. Abrí el PR a `main`.
+3. Abrí el PR a `main`. Netlify arma una vista previa con el botón DEV y deja el enlace en el PR.
+4. Al mergear, Netlify publica la web final, sin el botón DEV.
 
-## Publicación
+## Publicación (Netlify)
 
-`node web/tools/build.cjs --release --site https://DIRECCION` deja en `web/dist/` los cuatro archivos para subir a
-cualquier hosting estático (Netlify y Cloudflare Pages leen `_headers` solos; en otro hosting hay que cargar esos
-mismos encabezados). Después de publicar, verificar el sitio real:
+`netlify.toml`, en la raíz del repo, le dice a Netlify que arme solo `web/`:
+
+- `main` → `node tools/build.cjs --release --site $URL` (la dirección del sitio).
+- Vista previa de cada PR → `node tools/build.cjs --site $DEPLOY_PRIME_URL` (las invitaciones y la imagen para
+  compartir apuntan a la vista previa).
+- Si en un cambio no se tocó nada de `web/`, Netlify no vuelve a armar la web.
+
+Conectarlo, una sola vez: en Netlify, *Add new site → Import an existing project → GitHub* y elegir este repo; la
+configuración se lee de `netlify.toml`. Un sitio subido antes arrastrando la carpeta se puede vincular al repo desde
+*Site configuration → Build & deploy → Link repository* y conserva su dirección.
+
+Sin Netlify, `node web/tools/build.cjs --release --site https://DIRECCION` deja en `web/dist/` los cuatro archivos
+para cualquier hosting estático (Cloudflare Pages también lee `_headers`; en otro hosting hay que cargar esos mismos
+encabezados).
+
+Después de publicar, verificar el sitio real:
 
 ```bash
 node web/tools/preflight.cjs --site https://DIRECCION

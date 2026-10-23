@@ -1,0 +1,16 @@
+# Netlify builds only the launch website in web/: a static page made by Node, with no packages to install.
+# main → the public site, without the DEV chip. Pull requests → a preview with the DEV tools (the player self-test),
+# whose invitation links point to the preview itself. Netlify skips the build when nothing in web/ changed.
+[build]
+  base = "web/"
+  publish = "dist/"
+  command = "node tools/build.cjs --release --site $URL"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[context.deploy-preview]
+  command = "node tools/build.cjs --site $DEPLOY_PRIME_URL"
+
+[context.branch-deploy]
+  command = "node tools/build.cjs --site $DEPLOY_PRIME_URL"
