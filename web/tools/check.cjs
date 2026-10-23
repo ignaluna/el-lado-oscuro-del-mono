@@ -112,7 +112,9 @@ const waitFloor = (p, n, timeout = 40000) =>
     { timeout },
   );
 const state = (p) => ev(p, () => window.__eldom.state());
-const iframeCount = (p) => ev(p, () => document.querySelectorAll('iframe').length);
+// Official players only: a host may add frames of its own (Netlify's badge on free sites is an empty iframe).
+const PLAYER_FRAMES = 'iframe[src*="youtube.com"], iframe[src*="youtube-nocookie.com"], iframe[src*="open.spotify.com"]';
+const iframeCount = (p) => ev(p, (sel) => document.querySelectorAll(sel).length, PLAYER_FRAMES);
 
 async function clickSubmit(p) {
   const sel = (await p.$('#lead-submit')) ? '#lead-submit' : '#lead-form button[type=submit]';
@@ -294,7 +296,7 @@ const SCENARIOS = {
     await wait(3500);
     s = await state(p);
     log('arrived: floor=' + s.floor + ' platform=' + s.platform + ' hash=' + s.hash + ' pending=' + s.pendingInvite + ' portal=' + JSON.stringify(s.portal));
-    log('player src: ' + (await ev(p, () => (document.querySelector('iframe') || {}).src || 'none')));
+    log('player src: ' + (await ev(p, (sel) => (document.querySelector(sel) || {}).src || 'none', PLAYER_FRAMES)));
     // 3) invite from inside the world
     await p.click('#cap-invite');
     await wait(700);
@@ -303,7 +305,7 @@ const SCENARIOS = {
     log('whatsapp href: ' + (await ev(p, () => document.querySelector('#invite-wa').href)));
     await shot('invite-world-plate');
     const box = await p.locator('#invite').boundingBox();
-    const ib = await p.locator('iframe').boundingBox();
+    const ib = await p.locator(PLAYER_FRAMES).first().boundingBox();
     log('plate overlaps player: ' + !(box.x + box.width <= ib.x || ib.x + ib.width <= box.x || box.y + box.height <= ib.y || ib.y + ib.height <= box.y));
     await p.click('#invite-copy');
     await wait(500);
@@ -377,7 +379,7 @@ const SCENARIOS = {
     await wait(500);
     await shot('book-page-reader');
     const bb = await p.locator('#book').boundingBox();
-    const ib = await p.locator('iframe').boundingBox();
+    const ib = await p.locator(PLAYER_FRAMES).first().boundingBox();
     log('reader overlaps player: ' + !(bb.x + bb.width <= ib.x || ib.x + ib.width <= bb.x || bb.y + bb.height <= ib.y || ib.y + ib.height <= bb.y) + ' reader=' + JSON.stringify(bb));
     log('page text: ' + JSON.stringify(await ev(p, () => document.querySelector('#bk-page').innerText)));
     // purchase: ebook always, paper only when complete
@@ -524,7 +526,7 @@ const SCENARIOS = {
     const cfg = await ev(p, () => window.__eldom.config());
     const portal = async () => (await state(p)).portal;
     const until = async (pred, ms) => { const t0 = Date.now(); let s; for (;;) { s = await portal(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(250); } };
-    const frameSrc = () => ev(p, () => { const f = document.querySelector('iframe'); return f ? f.src : ''; });
+    const frameSrc = () => ev(p, (sel) => { const f = document.querySelector(sel); return f ? f.src : ''; }, PLAYER_FRAMES);
     const playYouTube = async () => { const b = await p.locator('iframe[src*="youtube.com/embed"]').boundingBox(); await p.mouse.click(b.x + b.width / 2, b.y + b.height / 2); };
     const playSpotify = async () => p.frameLocator('iframe[src*="open.spotify.com/embed"]').locator('button[data-testid="play-pause-button"]').first().click({ timeout: 10000 });
     const only = (opt('floors', '') || '').split(',').filter(Boolean).map(Number);
@@ -534,7 +536,7 @@ const SCENARIOS = {
     for (const prov of ['youtube', 'spotify']) {
       await ev(p, () => window.__eldom.ui.openListen()); await wait(700);
       await ev(p, (pv) => window.__eldom.ui.chooseListen(pv), prov);
-      await p.waitForSelector('iframe', { timeout: 15000 });
+      await p.waitForSelector(PLAYER_FRAMES, { timeout: 15000 });
       const src = await frameSrc();
       check(prov === 'youtube' ? src.includes('/embed/' + cfg.demo.youtubeVideoId) : src.includes('/embed/album/' + cfg.demo.spotifyAlbumId), `listen ${prov}: embed ${src.split('?')[0]}`);
       const s0 = await until((s) => (prov === 'youtube' ? s.diag.videoId : s.diag.ready), 15000);
@@ -556,7 +558,7 @@ const SCENARIOS = {
       for (const t of floors) {
         await ev(p, (n) => window.__eldom.dev.arrive(n), t.floor);
         await waitFloor(p, t.floor);
-        await p.waitForSelector('iframe', { timeout: 15000 });
+        await p.waitForSelector(PLAYER_FRAMES, { timeout: 15000 });
         await wait(600);
         check((await iframeCount(p)) === 1, `piso ${t.floor} ${prov}: exactly one player on screen`);
         const src = await frameSrc();
@@ -967,7 +969,8 @@ const SCENARIOS = {
       await p.locator('.portal-mini').click(); await wait(1200);
       await p.locator('.portal .portal-close').click(); await wait(1000);
       s = await state(p);
-      check(!s.portal && !s.overlay && (await iframeCount(p)) === 0, `${prov}: CERRAR while minimized ends it`);
+      const left = await ev(p, (sel) => [...document.querySelectorAll(sel)].map((f) => f.src.split('?')[0]), PLAYER_FRAMES);
+      check(!s.portal && !s.overlay && left.length === 0, `${prov}: CERRAR while minimized ends it (portal ${s.portal ? s.portal.provider : 'none'}, overlay ${s.overlay}, frames ${JSON.stringify(left)})`);
       check(await p.locator('#cap-primary').isVisible(), `${prov}: and the entrance stays as it was`);
     }
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
