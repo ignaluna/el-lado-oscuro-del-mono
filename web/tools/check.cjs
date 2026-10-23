@@ -887,6 +887,92 @@ const SCENARIOS = {
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' mini check(s) failed: ' + fails.join(' | '));
   },
+  // "Mientras esperás" minimized: the song goes on while the visitor uses the entrance (its buttons, the sign-up
+  // plate), AMPLIAR brings the listening view back, CERRAR ends it from the minimized state; leaving the page:
+  // Spotify goes on, YouTube pauses (no background player).
+  async waiting(p, shot, log) {
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    const vw = p.viewportSize();
+    const portal = async () => (await state(p)).portal;
+    const until = async (pred, ms) => { const t0 = Date.now(); let s; for (;;) { s = await portal(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(250); } };
+    const block = () => p.locator('.portal').boundingBox();
+    const at = (b) => (b ? `${Math.round(b.width)}×${Math.round(b.height)} at ${Math.round(b.x)},${Math.round(b.y)}` : 'none');
+    const overlap = (a, b) => !!(a && b && a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height);
+    const onScreen = (b) => !!(b && b.x >= 0 && b.y >= 0 && b.x + b.width <= vw.width && b.y + b.height <= vw.height);
+    const playYouTube = async () => { const b = await p.locator('iframe[src*="youtube.com/embed"]').boundingBox(); await p.mouse.click(b.x + b.width / 2, b.y + b.height / 2); };
+    const playSpotify = async () => p.frameLocator('iframe[src*="open.spotify.com/embed"]').locator('button[data-testid="play-pause-button"]').first().click({ timeout: 10000 });
+    const clock = (s) => (s.provider === 'youtube' ? s.diag.currentTime || 0 : (s.diag.position || 0) / 1000);
+    const pageHidden = (hidden) => ev(p, (hd) => {
+      if (hd) { Object.defineProperty(document, 'hidden', { get: () => true, configurable: true }); Object.defineProperty(document, 'visibilityState', { get: () => 'hidden', configurable: true }); }
+      else { delete document.hidden; delete document.visibilityState; }
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, hidden);
+
+    for (const prov of (opt('providers', 'youtube,spotify')).split(',')) {
+      await ev(p, () => window.__eldom.ui.openListen()); await wait(700);
+      await ev(p, (pv) => window.__eldom.ui.chooseListen(pv), prov);
+      await p.waitForSelector('.portal iframe, .portal .portal-linkbox', { timeout: 15000 }); await wait(1800);
+      let s = await state(p);
+      check(s.overlay === 'listen' && s.portal && !s.portal.mini, `${prov}: "Mientras esperás" opens full size (overlay ${s.overlay})`);
+      const embed = s.portal.mode === 'embed';
+      let playing = false;
+      if (embed) {
+        await until((x) => (prov === 'youtube' ? x.diag.videoId : x.diag.ready), 15000);
+        try { await (prov === 'youtube' ? playYouTube() : playSpotify()); } catch (e) { log('click failed: ' + e.message.split('\n')[0]); }
+        const s1 = await until((x) => x.playing && clock(x) > 0.5, 20000);
+        playing = !!s1.playing;
+        log(`${prov}: ${playing ? 'playing at ' + clock(s1).toFixed(1) + ' s' : 'playback did not start in the test browser: the layout checks still run'}`);
+      }
+      await ev(p, () => { const f = document.querySelector('.portal iframe'); if (f) f.dataset.stamp = 'same-frame'; });
+      await p.locator('.portal-mini').click(); await wait(1700);
+      s = await state(p);
+      const b1 = await block();
+      check(s.portal && s.portal.mini && !s.overlay, `${prov}: MINIMIZAR frees the entrance (overlay ${s.overlay})`);
+      if (embed) check((await ev(p, () => { const f = document.querySelector('.portal iframe'); return f ? f.dataset.stamp || 'a new frame' : 'none'; })) === 'same-frame', `${prov}: the same frame, never reloaded`);
+      const caps = [];
+      for (const sel of ['#cap-primary', '#cap-secondary']) if (await p.locator(sel).isVisible()) caps.push(await p.locator(sel).boundingBox());
+      check(caps.length === 2 && caps.every((c) => !overlap(b1, c)) && onScreen(b1), `${prov}: the player (${at(b1)}) sits clear of the entrance buttons, fully on screen`);
+      if (playing) {
+        const c0 = clock(await portal()); await wait(3000);
+        const s2 = await portal();
+        check(s2.playing && clock(s2) > c0 + 2, `${prov}: the song goes on while minimized (${c0.toFixed(1)} → ${clock(s2).toFixed(1)} s)`);
+      }
+      await shot(`01-${prov}-mini`);
+      // signing up while it plays
+      await p.locator('#cap-primary').click(); await wait(1800);
+      s = await state(p);
+      const b2 = await block(), plate = await p.locator('#plate').boundingBox();
+      check(s.overlay === 'form' && s.portal && s.portal.mini, `${prov}: the sign-up plate opens with the player still on`);
+      check(!overlap(b2, plate) && onScreen(b2), `${prov}: the player (${at(b2)}) keeps clear of the plate (${at(plate)})`);
+      if (playing) {
+        const c0 = clock(await portal()); await wait(2500);
+        const s2 = await portal();
+        check(s2.playing && clock(s2) > c0 + 1.5, `${prov}: still sounding while signing up (${c0.toFixed(1)} → ${clock(s2).toFixed(1)} s)`);
+      }
+      await shot(`02-${prov}-form`);
+      await ev(p, () => window.__eldom.ui.closeForm()); await wait(1000);
+      // leaving the page
+      if (playing) {
+        await pageHidden(true); await wait(3500);
+        const s3 = await portal();
+        if (prov === 'youtube') check(!s3.playing, 'youtube: leaving the page pauses it (YouTube allows no background player)');
+        else check(s3.playing && clock(s3) > 0, `spotify: leaving the page, the song goes on (${clock(s3).toFixed(1)} s)`);
+        await pageHidden(false); await wait(600);
+      }
+      // AMPLIAR brings the listening view back; CERRAR ends it from the minimized state
+      await p.locator('.portal-mini').click(); await wait(1700);
+      s = await state(p);
+      check(s.portal && !s.portal.mini && s.overlay === 'listen', `${prov}: AMPLIAR brings the listening view back (overlay ${s.overlay})`);
+      await p.locator('.portal-mini').click(); await wait(1200);
+      await p.locator('.portal .portal-close').click(); await wait(1000);
+      s = await state(p);
+      check(!s.portal && !s.overlay && (await iframeCount(p)) === 0, `${prov}: CERRAR while minimized ends it`);
+      check(await p.locator('#cap-primary').isVisible(), `${prov}: and the entrance stays as it was`);
+    }
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' waiting check(s) failed: ' + fails.join(' | '));
+  },
   // Free movement: keys, mouse look, run, collisions, the elevator by walking; on touch screens the joystick
   // (real touch events through CDP), two thumbs at once, and the hint ring.
   async roam(p, shot, log) {

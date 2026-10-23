@@ -385,7 +385,8 @@ Spotify (official embed, no API script):
 - Links: track `https://open.spotify.com/track/${id}`, album `https://open.spotify.com/album/${albumId}` ("Abrir el álbum").
 
 Lifecycle (both): one `message` listener per portal, removed on destroy; timers cleared; `playing` flag reset;
-destroy on: close, return to elevator, travel start, dev jumps, page hide (pause only — do not destroy on hide).
+destroy on: close, return to elevator, travel start, dev jumps. Page hide: never destroy; YouTube pauses (its rules allow
+no background player), Spotify goes on.
 Ambient/SFX audio is fully faded out while a portal exists (no overlapping audio).
 
 Link mode (embeds blocked): the same frame and size, but inside: provider name (Marcellus SC), "Pequeño Primate" or the
