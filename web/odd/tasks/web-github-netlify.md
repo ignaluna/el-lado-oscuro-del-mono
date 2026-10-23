@@ -41,6 +41,12 @@ From the repo: `node web/tools/build.cjs` reproduces the published page; the har
   `$URL` falls back to the page address. Preview build with its `_headers` (`--dist`): smoke, selftest (18/18
   players), mini green on desktop. TOML not machine-validated (no parser available locally): plain tables and strings.
 
+- Commits 61e2b61 (website) + abb2b17 (Netlify); PR https://github.com/ignaluna/el-lado-oscuro-del-mono/pull/1 →
+  `main`. Size exception: one cohesive import of the tested v10 project (~9.8k lines) + a 40-line config commit.
+- Review (RDD on): `gentle-ai review assess` on 0bb40c0..abb2b17 → medium (configuration change in netlify.toml,
+  slice budget reached); START offered consent; the user declined for this change (2026-10-23, "Saltear esta vez").
+  Verification of record: the writer checks above.
+
 ## Next step
-User: connect Netlify to the repo (Import an existing project → GitHub), then a first small PR to see the preview.
+User: merge, then connect Netlify to the repo (Import an existing project → GitHub), then a first small PR to see the preview.
 Railway: if it deploys from this repo, set Watch Paths so web/ changes do not redeploy the app.
