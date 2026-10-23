@@ -37,7 +37,7 @@ function loadConfig(file) {
   if (a < 0 || b < 0) throw new Error('config block not found (const RELEASE_AT … const BOOK)');
   const code = src.slice(a, b);
   // eslint-disable-next-line no-new-func
-  return new Function(`${code}\nreturn { RELEASE_AT, EMBED_MODE, SHARE_BASE_URL, SHOW_DEV_TOOLS, DEMO_ALBUM, tracks };`)();
+  return new Function(`${code}\nreturn { RELEASE_AT, EMBED_MODE, SHARE_BASE_URL, SHOW_DEV_TOOLS, LEAD_ENDPOINT, DEMO_ALBUM, tracks };`)();
 }
 
 const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -54,6 +54,8 @@ function checkFormat(cfg) {
   if (!['auto', 'embed', 'link'].includes(cfg.EMBED_MODE)) err('EMBED_MODE', `"${cfg.EMBED_MODE}" is not auto|embed|link`);
   else if (cfg.EMBED_MODE !== 'auto') warn('EMBED_MODE', `"${cfg.EMBED_MODE}": the automatic fallback to links is off`);
   if (cfg.SHARE_BASE_URL !== null && !/^https:\/\//.test(cfg.SHARE_BASE_URL || '')) err('SHARE_BASE_URL', 'must be an https URL or null (invitation links)');
+  if (cfg.LEAD_ENDPOINT === null) warn('LEAD_ENDPOINT', "null: each sign-up stays in the visitor's browser and reaches nobody (see tools/leads/LEEME.md)");
+  else if (!/^https:\/\//.test(cfg.LEAD_ENDPOINT || '')) err('LEAD_ENDPOINT', 'must be an https URL or null (where sign-ups go)');
 
   const d = cfg.DEMO_ALBUM || {};
   if (!YT_ID.test(d.youtubeVideoId || '')) err('DEMO_ALBUM', `youtubeVideoId "${d.youtubeVideoId}" is not an 11-character id`);
@@ -204,6 +206,13 @@ async function checkSite(site) {
       else ok('headers', 'CSP allows this build\'s script (hash matches)');
     }
   } else ok('headers', 'no Content-Security-Policy (nothing blocks the players)');
+  const leadUrl = (/const LEAD_ENDPOINT = "([^"]+)";/.exec(html) || [])[1];
+  if (csp && leadUrl) { // the sign-ups must be allowed to leave the page
+    const m = /(?:^|;)\s*connect-src\s+([^;]*)/i.exec(csp) || /(?:^|;)\s*default-src\s+([^;]*)/i.exec(csp);
+    const origin = new URL(leadUrl).origin;
+    if (!m || !m[1].includes(origin)) err('headers', `CSP connect-src does not allow ${origin}: sign-ups cannot be sent`);
+    else ok('headers', `CSP lets sign-ups reach ${origin}`);
+  }
   const pp = (r.headers.get('permissions-policy') || '').toLowerCase();
   for (const f of ['encrypted-media', 'autoplay', 'fullscreen', 'picture-in-picture']) if (new RegExp(f + '=\\(\\)').test(pp)) err('headers', `Permissions-Policy disables ${f}: the official players need it`);
   // link preview (WhatsApp, Instagram, X)
@@ -242,11 +251,22 @@ async function checkSite(site) {
     for (const [aid, list] of albums) jobs.push(checkSpotifyAlbum(aid, list, rel));
     if (cfg.DEMO_ALBUM && !albums.has(cfg.DEMO_ALBUM.spotifyAlbumId)) jobs.push(checkSpotifyAlbum(cfg.DEMO_ALBUM.spotifyAlbumId, [], NaN));
     for (const t of cfg.tracks) if (t.spotifyTrackUri) jobs.push(checkSpotifyTrack(t, rel));
+    if (cfg.LEAD_ENDPOINT) jobs.push(checkLeads(cfg.LEAD_ENDPOINT));
     await Promise.all(jobs);
   }
   print();
   process.exit(report.errors.length ? 1 : 0);
 })();
+
+/** The sign-up sheet answers its health check (tools/leads/Code.gs, doGet). */
+async function checkLeads(url) {
+  const r = await fetch(url, { redirect: 'follow', headers: { 'User-Agent': UA } }).catch((e) => ({ error: e.message }));
+  if (!r || r.error) { err('LEAD_ENDPOINT', `${url} unreachable (${r && r.error})`); return; }
+  let j = null;
+  try { j = await r.json(); } catch { /* not JSON */ }
+  if (j && j.ok && j.service === 'eldom-leads') ok('LEAD_ENDPOINT', 'the sign-up sheet answers');
+  else err('LEAD_ENDPOINT', `${url} answered ${r.status} without the sheet's health check (is it deployed for "Anyone"?)`);
+}
 
 function print() {
   if (flag('--json')) { console.log(JSON.stringify(report, null, 2)); }

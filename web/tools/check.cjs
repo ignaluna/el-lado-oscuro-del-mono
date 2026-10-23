@@ -79,6 +79,45 @@ function distHeaders(urlPath) {
 }
 const TYPES = { '.html': 'text/html; charset=utf-8', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.js': 'text/javascript', '.png': 'image/png', '.webp': 'image/webp' };
 
+/**
+ * The band's sign-up sheet, on another port like Google's: the real Apps Script (tools/leads/Code.gs) on an
+ * in-memory sheet. Like Apps Script it answers a POST with a redirect to the JSON, answers no CORS preflight, and
+ * can be made busy (`busy` answers before a success) or unreachable (`down`). Pages opened with ?leads=mock use it.
+ */
+const LeadsMock = {
+  server: null, url: '', sim: null, busy: 0, down: false, requests: [], preflights: 0, answers: [],
+  async start() {
+    if (!this.server) {
+      this.server = http.createServer((req, res) => this.handle(req, res));
+      await new Promise((r) => this.server.listen(0, '127.0.0.1', r));
+      this.url = `http://127.0.0.1:${this.server.address().port}/exec`;
+    }
+    this.reset();
+    return this;
+  },
+  reset() { this.sim = require('./leads/sheet-sim.cjs').loadScript(); this.busy = 0; this.down = false; this.requests = []; this.preflights = 0; this.answers = []; },
+  rows() { return this.sim.rows(); },
+  handle(req, res) {
+    const u = new URL(req.url, 'http://x');
+    const send = (code, body, extra = {}) => { res.writeHead(code, { 'content-type': 'application/json', 'access-control-allow-origin': '*', ...extra }); res.end(body); };
+    if (req.method === 'OPTIONS') { this.preflights++; res.writeHead(405); return res.end(); }
+    const echo = /^\/echo\/(\d+)$/.exec(u.pathname);
+    if (echo) return send(200, this.answers[Number(echo[1])] || '{}');
+    if (u.pathname !== '/exec') return send(404, '{}');
+    if (req.method === 'GET') return send(200, this.sim.ctx.doGet().body);
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      this.requests.push({ type: req.headers['content-type'] || '', body });
+      if (this.down) { req.socket.destroy(); return; }
+      let answer;
+      if (this.busy > 0) { this.busy--; answer = JSON.stringify({ ok: false, error: 'busy' }); } else answer = this.sim.postRaw(body).body;
+      this.answers.push(answer);
+      send(302, '', { location: `/echo/${this.answers.length - 1}` });
+    });
+  },
+};
+
 function startServer(port, csp, dist, host = '127.0.0.1') {
   const server = http.createServer((req, res) => {
     if (dist) {
@@ -96,7 +135,9 @@ function startServer(port, csp, dist, host = '127.0.0.1') {
     const headers = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' };
     if (csp) headers['content-security-policy'] = ARTIFACT_CSP;
     res.writeHead(200, headers);
-    res.end(SKELETON_OPEN + fs.readFileSync(ARTIFACT, 'utf8') + SKELETON_CLOSE);
+    let page = fs.readFileSync(ARTIFACT, 'utf8');
+    if (/[?&]leads=mock\b/.test(req.url) && LeadsMock.url) page = page.replace('const LEAD_ENDPOINT = null;', `const LEAD_ENDPOINT = ${JSON.stringify(LeadsMock.url)};`);
+    res.end(SKELETON_OPEN + page + SKELETON_CLOSE);
   });
   return new Promise((resolve) => server.listen(port, host, () => resolve(server)));
 }
@@ -973,6 +1014,75 @@ const SCENARIOS = {
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' waiting check(s) failed: ' + fails.join(' | '));
   },
+  // Sign-ups → the band's sheet (the real Apps Script on a mock server, another port like Google's): one row as typed,
+  // sent as text/plain (no preflight), the same person from another device stays one row, the honeypot sends nothing,
+  // a busy sheet is retried, an unreachable one shows the error and keeps what the visitor typed.
+  async leads(p, shot, log) {
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    const here = new URL(p.url());
+    if (!/^(127\.0\.0\.1|localhost)$/.test(here.hostname) || flag('dist')) { log('skipped: needs the local page server (the mock sheet), not --url or --dist'); return; }
+    const mock = await LeadsMock.start();
+    here.search = '?leads=mock';
+    await p.goto(here.toString()); await waitPhase(p, 'prelaunch'); await wait(1500);
+    await ev(p, () => window.__eldom.dev.clearLead());
+    const closed = () => p.waitForFunction(() => !window.__eldom.state().overlay, null, { timeout: 15000 });
+    const signUp = async (v, bot) => {
+      await ev(p, () => window.__eldom.ui.openForm()); await wait(1500);
+      for (const k of ['name', 'whatsapp', 'email', 'instagram']) await p.fill('#lead-' + k, v[k] || '');
+      await p.locator('#lead-consent').check({ force: true });
+      if (bot) await ev(p, () => { document.querySelector('#lead-website').value = 'http://spam.example'; });
+      await clickSubmit(p);
+    };
+    const confirmed = async () => { await p.waitForSelector('#plate-confirm:not([hidden])', { timeout: 25000 }); return p.locator('#plate-confirm .conf-main').innerText(); };
+
+    check(/planilla/.test(await p.locator('#privacy-where').innerText()), 'the privacy note says the sign-ups go to the band\'s sheet');
+    // 1. one sign-up, one row, as typed
+    await signUp({ name: 'Prueba', whatsapp: '+598 99 123 456', email: 'Prueba@Example.com', instagram: '@usuario.prueba' });
+    const c1 = await confirmed();
+    let rows = mock.rows();
+    const r = rows[0] || [];
+    check(rows.length === 1 && r[1] === 'Prueba' && r[2] === '+59899123456' && r[3] === 'prueba@example.com' && r[4] === 'usuario.prueba' && r[5] === 'Sí',
+      `one row in the sheet, as typed (${JSON.stringify(r.slice(0, 6))})`);
+    check(/^prelaunch:127\.0\.0\.1/.test(r[8] || '') && r[6] && /Acepto recibir/.test(r[7] || ''), `with its origin and the consent the visitor accepted (${r[8]}, ${r[6]})`);
+    check(mock.requests.length === 1 && /^text\/plain/.test(mock.requests[0].type) && mock.preflights === 0, `sent once as ${mock.requests[0] && mock.requests[0].type}, no CORS preflight (${mock.preflights})`);
+    check(!/ya estabas/i.test(c1), `the visitor sees the confirmation ("${c1}")`);
+    await shot('01-confirmed');
+    await closed();
+    // 2. the same person on another device: the sheet itself refuses the second row
+    await ev(p, () => window.__eldom.dev.clearLead());
+    await signUp({ email: 'PRUEBA@example.com', whatsapp: '+598 98 765 432' });
+    const c2 = await confirmed();
+    check(mock.rows().length === 1 && /ya estabas/i.test(c2), `the same email from another device stays one row ("${c2}")`);
+    await closed();
+    // 3. a bot filling the hidden field: told yes, nothing is sent
+    const sent = mock.requests.length;
+    await signUp({ email: 'bot@example.com' }, true);
+    await confirmed();
+    check(mock.requests.length === sent && mock.rows().length === 1, 'the honeypot sends nothing');
+    await closed();
+    // 4. a busy sheet (more than 30 at once): retried until it answers
+    mock.busy = 2;
+    const before = mock.requests.length;
+    await signUp({ email: 'segunda@example.com' });
+    await confirmed();
+    check(mock.rows().length === 2 && mock.requests.length - before === 3, `a busy sheet is retried (${mock.requests.length - before} tries) and the row lands`);
+    await closed();
+    // 5. the sheet unreachable: the visitor is told and keeps what they typed; later it works
+    mock.down = true;
+    await signUp({ name: 'Tercera', email: 'tercera@example.com' });
+    await p.waitForFunction(() => !document.querySelector('#err-group').hidden, null, { timeout: 30000 });
+    const errText = await p.locator('#err-group').innerText();
+    check(/No pudimos registrarte/.test(errText) && (await p.inputValue('#lead-email')) === 'tercera@example.com' && (await p.inputValue('#lead-name')) === 'Tercera',
+      `an unreachable sheet shows "${errText}" and keeps the form filled`);
+    await shot('02-unreachable');
+    mock.down = false;
+    await clickSubmit(p);
+    await confirmed();
+    check(mock.rows().length === 3, 'once the sheet is back, the same form goes through');
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' leads check(s) failed: ' + fails.join(' | '));
+  },
   // Free movement: keys, mouse look, run, collisions, the elevator by walking; on touch screens the joystick
   // (real touch events through CDP), two thumbs at once, and the hint ring.
   async roam(p, shot, log) {
@@ -1324,6 +1434,7 @@ async function run() {
   }
   await browser.close();
   if (server) server.close();
+  if (LeadsMock.server) LeadsMock.server.close();
   process.exit(failed ? 1 : 0);
 }
 
