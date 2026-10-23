@@ -20,6 +20,8 @@ las pruebas.
 - `tools/check.cjs` — pruebas de punta a punta en el navegador (escenarios `smoke`, `cabin`, `mini`, `level`,
   `roam`, `integrations`, …). `--dist` las corre sobre `dist/` con sus encabezados; `--url` sobre el sitio publicado.
 - `tools/preflight.cjs` — verifica los ids de YouTube y Spotify y, con `--site`, el sitio publicado.
+- `tools/leads/` — la planilla de Google donde caen los registros: el programa (`Code.gs`), sus pruebas y cómo
+  armarla ([LEEME.md](tools/leads/LEEME.md)).
 - `odd/tasks/` — el registro de cada etapa: qué se hizo, por qué y cómo se verificó.
 
 ## Cambiar algo
@@ -64,8 +66,9 @@ con `#dev` al final).
 
 ## Antes del lanzamiento
 
-- `LEAD_ENDPOINT` es `null`: cada registro queda solo en el navegador de quien se anota. Hay que conectarlo a un
-  servidor o servicio de formularios antes de difundir el enlace.
+- Registros: con `LEAD_ENDPOINT` en `null`, cada registro queda solo en el navegador de quien se anota. Hay que poner
+  la dirección `/exec` de la planilla de la banda ([tools/leads/LEEME.md](tools/leads/LEEME.md)) antes de difundir
+  el enlace.
 - Los datos de música son los del disco de prueba (*Pequeño Primate*): reemplazar por los ids reales en `tracks`,
   revisar `RELEASE_AT` (provisoria) y `PRIVACY_URL`.
 - Los textos provisorios están listados en cada documento de `odd/tasks/`.
