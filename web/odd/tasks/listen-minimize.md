@@ -55,6 +55,15 @@ plate; AMPLIAR and CERRAR work from the minimized state; a hidden page leaves Sp
 - L3: commit f0ae32e (+221 −19). Review assess (base 9e21782): medium (executable change), 240 lines → not due
   (`under_budget`). Branch `feat/listen-mini` → PR to `main`.
 
+- PR https://github.com/ignaluna/el-lado-oscuro-del-mono/pull/2; Netlify preview
+  https://deploy-preview-2--monosdelambiente.netlify.app: preflight 0 errors (DEV shown, as previews should); harness
+  `--url` smoke + selftest (18/18) green on desktop and mobile, `waiting` partly red only because Netlify injects its
+  Drawer into previews (`/.netlify/scripts/cdp`, same origin, then an app.netlify.com iframe that our CSP blocks): a
+  grey strip at the bottom covers the entrance buttons and counts as an extra iframe. Production
+  (https://monosdelambiente.netlify.app) has no Drawer: preflight 0 errors, 0 warnings. Fix on the user's side:
+  Project configuration → Developer settings → Continuous deployment → Collaboration tools → Configure → Deploy
+  Previews off.
+
 ## Next step
-User: look at the Netlify preview on a phone (Spotify sample → "CONTINUAR EN SPOTIFY"; minimized while signing up),
+User: turn off the Netlify Drawer for Deploy Previews; rerun `waiting` with `--url` on the preview; look at it on a phone (Spotify sample → "CONTINUAR EN SPOTIFY"; minimized while signing up),
 then merge.
