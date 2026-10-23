@@ -6,6 +6,9 @@ estreno se habilita solo: el visitante entra y cada piso es una canción.
 
 > Proyecto artístico de Monos del Ambiente. No confundir con Monoambiente (propuesta comercial).
 
+> La web estática del ascensor (reproductores oficiales, nivel, libro y galería) vive en **[web/](web/README.md)** y
+> la publica Netlify: cada PR tiene su vista previa y al mergear a `main` se actualiza el sitio.
+
 ## Correr
 
 Requiere **Node 22.13 o superior**.
