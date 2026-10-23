@@ -1,0 +1,6 @@
+# Built by tools/build.cjs (Netlify builds dist/ on its own)
+dist/
+artifact/
+# Test screenshots and temporary files of the harness
+shots/
+tools/.syntax-check.mjs
