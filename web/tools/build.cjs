@@ -73,6 +73,15 @@ fs.writeFileSync(path.join(DIST, 'index.html'), html);
 
 // host headers: the inline module is allowed by its hash (no 'unsafe-inline' for scripts)
 const scripts = [...html.matchAll(/<script type="module">([\s\S]*?)<\/script>/g)].map((m) => `'sha256-${crypto.createHash('sha256').update(m[1], 'utf8').digest('base64')}'`);
+// the sign-ups' address may be reached; a Google Apps Script answers from script.googleusercontent.com after a redirect
+const lead = (/const LEAD_ENDPOINT = ("[^"]*"|null);/.exec(body) || [])[1];
+if (!lead) { console.error('build: LEAD_ENDPOINT not found'); process.exit(1); }
+const connect = ["'self'"];
+if (lead !== 'null') {
+  const u = new URL(JSON.parse(lead));
+  connect.push(u.origin);
+  if (u.hostname === 'script.google.com') connect.push('https://script.googleusercontent.com');
+}
 const CSP = [
   "default-src 'self'",
   `script-src 'self' ${scripts.join(' ')} https://cdn.jsdelivr.net https://unpkg.com`, // three.js (jsdelivr, unpkg as fallback)
@@ -81,7 +90,7 @@ const CSP = [
   "img-src 'self' data: blob:",
   "media-src 'self' data: blob:",
   'frame-src https://www.youtube.com https://www.youtube-nocookie.com https://open.spotify.com', // the official players
-  "connect-src 'self'", // add the origin of LEAD_ENDPOINT here when the sign-up form gets a server
+  `connect-src ${connect.join(' ')}`, // the page itself and LEAD_ENDPOINT (where sign-ups go)
   "worker-src 'self' blob:",
   "base-uri 'self'",
   "form-action 'self'",

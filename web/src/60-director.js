@@ -212,7 +212,8 @@ const Register = {
     try {
       res = await submitLead({
         ...v.values, consent: true, consentText: $('label[for="lead-consent"]').textContent.trim(), consentVersion: CONSENT_VERSION,
-        source: 'artifact-prelaunch', locale: navigator.language || '', timeZone: (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || '',
+        // the host tells the live site, its previews and tests apart
+        source: 'prelaunch:' + (location.hostname || 'local'), locale: navigator.language || '', timeZone: (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || '',
         createdAt: new Date().toISOString(), website: $('#lead-website').value,
       });
     } catch { res = { ok: false, error: COPY.submitFailed }; }
@@ -1037,6 +1038,7 @@ function initUI() {
   });
   $('#lead-close').addEventListener('click', () => Register.close(false));
   $('#lead-form').addEventListener('submit', (e) => { e.preventDefault(); Register.submit(); });
+  if (LEAD_ENDPOINT) $('#privacy-where').textContent = COPY.privacySheet; // the note says where sign-ups are kept
   const pl = $('#privacy-link');
   if (PRIVACY_URL === '#privacidad') pl.addEventListener('click', (e) => { e.preventDefault(); $('#privacy').hidden = false; $('#privacy-close').focus(); });
   else { pl.href = PRIVACY_URL; pl.target = '_blank'; pl.rel = 'noopener'; }

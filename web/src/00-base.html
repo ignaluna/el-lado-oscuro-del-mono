@@ -413,7 +413,7 @@ button{font-family:inherit;color:inherit}
 
 <div id="privacy" hidden role="dialog" aria-labelledby="privacy-title">
   <h3 id="privacy-title">POLÍTICA DE PRIVACIDAD</h3>
-  <p>Usamos tus datos solo para avisarte del lanzamiento de El Lado Oscuro del Mono y mandarte novedades de Monos del Ambiente por las vías que elegiste. No los compartimos con nadie. Podés darte de baja cuando quieras respondiendo cualquier mensaje. En esta versión de prueba, el registro queda guardado solo en este navegador.</p>
+  <p>Usamos tus datos solo para avisarte del lanzamiento de El Lado Oscuro del Mono y mandarte novedades de Monos del Ambiente por las vías que elegiste. No los compartimos con nadie. Podés darte de baja cuando quieras respondiendo cualquier mensaje. <span id="privacy-where">En esta versión de prueba, el registro queda guardado solo en este navegador.</span></p>
   <button id="privacy-close" class="plate-x" type="button">CERRAR</button>
 </div>
 
@@ -440,7 +440,11 @@ button{font-family:inherit;color:inherit}
 const RELEASE_AT = "2026-12-01T21:00:00-03:00";
 /** "#privacidad" opens the in-scene note; set an https URL to link to the real policy. */
 const PRIVACY_URL = "#privacidad";
-/** Set to your API URL to send registrations to a server (see submitLead). null = this device only. */
+/**
+ * Where sign-ups go: the web app address of the band's Google sheet (".../exec", see tools/leads/LEEME.md), or any
+ * endpoint that takes the JSON as text/plain and answers { ok, id } / { ok, duplicate }. null = this device only.
+ * The build adds its origin to the Content-Security-Policy.
+ */
 const LEAD_ENDPOINT = null;
 /** "auto" detects blocked iframes (claude.ai) and falls back to official links. */
 const EMBED_MODE = "auto";
@@ -580,6 +584,7 @@ const COPY = {
   reservedNote: "Tu piso quedó reservado.",
   savedLocal: "Guardado en este dispositivo.",
   savedMemory: "Guardado solo durante esta visita.",
+  privacySheet: "Los registros quedan guardados en una planilla privada de Monos del Ambiente.", // provisional: the band reviews the note
   duplicate: "Ya estabas en la lista. No hace falta tocar el botón dos veces (aunque todos lo hacemos).",
   registering: "Registrando…",
   submitFailed: "No pudimos registrarte ahora. Probá de nuevo en un momento.",
@@ -1044,17 +1049,25 @@ async function submitLead(data) {
   };
   const remember = () => { memFingerprints.add(fp); sessionFps.push(fp); store.session.setJson(FP_KEY, sessionFps.slice(-20)); store.session.set('eldom.registered', '1'); };
   if (typeof LEAD_ENDPOINT === 'string' && /^https?:/.test(LEAD_ENDPOINT)) {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 10000);
-    try {
-      const { fp: _fp, ...payload } = record;
-      const res = await fetch(LEAD_ENDPOINT, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), signal: ctl.signal });
-      if (!res.ok) return { ok: false, error: COPY.submitFailed };
-      let id = record.id;
-      try { const j = await res.json(); if (j && j.id) id = String(j.id); } catch { /* body optional */ }
-      remember();
-      return { ok: true, id, destination: 'remote' };
-    } catch { return { ok: false, error: COPY.submitFailed }; } finally { clearTimeout(timer); }
+    const { fp: _fp, ...payload } = record;
+    // The sign-up sheet (Google Apps Script, tools/leads/Code.gs) answers no CORS preflight: the JSON goes as text/plain
+    // and the answer comes after Google's redirect. It runs at most 30 sign-ups at once, so a busy moment is retried.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, attempt === 1 ? 1200 : 3000));
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 15000);
+      let j = null;
+      try {
+        const res = await fetch(LEAD_ENDPOINT, { method: 'POST', headers: { 'content-type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload), redirect: 'follow', signal: ctl.signal });
+        if (res.ok) j = await res.json();
+      } catch { /* network, timeout or a body that is not JSON: try again */ } finally { clearTimeout(timer); }
+      if (j && j.ok) {
+        remember();
+        return j.duplicate ? { ok: true, duplicate: true } : { ok: true, id: j.id ? String(j.id) : record.id, destination: 'remote' };
+      }
+      if (j && j.error === 'invalid') break; // the sheet refused the data itself: trying again would not help
+    }
+    return { ok: false, error: COPY.submitFailed };
   }
   const list = Lead.stored();
   list.push(record);
