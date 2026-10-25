@@ -1119,7 +1119,7 @@ async function boot() {
   let readyRes;
   window.__eldom = {
     ready: new Promise((res) => { readyRes = res; }),
-    config: () => ({ release: RELEASE_AT, demo: DEMO_ALBUM, tracks: tracks.map((t) => ({ floor: t.floor, id: t.id, title: t.title, youtubeVideoId: t.youtubeVideoId, youtubeStartSeconds: t.youtubeStartSeconds, spotifyTrackUri: t.spotifyTrackUri, spotifyAlbumId: t.spotifyAlbumId, durationSeconds: t.durationSeconds })), level: { floor: LEVEL.floor, symbols: LEVEL.symbols, stones: LEVEL.stones } }),
+    config: () => ({ release: RELEASE_AT, demo: DEMO_ALBUM, gallery: { pieces: GALLERY.pieces.map(({ id, src, title, caption, thanks }) => ({ id, src, title, caption, thanks })), thanks: GALLERY.thanks.lines }, tracks: tracks.map((t) => ({ floor: t.floor, id: t.id, title: t.title, youtubeVideoId: t.youtubeVideoId, youtubeStartSeconds: t.youtubeStartSeconds, spotifyTrackUri: t.spotifyTrackUri, spotifyAlbumId: t.spotifyAlbumId, durationSeconds: t.durationSeconds })), level: { floor: LEVEL.floor, symbols: LEVEL.symbols, stones: LEVEL.stones } }),
     state() {
       const port = PlayerPortal.current;
       return {
