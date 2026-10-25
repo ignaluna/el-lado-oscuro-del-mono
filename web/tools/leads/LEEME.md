@@ -43,6 +43,15 @@ Para comprobar que funciona, abrí esa dirección en el navegador. Tiene que mos
 - Para bajarla como Excel: **Archivo → Descargar → Microsoft Excel (.xlsx)**.
 - Compartila solo con quienes tengan que ver los datos: son datos personales.
 
+## Probar que funciona, con tus datos
+
+1. Abrí <https://monosdelambiente.netlify.app> y tocá **AVISAME CUANDO SE ABRAN LAS PUERTAS**.
+2. Completá el formulario con tus datos, aceptá el consentimiento y enviá.
+3. La web dice «Tu piso quedó reservado» solo cuando la planilla confirmó el registro. Si dice «Ya estabas en la lista», esos datos ya estaban en la planilla.
+4. En la planilla, pestaña **Inscriptos**, aparece una fila nueva con la fecha y la hora. En **Origen** dice `prelaunch:monosdelambiente.netlify.app`.
+
+Si te anotaste antes de que la web estuviera conectada a la planilla, ese registro quedó solo en tu navegador. La web ya no lo tiene en cuenta: te vuelve a mostrar el formulario y, al enviarlo, llega a la planilla.
+
 ## Si alguna vez cambia el programa
 
 Pegá el `Code.gs` nuevo y guardá. Después entrá a **Implementar → Administrar implementaciones**, tocá el lápiz y en **Versión** elegí **Nueva versión** → **Implementar**. La dirección `/exec` sigue siendo la misma.
@@ -55,5 +64,11 @@ Pegá el `Code.gs` nuevo y guardá. Después entrá a **Implementar → Administ
   - los repetidos, bajo un candado;
   - todos los valores como texto: nada se vuelve fórmula y el WhatsApp conserva el «+».
 - Apps Script corre hasta 30 registros a la vez; la web reintenta dos veces si la planilla está ocupada.
-- Pruebas: `node --test web/tools/leads/Code.test.cjs` (el programa contra una planilla en memoria) y `node web/tools/check.cjs --scenario leads` (la web contra esa misma planilla simulada).
+- Con la planilla conectada, la web siempre envía. Nada guardado en el navegador (por ejemplo, de cuando los registros quedaban solo ahí) frena el envío ni marca a la persona como anotada: los repetidos los decide la planilla.
+- Pruebas: `node --test web/tools/leads/Code.test.cjs` (el programa contra una planilla en memoria) y `node web/tools/check.cjs --scenario leads` (la web contra esa misma planilla simulada, incluido alguien que se había anotado solo en su navegador).
+- Las pruebas nunca escriben en la planilla real: las direcciones de Google las contesta la planilla simulada. La única excepción escribe una fila a propósito y verifica que la planilla real la reconozca:
+
+  ```bash
+  node web/tools/check.cjs --scenario leadslive --url https://monosdelambiente.netlify.app --real-leads --viewport desktop --lead-name "PRUEBA TECNICA - ignorar" --lead-email prueba-tecnica-AAAAMMDD@example.com
+  ```
 - `node web/tools/preflight.cjs` avisa si `LEAD_ENDPOINT` está vacío. Con `--site`, además comprueba que la planilla responda y que los encabezados del sitio la permitan.

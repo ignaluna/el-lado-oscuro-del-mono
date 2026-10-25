@@ -66,9 +66,8 @@ con `#dev` al final).
 
 ## Antes del lanzamiento
 
-- Registros: con `LEAD_ENDPOINT` en `null`, cada registro queda solo en el navegador de quien se anota. Hay que poner
-  la dirección `/exec` de la planilla de la banda ([tools/leads/LEEME.md](tools/leads/LEEME.md)) antes de difundir
-  el enlace.
+- Registros: `LEAD_ENDPOINT` apunta a la planilla de la banda ([tools/leads/LEEME.md](tools/leads/LEEME.md)). Las
+  pruebas nunca escriben en ella, salvo el escenario `leadslive` con `--real-leads`.
 - Los datos de música son los del disco de prueba (*Pequeño Primate*): reemplazar por los ids reales en `tracks`,
   revisar `RELEASE_AT` (provisoria) y `PRIVACY_URL`.
 - Los textos provisorios están listados en cada documento de `odd/tasks/`.

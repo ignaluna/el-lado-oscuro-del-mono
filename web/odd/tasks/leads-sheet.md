@@ -32,6 +32,11 @@ User 2026-10-23: about 1,000 people will leave their details to be told when the
 - [x] S3 Harness: a mock endpoint behaving like the script (`--leads mock`), scenario `leads` (row content, duplicate,
       honeypot, a busy endpoint retried, a dead endpoint keeps the form); regression of form/tour.
 - [x] S4 Docs (LEEME for the user, web README), commit, PR.
+- [x] S6 (user 2026-10-25, reopened scope) With the endpoint live, a sign-up kept only in this browser from the
+      local-only days must not stop the send: no local duplicate short-circuit, Google decides duplicates, the page
+      confirms only on Google's success, and the initial state no longer shows "TU PISO QUEDÓ RESERVADO" from local
+      data. No migration or deletion of local sign-ups. Tests can never write to the real sheet (Google's addresses
+      answered by the mock unless `--real-leads`); the `leads` scenario covers the browser-only earlier sign-up.
 - [ ] S5 With the user's URL: set `LEAD_ENDPOINT`, one real test sign-up, check the row.
 
 ## Acceptance criteria
@@ -56,5 +61,28 @@ error and keeps what the visitor typed.
   honeypot sends nothing, busy ×2 → 3 tries and the row lands, unreachable → error + form kept, then it goes through.
   Found on the way: a comment of mine had cut the sign-up object line (syntax check caught it before any run).
 
+- 2026-10-25: PRs #3 and #4 merged by the user (5be055f, f6d0fb0); main and the live site still had
+  `LEAD_ENDPOINT = null` and `connect-src 'self'`. The user's sheet "Inscriptos — El Lado Oscuro del Mono"
+  (owner monoambientemusicacba@gmail.com) answers the health check; before this work it held 2 synthetic rows only
+  ("PRUEBA TECNICA - no contactar", "PRUEBA TECNICA - ignorar"). Authorized: set the endpoint, fix the local
+  duplicate, merge to main, deploy and verify end to end with a clearly synthetic sign-up. Branch
+  `fix/leads-endpoint-live` from f6d0fb0.
+
+- S6: `Lead.remote()`; with the sheet, `submitLead` sends every sign-up (the local fingerprint check only runs in
+  device-only mode) and returns ok only on the sheet's `ok` (`duplicate` → "Ya estabas"); nothing is written to
+  session/local storage in sheet mode; `Lead.registered()` is false in sheet mode, so the page boots with
+  "AVISAME…" whatever the browser kept (kept data is neither sent nor deleted). Harness: every browser context
+  routes `script.google.com` / `script.googleusercontent.com` to the mock sheet unless `--real-leads`; `?leads=none`
+  serves the device-only page; scenario `leads` step 0 (signed up in the device-only days → with the sheet the form
+  is offered again, nothing sent or deleted on its own, the same person then lands as one row, local data untouched)
+  and step 2 (the same browser again: sent, the sheet answers duplicate); new scenario `leadslive` (live site + real
+  sheet, needs `--real-leads`, `--lead-name`, `--lead-email`).
+- Checks: `node --test` 8/8; `leads` green on desktop, mobile, landscape; regression `shots/regress-live-leads.log`
+  (mobile: leads, form, smoke, tour, waiting, csp, fallback2d, selftest; desktop: same minus leads; landscape: leads,
+  tour; `--dist` release build with the real endpoint: smoke, selftest, form, tour) all green, no CSP violation.
+  The real sheet was untouched by the runs (2 rows, modifiedTime 14:21:18Z before and after).
+- Build with the endpoint: `connect-src 'self' https://script.google.com https://script.googleusercontent.com`;
+  preflight: "the sign-up sheet answers", 0 errors 0 warnings.
+
 ## Next step
-S4 regression + commit + PR; S5 needs the user's `/exec` address (tools/leads/LEEME.md).
+S5: merge, deploy, live end-to-end sign-up, read the row in the sheet.
