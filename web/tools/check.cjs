@@ -9,6 +9,9 @@
 //   node tools/check.cjs --scenario … --dist             run the scenarios on dist/ with its headers (strict CSP)
 //   node tools/check.cjs --scenario … --url https://…    run the scenarios against the deployed site
 //   In --dist / --url runs any Content-Security-Policy violation of the page fails the run.
+//   Sign-ups never reach the band's real sheet from a test: Google's addresses are answered by a mock sheet. The one
+//   exception writes a single row on purpose:
+//     node tools/check.cjs --scenario leadslive --url https://… --real-leads --lead-name "PRUEBA …" --lead-email …
 //
 // The page is served inside the same skeleton claude.ai adds at publish time. `--csp` adds an
 // Artifact-like Content-Security-Policy header (third-party frames blocked) to exercise link mode.
@@ -97,6 +100,18 @@ const LeadsMock = {
   },
   reset() { this.sim = require('./leads/sheet-sim.cjs').loadScript(); this.busy = 0; this.down = false; this.requests = []; this.preflights = 0; this.answers = []; },
   rows() { return this.sim.rows(); },
+  /** Answers a request a page made to Google's addresses (the real sheet never receives test sign-ups). */
+  async fulfill(route) {
+    if (!this.sim) this.reset();
+    const req = route.request();
+    if (req.method() !== 'POST') return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: this.sim.ctx.doGet().body });
+    const body = req.postData() || '';
+    this.requests.push({ type: req.headers()['content-type'] || '', body, intercepted: true });
+    if (this.down) return route.abort('failed');
+    let answer;
+    if (this.busy > 0) { this.busy--; answer = JSON.stringify({ ok: false, error: 'busy' }); } else answer = this.sim.postRaw(body).body;
+    return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: answer });
+  },
   handle(req, res) {
     const u = new URL(req.url, 'http://x');
     const send = (code, body, extra = {}) => { res.writeHead(code, { 'content-type': 'application/json', 'access-control-allow-origin': '*', ...extra }); res.end(body); };
@@ -136,7 +151,8 @@ function startServer(port, csp, dist, host = '127.0.0.1') {
     if (csp) headers['content-security-policy'] = ARTIFACT_CSP;
     res.writeHead(200, headers);
     let page = fs.readFileSync(ARTIFACT, 'utf8');
-    if (/[?&]leads=mock\b/.test(req.url) && LeadsMock.url) page = page.replace('const LEAD_ENDPOINT = null;', `const LEAD_ENDPOINT = ${JSON.stringify(LeadsMock.url)};`);
+    if (/[?&]leads=mock\b/.test(req.url) && LeadsMock.url) page = page.replace(/const LEAD_ENDPOINT = (null|"[^"]*");/, `const LEAD_ENDPOINT = ${JSON.stringify(LeadsMock.url)};`);
+    else if (/[?&]leads=none\b/.test(req.url)) page = page.replace(/const LEAD_ENDPOINT = (null|"[^"]*");/, 'const LEAD_ENDPOINT = null;'); // the device-only days
     res.end(SKELETON_OPEN + page + SKELETON_CLOSE);
   });
   return new Promise((resolve) => server.listen(port, host, () => resolve(server)));
@@ -1026,9 +1042,7 @@ const SCENARIOS = {
     const here = new URL(p.url());
     if (!/^(127\.0\.0\.1|localhost)$/.test(here.hostname) || flag('dist')) { log('skipped: needs the local page server (the mock sheet), not --url or --dist'); return; }
     const mock = await LeadsMock.start();
-    here.search = '?leads=mock';
-    await p.goto(here.toString()); await waitPhase(p, 'prelaunch'); await wait(1500);
-    await ev(p, () => window.__eldom.dev.clearLead());
+    const open = async (mode) => { here.search = '?leads=' + mode; await p.goto(here.toString()); await waitPhase(p, 'prelaunch'); await wait(1500); };
     const closed = () => p.waitForFunction(() => !window.__eldom.state().overlay, null, { timeout: 15000 });
     const signUp = async (v, bot) => {
       await ev(p, () => window.__eldom.ui.openForm()); await wait(1500);
@@ -1038,10 +1052,23 @@ const SCENARIOS = {
       await clickSubmit(p);
     };
     const confirmed = async () => { await p.waitForSelector('#plate-confirm:not([hidden])', { timeout: 25000 }); return p.locator('#plate-confirm .conf-main').innerText(); };
+    const localLeads = () => ev(p, () => JSON.parse(localStorage.getItem('eldom.leads.v1') || '[]').length);
+    const SAME = { name: 'Prueba', whatsapp: '+598 99 123 456', email: 'Prueba@Example.com', instagram: '@usuario.prueba' };
 
+    // 0. someone who signed up in the device-only days: it stays in their browser...
+    await open('none');
+    await ev(p, () => window.__eldom.dev.clearLead());
+    await signUp(SAME);
+    await confirmed(); await closed();
+    check((await localLeads()) === 1 && (await state(p)).registered && mock.requests.length === 0, 'device-only days: the sign-up stays in this browser and the page shows it reserved');
+    // ...and with the sheet on, that earlier sign-up neither hides the form nor stops the send
+    await open('mock');
+    check(!(await state(p)).registered && (await p.locator('#cap-primary').isVisible()) && !(await p.locator('#cap-reserved').isVisible()),
+      'with the sheet on, the page offers the form again ("AVISAME…", not "TU PISO QUEDÓ RESERVADO")');
+    check(mock.requests.length === 0 && (await localLeads()) === 1, 'nothing kept in the browser is sent or deleted on its own');
     check(/planilla/.test(await p.locator('#privacy-where').innerText()), 'the privacy note says the sign-ups go to the band\'s sheet');
-    // 1. one sign-up, one row, as typed
-    await signUp({ name: 'Prueba', whatsapp: '+598 99 123 456', email: 'Prueba@Example.com', instagram: '@usuario.prueba' });
+    // 1. one sign-up, one row, as typed — the same person as in the browser-only days
+    await signUp(SAME);
     const c1 = await confirmed();
     let rows = mock.rows();
     const r = rows[0] || [];
@@ -1049,14 +1076,14 @@ const SCENARIOS = {
       `one row in the sheet, as typed (${JSON.stringify(r.slice(0, 6))})`);
     check(/^prelaunch:127\.0\.0\.1/.test(r[8] || '') && r[6] && /Acepto recibir/.test(r[7] || ''), `with its origin and the consent the visitor accepted (${r[8]}, ${r[6]})`);
     check(mock.requests.length === 1 && /^text\/plain/.test(mock.requests[0].type) && mock.preflights === 0, `sent once as ${mock.requests[0] && mock.requests[0].type}, no CORS preflight (${mock.preflights})`);
-    check(!/ya estabas/i.test(c1), `the visitor sees the confirmation ("${c1}")`);
+    check(!/ya estabas/i.test(c1), `the visitor sees the confirmation only after the sheet's answer ("${c1}")`);
+    check((await localLeads()) === 1, 'the old browser-only sign-up is left as it was (not migrated, not deleted)');
     await shot('01-confirmed');
     await closed();
-    // 2. the same person on another device: the sheet itself refuses the second row
-    await ev(p, () => window.__eldom.dev.clearLead());
+    // 2. the same person again (same browser, different WhatsApp): it is sent, and the sheet answers it is the same one
     await signUp({ email: 'PRUEBA@example.com', whatsapp: '+598 98 765 432' });
     const c2 = await confirmed();
-    check(mock.rows().length === 1 && /ya estabas/i.test(c2), `the same email from another device stays one row ("${c2}")`);
+    check(mock.requests.length === 2 && mock.rows().length === 1 && /ya estabas/i.test(c2), `sent again and the sheet keeps one row ("${c2}")`);
     await closed();
     // 3. a bot filling the hidden field: told yes, nothing is sent
     const sent = mock.requests.length;
@@ -1085,6 +1112,45 @@ const SCENARIOS = {
     check(mock.rows().length === 3, 'once the sheet is back, the same form goes through');
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' leads check(s) failed: ' + fails.join(' | '));
+  },
+  // The live site end to end against the band's REAL sheet: one sign-up through the real form, confirmed only by
+  // Google's answer, then the same person again (the sheet must recognise it). Writes one row: only with --url and
+  // --real-leads, and with --lead-name / --lead-email that say it is a test.
+  async leadslive(p, shot, log) {
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    if (!opt('url', '') || !flag('real-leads')) { log('skipped: needs --url and --real-leads (it writes one row to the real sheet)'); return; }
+    const name = opt('lead-name', ''), email = opt('lead-email', '');
+    if (!name || !email) throw new Error('leadslive needs --lead-name and --lead-email');
+    const answers = [];
+    p.on('response', async (r) => {
+      if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(r.url())) return;
+      try { answers.push(await r.json()); } catch { /* the redirect itself has no body */ }
+    });
+    const send = async () => {
+      await ev(p, () => window.__eldom.ui.openForm()); await wait(1600);
+      await p.fill('#lead-name', name); await p.fill('#lead-email', email);
+      for (const k of ['whatsapp', 'instagram']) await p.fill('#lead-' + k, '');
+      await p.locator('#lead-consent').check({ force: true });
+      await clickSubmit(p);
+      await p.waitForSelector('#plate-confirm:not([hidden]), #err-group:not([hidden])', { timeout: 60000 });
+      const ok = await p.locator('#plate-confirm').isVisible();
+      return { ok, text: await p.locator(ok ? '#plate-confirm .conf-main' : '#err-group').innerText() };
+    };
+    check(/planilla/.test(await p.locator('#privacy-where').innerText()), 'the live privacy note says the sign-ups go to the band\'s sheet');
+    const first = await send();
+    const a1 = answers.find((a) => a && a.ok);
+    log('the sheet answered: ' + JSON.stringify(answers));
+    check(first.ok && !/ya estabas/i.test(first.text) && a1 && a1.id && !a1.duplicate, `the live form shows the confirmation after Google's answer ("${first.text}", row id ${a1 && a1.id})`);
+    await shot('01-confirmed');
+    await p.waitForFunction(() => !window.__eldom.state().overlay, null, { timeout: 15000 });
+    const n = answers.length;
+    const second = await send();
+    const a2 = answers.slice(n).find((a) => a && a.ok);
+    check(second.ok && /ya estabas/i.test(second.text) && a2 && a2.duplicate, `the same person again: the real sheet already has the row ("${second.text}")`);
+    await shot('02-again');
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' leadslive check(s) failed: ' + fails.join(' | '));
   },
   // Free movement: keys, mouse look, run, collisions, the elevator by walking; on touch screens the joystick
   // (real touch events through CDP), two thumbs at once, and the hint ring.
@@ -1394,6 +1460,9 @@ async function run() {
       }
       const ctx = await browser.newContext(VIEWPORTS[vp]);
       await ctx.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
+      // The band's real sheet never gets test sign-ups: Google's addresses are answered by the mock sheet, unless
+      // --real-leads (the one end-to-end check of the live site, scenario `leadslive`).
+      if (!flag('real-leads')) await ctx.route(/^https:\/\/script\.google(usercontent)?\.com\//, (route) => LeadsMock.fulfill(route));
       if (extUrl || dist) await ctx.addInitScript(() => { window.__csp = []; document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(`${e.effectiveDirective} ${e.blockedURI}`)); });
       const p = await ctx.newPage();
       const errors = [];

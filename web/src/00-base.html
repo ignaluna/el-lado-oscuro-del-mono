@@ -1019,8 +1019,14 @@ const Lead = {
   fingerprint(v) { return `${v.whatsapp}|${v.email}|${v.instagram}`; },
   stored() { const a = store.local.json(LEADS_KEY, []); return Array.isArray(a) ? a : []; },
   clear() { store.local.remove(LEADS_KEY); store.session.remove(FP_KEY); store.session.remove('eldom.registered'); memFingerprints.clear(); },
-  /** True once this device/visit has a registration. */
-  registered() { return this.stored().length > 0 || store.session.get('eldom.registered') === '1' || memFingerprints.size > 0; },
+  /** Sign-ups go to the band's sheet (LEAD_ENDPOINT) rather than staying on this device. */
+  remote() { return typeof LEAD_ENDPOINT === 'string' && /^https?:/.test(LEAD_ENDPOINT); },
+  /**
+   * True once this device/visit has a registration (the page then shows "TU PISO QUEDÓ RESERVADO"). With the sheet,
+   * only the sheet knows: whatever this browser kept from the device-only days is ignored (never sent, never deleted),
+   * so the form is offered again and the sheet says whether that person was already there.
+   */
+  registered() { return !this.remote() && (this.stored().length > 0 || store.session.get('eldom.registered') === '1' || memFingerprints.size > 0); },
 };
 
 /**
@@ -1040,15 +1046,14 @@ async function submitLead(data) {
   const newId = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID() : 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
   if (data.website) return { ok: true, id: newId(), destination: LEAD_ENDPOINT ? 'remote' : 'local' }; // honeypot: pretend, store nothing
   const fp = Lead.fingerprint(data);
-  const sessionFps = store.session.json(FP_KEY, []);
-  if (memFingerprints.has(fp) || sessionFps.includes(fp) || Lead.stored().some((l) => l.fp === fp)) return { ok: true, duplicate: true };
   const record = {
     id: newId(), fp, name: data.name || '', whatsapp: data.whatsapp, email: data.email, instagram: data.instagram,
     consent: !!data.consent, consentText: data.consentText, consentVersion: data.consentVersion,
     source: data.source, locale: data.locale, timeZone: data.timeZone, createdAt: data.createdAt,
   };
-  const remember = () => { memFingerprints.add(fp); sessionFps.push(fp); store.session.setJson(FP_KEY, sessionFps.slice(-20)); store.session.set('eldom.registered', '1'); };
-  if (typeof LEAD_ENDPOINT === 'string' && /^https?:/.test(LEAD_ENDPOINT)) {
+  if (Lead.remote()) {
+    // Every sign-up is sent: the sheet alone decides whether this person is already there, and only its answer
+    // confirms (or reports a duplicate). Nothing kept in this browser short-circuits the send.
     const { fp: _fp, ...payload } = record;
     // The sign-up sheet (Google Apps Script, tools/leads/Code.gs) answers no CORS preflight: the JSON goes as text/plain
     // and the answer comes after Google's redirect. It runs at most 30 sign-ups at once, so a busy moment is retried.
@@ -1061,14 +1066,15 @@ async function submitLead(data) {
         const res = await fetch(LEAD_ENDPOINT, { method: 'POST', headers: { 'content-type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload), redirect: 'follow', signal: ctl.signal });
         if (res.ok) j = await res.json();
       } catch { /* network, timeout or a body that is not JSON: try again */ } finally { clearTimeout(timer); }
-      if (j && j.ok) {
-        remember();
-        return j.duplicate ? { ok: true, duplicate: true } : { ok: true, id: j.id ? String(j.id) : record.id, destination: 'remote' };
-      }
+      if (j && j.ok) return j.duplicate ? { ok: true, duplicate: true } : { ok: true, id: j.id ? String(j.id) : record.id, destination: 'remote' };
       if (j && j.error === 'invalid') break; // the sheet refused the data itself: trying again would not help
     }
     return { ok: false, error: COPY.submitFailed };
   }
+  // this device only (no sheet): an earlier sign-up kept here counts as the same person
+  const sessionFps = store.session.json(FP_KEY, []);
+  if (memFingerprints.has(fp) || sessionFps.includes(fp) || Lead.stored().some((l) => l.fp === fp)) return { ok: true, duplicate: true };
+  const remember = () => { memFingerprints.add(fp); sessionFps.push(fp); store.session.setJson(FP_KEY, sessionFps.slice(-20)); store.session.set('eldom.registered', '1'); };
   const list = Lead.stored();
   list.push(record);
   const json = JSON.stringify(list.slice(-20));
