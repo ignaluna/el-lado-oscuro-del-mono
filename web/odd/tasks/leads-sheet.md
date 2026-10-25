@@ -37,7 +37,7 @@ User 2026-10-23: about 1,000 people will leave their details to be told when the
       confirms only on Google's success, and the initial state no longer shows "TU PISO QUEDÓ RESERVADO" from local
       data. No migration or deletion of local sign-ups. Tests can never write to the real sheet (Google's addresses
       answered by the mock unless `--real-leads`); the `leads` scenario covers the browser-only earlier sign-up.
-- [ ] S5 With the user's URL: set `LEAD_ENDPOINT`, one real test sign-up, check the row.
+- [x] S5 With the user's URL: set `LEAD_ENDPOINT`, one real test sign-up, check the row.
 
 ## Acceptance criteria
 A sign-up on the site appears as one row in the band's sheet with the data as typed; the same person twice → one row
@@ -84,5 +84,24 @@ error and keeps what the visitor typed.
 - Build with the endpoint: `connect-src 'self' https://script.google.com https://script.googleusercontent.com`;
   preflight: "the sign-up sheet answers", 0 errors 0 warnings.
 
+- S5: commits 0210201 (fix + test guard) and 6311307 (live endpoint), PR #5 → merged 5ea69a1 (2026-10-25 14:51 UTC,
+  authorized by the user), live ~20 s later. Live checks:
+  - headers `connect-src 'self' https://script.google.com https://script.googleusercontent.com`; preflight:
+    "the sign-up sheet answers", "CSP lets sign-ups reach https://script.google.com".
+  - `leadslive` on https://monosdelambiente.netlify.app (real form, real sheet, `--real-leads`), name
+    "PRUEBA TECNICA WEB - ignorar", email prueba-tecnica-web-20261025@example.com: Google answered
+    `{"ok":true,"id":"258887d5-7cd0-4571-9750-4906a114625d"}`, the page showed "Tu piso quedó reservado." only then;
+    the same person again → `duplicate`, "Ya estabas en la lista".
+  - The sheet (read through the band's Google Drive): tab "Inscriptos", row 4 = 2026-10-25 11:52:20 · PRUEBA TECNICA
+    WEB - ignorar · prueba-tecnica-web-20261025@example.com · Sí · v1-2026-09 · the form's consent text ·
+    prelaunch:monosdelambiente.netlify.app · es · America/Buenos_Aires · 258887d5-…; no second row for the duplicate.
+    The sheet now holds 3 synthetic rows and no real person.
+  - Live page with an earlier browser-only sign-up (localStorage + session flag seeded): boots with "AVISAME…",
+    not reserved, no request to Google on its own, local data kept.
+- Found, not changed: Netlify's primary domain is now https://monosdelambiente.uy (so `$URL` → invitations and
+  og:image point there) but that domain does not answer over HTTPS yet (resolves to 54.232.119.62, no response):
+  preflight `--site` on the netlify.app address reports og:image unreachable. Needs the domain's DNS / certificate in
+  Netlify.
+
 ## Next step
-S5: merge, deploy, live end-to-end sign-up, read the row in the sheet.
+User: finish the custom domain (DNS + HTTPS in Netlify) or set the netlify.app address as primary until then.
