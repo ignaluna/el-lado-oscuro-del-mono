@@ -1205,7 +1205,10 @@ class PlayerPortal {
     if (this.provider === 'youtube') {
       src = `https://www.youtube.com/embed/${o.videoId}?start=${o.start || 0}&enablejsapi=1&playsinline=1&rel=0`;
       if (/^http/.test(location.origin)) src += `&origin=${encodeURIComponent(location.origin)}`;
-      iframe.setAttribute('allow', 'accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+      // A world plays its song on arrival through YouTube's own autoplay parameter: the player is already in view and it
+      // is the only one on the page (Required Minimum Functionality, "Autoplay and scripted playbacks"). No playVideo().
+      if (o.autoplay) src += '&autoplay=1';
+      iframe.setAttribute('allow', `accelerometer; ${o.autoplay ? 'autoplay; ' : ''}clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share`);
       iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
       iframe.setAttribute('allowfullscreen', '');
       iframe.title = `YouTube: ${o.title}`;
@@ -1284,8 +1287,13 @@ class PlayerPortal {
     this.timers.add(iv);
   }
 
+  /** YouTube's widget protocol: messages travel as JSON text. */
   post(msg, origin) {
     try { if (this.iframe && this.iframe.contentWindow) this.iframe.contentWindow.postMessage(typeof msg === 'string' ? msg : JSON.stringify(msg), origin); } catch { /* frame gone */ }
+  }
+  /** Spotify's embed reads its commands as objects (as its own iframe controller sends them), not as JSON text. */
+  postSpotify(msg) {
+    try { if (this.iframe && this.iframe.contentWindow) this.iframe.contentWindow.postMessage(msg, SP_ORIGIN); } catch { /* frame gone */ }
   }
 
   handleMessage(e) {
@@ -1315,7 +1323,11 @@ class PlayerPortal {
   }
 
   handleSpotify(d) {
-    if (d.type === 'ready') this.diag.ready = true;
+    if (d.type === 'ready') {
+      this.diag.ready = true;
+      // a world's song starts on its own: the same play command Spotify's official iframe controller sends, once
+      if (this.o.autoplay && !this.diag.autoplay) { this.diag.autoplay = 'requested'; this.postSpotify({ command: 'play' }); }
+    }
     if (d.type === 'playback_update' && d.payload) {
       const p = d.payload;
       Object.assign(this.diag, { uri: p.playingURI, duration: p.duration, position: p.position, paused: p.isPaused });
@@ -1377,7 +1389,7 @@ class PlayerPortal {
     if (!this.iframe) return;
     try {
       if (this.provider === 'youtube') this.post({ event: 'command', func: 'pauseVideo', args: [], id: 1, channel: 'widget' }, 'https://www.youtube.com');
-      else this.post({ command: 'pause' }, SP_ORIGIN);
+      else this.postSpotify({ command: 'pause' });
     } catch { /* ignore */ }
   }
 

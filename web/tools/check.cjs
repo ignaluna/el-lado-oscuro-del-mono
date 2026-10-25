@@ -586,6 +586,8 @@ const SCENARIOS = {
     const frameSrc = () => ev(p, (sel) => { const f = document.querySelector(sel); return f ? f.src : ''; }, PLAYER_FRAMES);
     const playYouTube = async () => { const b = await p.locator('iframe[src*="youtube.com/embed"]').boundingBox(); await p.mouse.click(b.x + b.width / 2, b.y + b.height / 2); };
     const playSpotify = async () => p.frameLocator('iframe[src*="open.spotify.com/embed"]').locator('button[data-testid="play-pause-button"]').first().click({ timeout: 10000 });
+    // a world may already be playing on its own (its song autoplays): press play only if it is still
+    const startIfStill = async (prov) => { const s = await until((x) => x.playing, 6000); if (!(s && s.playing)) await (prov === 'youtube' ? playYouTube() : playSpotify()); };
     const only = (opt('floors', '') || '').split(',').filter(Boolean).map(Number);
     const floors = cfg.tracks.filter((t) => !only.length || only.includes(t.floor));
 
@@ -623,7 +625,7 @@ const SCENARIOS = {
           check(src.includes('/embed/' + t.youtubeVideoId) && src.includes('start=' + t.youtubeStartSeconds + '&'), `piso ${t.floor} youtube: embed ${t.youtubeVideoId} start=${t.youtubeStartSeconds}`);
           const s0 = await until((s) => s.diag.videoId, 15000);
           check(s0.diag.videoId === t.youtubeVideoId, `piso ${t.floor} youtube: player loaded ${s0.diag.videoId}`);
-          await playYouTube();
+          await startIfStill('youtube');
           const tPlay = Date.now();
           let s1 = await until((s) => s.playing && s.diag.currentTime > t.youtubeStartSeconds, 12000);
           if (!(s1.playing && s1.diag.currentTime > t.youtubeStartSeconds)) { // probably an ad first: skip it when YouTube allows
@@ -638,7 +640,7 @@ const SCENARIOS = {
           check(id ? src.includes('/embed/track/' + id) : src.includes('/embed/album/' + t.spotifyAlbumId), `piso ${t.floor} spotify: embed ${id ? 'track ' + id : 'album'}`);
           const s0 = await until((s) => s.diag.ready, 15000);
           check(!!s0.diag.ready, `piso ${t.floor} spotify: player ready`);
-          try { await playSpotify(); } catch (e) { log('click failed: ' + e.message.split('\n')[0]); }
+          try { await startIfStill('spotify'); } catch (e) { log('click failed: ' + e.message.split('\n')[0]); }
           const s1 = await until((s) => s.playing && s.diag.uri, 15000);
           check(!!s1.playing && (!t.spotifyTrackUri || s1.diag.uri === t.spotifyTrackUri), `piso ${t.floor} spotify: playing ${s1.diag.uri} (${Math.round((s1.diag.duration || 0) / 1000)}s${s1.preview ? ', muestra' : ''})`);
           if (s1.diag.duration && s1.diag.duration < 35000) check(s1.preview, `piso ${t.floor} spotify: preview detected → "Continuar en Spotify" offered`);
@@ -908,7 +910,8 @@ const SCENARIOS = {
       let playing = false;
       if (embed) {
         await until((x) => (prov === 'youtube' ? x.diag.videoId : x.diag.ready), 15000);
-        try { await (prov === 'youtube' ? playYouTube() : playSpotify()); } catch (e) { log('click failed: ' + e.message.split('\n')[0]); }
+        const auto = await until((x) => x.playing, 6000); // a world's song may start on its own
+        if (!(auto && auto.playing)) try { await (prov === 'youtube' ? playYouTube() : playSpotify()); } catch (e) { log('click failed: ' + e.message.split('\n')[0]); }
         const s1 = await until((x) => x.playing && clock(x) > (prov === 'youtube' ? 189 : 0.5), 20000);
         playing = !!s1.playing;
         log(`${prov}: ${playing ? 'playing at ' + clock(s1).toFixed(1) + ' s' : 'playback did not start in the test browser (an ad or a login wall): the size checks still run'}`);
@@ -1152,6 +1155,59 @@ const SCENARIOS = {
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' leadslive check(s) failed: ' + fails.join(' | '));
   },
+  // A world plays its song on arrival — real taps only (the floor button); nothing touches the player — but not when
+  // the site is set to SONIDO: NO. And the "10 GALERÍA" plaque beside the elevator takes a world's visitor to the
+  // gallery (back into the elevator, 10, the ride) and the gallery hands them back to the elevator.
+  async autoplay(p, shot, log) {
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    const portal = async () => (await state(p)).portal;
+    const until = async (pred, ms) => { const t0 = Date.now(); let s; for (;;) { s = await portal(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(250); } };
+    const tapFloor = async (n, prov) => {
+      await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin');
+      if (prov) await ev(p, (pv) => window.__eldom.dev.platform(pv), prov); // after entering: the cabin starts from the stored choice
+      await wait(1400);
+      await p.locator(`.hot[aria-label^="Piso ${n}:"]`).first().click({ timeout: 10000 });
+      await waitFloor(p, n, 45000);
+    };
+    await ev(p, () => window.__eldom.dev.released());
+    for (const prov of (opt('providers', 'youtube,spotify')).split(',')) {
+      await tapFloor(2, prov);
+      const s = await until((x) => x.playing, 25000);
+      check(!!(s && s.playing && s.provider === prov), `${prov}: the song plays on arrival without touching the player (${s && s.mode}, ${JSON.stringify(s && s.diag).slice(0, 120)})`);
+      const clock = (x) => (x.provider === 'youtube' ? x.diag.currentTime || 0 : (x.diag.position || 0) / 1000);
+      if (s && s.playing) { const c0 = clock(s); await wait(3000); const s2 = await portal(); check(s2.playing && clock(s2) > c0 + 1.5, `${prov}: and keeps playing (${c0.toFixed(1)} → ${clock(s2).toFixed(1)} s)`); }
+      await shot(`01-${prov}-arrived`);
+      await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 25000);
+    }
+    // SONIDO: NO — the visitor chose silence: the world waits for a tap on the player
+    if (!(await ev(p, () => document.querySelector('#sound').getAttribute('aria-pressed') === 'false'))) await p.locator('#sound').click();
+    await tapFloor(3);
+    await wait(8000);
+    const quiet = await portal();
+    check(quiet && !quiet.playing, `SONIDO: NO keeps the song still until the visitor plays it (playing ${quiet && quiet.playing})`);
+    await p.locator('#sound').click(); // back to SONIDO: SÍ
+    // the gallery plaque, seen from a world
+    // walk up to the elevator, in front of the plaque (left of the doors): on wide screens the player moves to its corner
+    await ev(p, () => window.__eldom.dev.roamTo(-1.2, 4.4, 0)); await ev(p, () => window.__eldom.dev.roamPush(0, 0.6, 1100)); await wait(1200); // ~1 m at walking pace
+    const plaque = p.locator('.hot[aria-label^="Piso 10: visitar la galería"]');
+    const pb = await plaque.boundingBox(), port = await p.locator('.portal').boundingBox();
+    // where a visitor would tap: the part of the plaque the player does not cover (on a phone held upright the player
+    // takes the bottom of the screen)
+    const clear = pb && (!port || pb.y + pb.height <= port.y || pb.y >= port.y + port.height || pb.x + pb.width <= port.x || pb.x >= port.x + port.width)
+      ? { x: pb.width / 2, y: pb.height / 2 } : pb && port && port.y > pb.y + 8 ? { x: pb.width / 2, y: Math.max(4, (port.y - pb.y) / 2) } : null;
+    check(!!(await plaque.isVisible()) && !!clear, `from a world, the "10 GALERÍA" plaque beside the elevator can be tapped (plaque ${pb && Math.round(pb.y)}–${pb && Math.round(pb.y + pb.height)}, player from ${port && Math.round(port.y)})`);
+    await shot('02-plaque');
+    await plaque.click({ position: clear || undefined });
+    await waitPhase(p, 'gallery', 60000); await wait(1500);
+    check((await state(p)).phase === 'gallery' && /ASCENSOR/.test(await p.locator('#gal-back').innerText()), `it rides up to the gallery ("${await p.locator('#gal-back').innerText()}")`);
+    await shot('03-gallery');
+    await p.locator('#gal-back').click();
+    await waitPhase(p, 'cabin', 30000);
+    check((await state(p)).phase === 'cabin', 'and the gallery hands the visitor back to the elevator');
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' autoplay check(s) failed: ' + fails.join(' | '));
+  },
   // Free movement: keys, mouse look, run, collisions, the elevator by walking; on touch screens the joystick
   // (real touch events through CDP), two thumbs at once, and the hint ring.
   async roam(p, shot, log) {
@@ -1345,7 +1401,7 @@ const SCENARIOS = {
     await wait(5000);
     const box = await p.locator('iframe[src*="youtube.com/embed"]').boundingBox();
     log('youtube iframe box: ' + JSON.stringify(box));
-    await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    if (!(await state(p)).portal.playing) await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2); // it may already play on its own
     await wait(7000);
     log('portal after manual play: ' + JSON.stringify((await state(p)).portal));
     await shot('yt-playing');
@@ -1363,7 +1419,7 @@ const SCENARIOS = {
     await p.waitForSelector('iframe[src*="open.spotify.com/embed"]', { timeout: 15000 });
     await wait(6000);
     await shot('spotify-embed');
-    try {
+    if (!(await state(p)).portal.playing) try { // it may already play on its own
       await p
         .frameLocator('iframe[src*="open.spotify.com/embed"]')
         .locator('button[data-testid="play-pause-button"]')
