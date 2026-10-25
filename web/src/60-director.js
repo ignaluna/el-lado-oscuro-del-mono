@@ -94,7 +94,7 @@ function syncUI() {
     if (id === 'elevator') return p === 'open' && !ov;
     if (id === 'book') return (p === 'prelaunch' || p === 'open') && !ov && Book.canPick();
     if (id === 'page') return p === 'floor' && !ov && !!Book.pageHere();
-    if (id === 'gallery') return (p === 'prelaunch' || p === 'open') && !ov && GALLERY.enabled;
+    if (id === 'gallery') return (p === 'prelaunch' || p === 'open' || (p === 'floor' && !Level.inspecting())) && !ov && GALLERY.enabled; // the plaque hangs beside the elevator in every world
     if (id.startsWith('piece-')) return p === 'gallery' && !ov && world.gallery.at < 0;
     if (id.startsWith('lv-')) return p === 'floor' && !ov && Level.hotOn(id);
     return p === 'cabin' && !ov;
@@ -378,8 +378,10 @@ function arriveOnFloor(n) {
   markVisited(n);
   Links.setHash(tr.id); // the address now is this world's own link
   setPhase('floor');
+  // the song is the place's music: it starts on arrival (unless the site is set to SONIDO: NO; an iPhone still asks for
+  // a tap on the player, its browser allows no sound without one)
   openPortal({ provider: world.platform || 'youtube', kind: 'floor', align: alignFor(tr), videoId: tr.youtubeVideoId, start: tr.youtubeStartSeconds || 0,
-    trackUri: tr.spotifyTrackUri, albumId: tr.spotifyAlbumId, title: tr.title, duration: tr.durationSeconds, closable: false }, tr.visualAccent);
+    trackUri: tr.spotifyTrackUri, albumId: tr.spotifyAlbumId, title: tr.title, duration: tr.durationSeconds, closable: false, autoplay: !Sound.muted }, tr.visualAccent);
   live(`Llegaste al piso ${n}: ${tr.title}.`);
   Roam.reset();
   Level.arrive(n);
@@ -653,7 +655,8 @@ function pressLobby() {
   });
 }
 
-function returnToElevator() {
+/** `then` runs once the visitor stands in front of the panel (e.g. pressing 10 for the gallery). */
+function returnToElevator(then) {
   if (world.phase !== 'floor' && world.phase !== 'gallery') return;
   if (App.overlay === 'invite') Invite.close();
   if (Level.s) Level.leave();
@@ -680,7 +683,14 @@ function returnToElevator() {
     await toPose(c, poseFromShot(Shots.panel(a)), rm(1.5), Ease.inOutCubic);
     await c.wait(0.9);
     setPhase('cabin');
+    if (then) setTimeout(then, 0); // after this sequence ends
   });
+}
+
+/** The "10 GALERÍA" plaque beside the elevator, seen from a world: back into the elevator, press 10, ride up. */
+function galleryFromFloor() {
+  if (world.phase !== 'floor' || App.overlay || !GALLERY.enabled || Level.inspecting()) return;
+  returnToElevator(() => pressGallery());
 }
 
 /** Per-frame logic that is not a sequence: countdown, launch trigger, derived flags. */
@@ -983,7 +993,7 @@ function initUI() {
   Hot.add('floor-0', 'PB', () => pressLobby());
   if (GALLERY.enabled) {
     Hot.add('floor-' + GALLERY_FLOOR, GALLERY.label, () => pressGallery());
-    Hot.add('gallery', `Piso ${GALLERY_FLOOR}: visitar la galería`, () => Gallery.enterFromLobby());
+    Hot.add('gallery', `Piso ${GALLERY_FLOOR}: visitar la galería`, () => (world.phase === 'floor' ? galleryFromFloor() : Gallery.enterFromLobby()));
     for (let i = 0; i < Gallery.count(); i++) Hot.add('piece-' + i, i < GALLERY.pieces.length ? `Obra ${i + 1}` : 'Agradecimientos', () => Gallery.focus(i));
     $('#gal-back').addEventListener('click', () => (world.gallery.at >= 0 ? Gallery.back() : Gallery.leave()));
     $('#gal-prev').addEventListener('click', () => Gallery.step(-1));
