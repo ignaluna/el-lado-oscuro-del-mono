@@ -64,6 +64,15 @@ plate; AMPLIAR and CERRAR work from the minimized state; a hidden page leaves Sp
   Project configuration → Developer settings → Continuous deployment → Collaboration tools → Configure → Deploy
   Previews off.
 
+- 2026-10-23: the user asked me to merge PR #2 ("Hacete el otro PR") → merged (860f00a), live on
+  https://monosdelambiente.netlify.app ~20 s later. Live site: preflight 0 errors, 0 warnings; `--url` selftest
+  (18/18), `waiting` and `integrations` (floor 1, both platforms, real playback) green on desktop and mobile — after
+  one harness fix: on the free plan Netlify injects a "Powered by Netlify" badge into published sites
+  (`/.netlify/scripts/hud`, an empty `#nl-badge-frame` iframe, bottom right). Our CSP blocks its inline script, so it
+  stays closed (clip-path empty): invisible and click-through (`elementFromPoint` → the page). The harness counted it
+  as a leftover player; it now counts only YouTube / Spotify frames (`PLAYER_FRAMES`). No Netlify term found that
+  requires the badge (Terms of Use, Self-Serve Subscription Agreement).
+
 ## Next step
-User: turn off the Netlify Drawer for Deploy Previews; rerun `waiting` with `--url` on the preview; look at it on a phone (Spotify sample → "CONTINUAR EN SPOTIFY"; minimized while signing up),
+Optional: turn off the Netlify Drawer for Deploy Previews (it covers the entrance buttons on PR previews only). (Spotify sample → "CONTINUAR EN SPOTIFY"; minimized while signing up),
 then merge.
