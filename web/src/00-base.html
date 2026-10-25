@@ -535,17 +535,26 @@ const GALLERY = {
   enabled: true,
   id: "galeria", // its link: page address + "#galeria"
   label: "GALERÍA",
+  // Photos and words from the band (2026-10-25); the files live in assets/galeria and the build publishes them next
+  // to the page. Still without photos, from the first plan: San Luis · momentos con el Pato · integrantes de la banda
+  // · Noe y el trabajo con la ropa.
   pieces: [
-    { id: "obra-01", group: "San Luis y la grabación en la Casa de la Música", src: "", title: "", caption: "", thanks: "" },
-    { id: "obra-02", group: "San Luis y la grabación en la Casa de la Música", src: "", title: "", caption: "", thanks: "" },
-    { id: "obra-03", group: "Momentos con el Pato, risas y escenas del proceso", src: "", title: "", caption: "", thanks: "" },
-    { id: "obra-04", group: "Momentos con el Pato, risas y escenas del proceso", src: "", title: "", caption: "", thanks: "" },
-    { id: "obra-05", group: "Fotos con los integrantes de la banda", src: "", title: "", caption: "", thanks: "" },
-    { id: "obra-06", group: "Fotos con los integrantes de la banda", src: "", title: "", caption: "", thanks: "" },
-    { id: "obra-07", group: "Noe y el trabajo con la ropa", src: "", title: "", caption: "", thanks: "" },
-    { id: "obra-08", group: "Noe y el trabajo con la ropa", src: "", title: "", caption: "", thanks: "" },
+    { id: "obra-01", group: "Portales: cuerda de tambores", src: "galeria/01-marea-del-tesoro.jpg",
+      title: "Marea del Tesoro", caption: "Las chicas que hicieron la cuerda de tambores en «Portales».", thanks: "" },
+    { id: "obra-02", group: "La grabación en la Casa de la Música", src: "galeria/02-casa-de-la-musica.jpg",
+      title: "Casa de la Música", caption: "", thanks: "Agradecimiento especial a Martin Valenzuela, Luis Ocampo y Luis Maldonado." },
+    { id: "obra-03", group: "Producción", src: "galeria/03-nico-archilla.jpg",
+      title: "Nico Archilla", caption: "Produ, mezcla y master.", thanks: "" },
+    { id: "obra-04", group: "Portales: featuring", src: "galeria/04-seione.jpg",
+      title: "Seione", caption: "Featuring en «Portales».", thanks: "" },
   ],
-  thanks: { heading: "", lines: [] },
+  thanks: {
+    heading: "",
+    lines: [
+      "Facu Berberian · mezcla, master y produ",
+      "A todo el Tesoro, donde nos inspiramos, donde surgieron las canciones y donde está gran parte de nuestra comunidad.",
+    ],
+  },
 };
 
 /**

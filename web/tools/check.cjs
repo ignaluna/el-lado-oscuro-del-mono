@@ -143,6 +143,11 @@ function startServer(port, csp, dist, host = '127.0.0.1') {
       res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream', ...distHeaders(p) });
       return res.end(fs.readFileSync(file));
     }
+    const gal = /^\/galeria\/([\w.-]+\.(jpe?g|png|webp))$/.exec(req.url.split('?')[0]); // the gallery photos, as the build publishes them
+    if (gal && fs.existsSync(path.join(ROOT, 'assets', 'galeria', gal[1]))) {
+      res.writeHead(200, { 'content-type': TYPES[path.extname(gal[1])] || 'image/jpeg', 'cache-control': 'no-store' });
+      return res.end(fs.readFileSync(path.join(ROOT, 'assets', 'galeria', gal[1])));
+    }
     if (req.url !== '/' && !req.url.startsWith('/?') && !req.url.startsWith('/#')) {
       res.writeHead(404);
       return res.end();
@@ -481,7 +486,26 @@ const SCENARIOS = {
     await waitPhase(p, 'open', 30000);
     s = await state(p);
     log('PB at the entrance just walks out: phase=' + s.phase + ' floor=' + s.floor);
+  },  // The gallery with the band's photos: every photo loads from where the build publishes it, and each piece and the
+  // closing plate read what the band wrote (GALLERY in 00-base.html).
+  async galleryphotos(p, shot, log) {
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    const cfg = await ev(p, () => window.__eldom.config().gallery);
+    const loaded = await ev(p, (srcs) => Promise.all(srcs.map((s) => new Promise((res) => { const i = new Image(); i.onload = () => res(i.naturalWidth > 0); i.onerror = () => res(false); i.src = s; }))), cfg.pieces.map((x) => x.src));
+    check(cfg.pieces.length > 0 && loaded.every(Boolean), `every photo loads (${cfg.pieces.map((x, i) => x.src + (loaded[i] ? '' : ' MISSING')).join(', ')})`);
+    await ev(p, () => window.__eldom.ui.openGallery()); await waitPhase(p, 'gallery', 20000); await wait(2500);
+    for (let i = 0; i <= cfg.pieces.length; i++) {
+      await ev(p, (k) => window.__eldom.ui.galleryFocus(k), i); await wait(2200);
+      const text = (await p.locator('.gal-text').innerText()).replace(/\s+/g, ' ').trim();
+      const want = i < cfg.pieces.length ? [cfg.pieces[i].title, cfg.pieces[i].caption, cfg.pieces[i].thanks] : cfg.thanks;
+      check(want.filter(Boolean).every((w) => text.includes(w.replace(/\s+/g, ' ').trim())), `${i < cfg.pieces.length ? 'piece ' + (i + 1) : 'thanks plate'}: "${text.slice(0, 110)}"`);
+      await shot(`${String(i + 1).padStart(2, '0')}-${i < cfg.pieces.length ? cfg.pieces[i].id : 'thanks'}`);
+    }
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' galleryphotos check(s) failed: ' + fails.join(' | '));
   },
+
   async gallery(p, shot, log) {
     const st = async () => { const s = await state(p); return 'phase=' + s.phase + ' floor=' + s.floor + ' gallery=' + JSON.stringify(s.gallery) + ' hash=' + s.hash; };
     // before the release, from the entrance
