@@ -54,6 +54,16 @@ if (galSrcs.length) {
   for (const f of galSrcs) fs.copyFileSync(path.join(GAL, f), path.join(DIST, 'galeria', f));
 }
 
+// cover illustrations (COVER_ELEMENTS[].art: "portadas/…"), published next to the page the same way
+const ART = path.join(ROOT, 'assets', 'portadas');
+const artSrcs = [...body.matchAll(/art: "portadas\/([^"]+)"/g)].map((m) => m[1]);
+for (const f of artSrcs) if (!fs.existsSync(path.join(ART, f))) { console.error(`build: cover illustration assets/portadas/${f} not found`); process.exit(1); }
+fs.rmSync(path.join(DIST, 'portadas'), { recursive: true, force: true });
+if (artSrcs.length) {
+  fs.mkdirSync(path.join(DIST, 'portadas'), { recursive: true });
+  for (const f of artSrcs) fs.copyFileSync(path.join(ART, f), path.join(DIST, 'portadas', f));
+}
+
 const DESC = 'El Lado Oscuro del Mono, de Monos del Ambiente.';
 const abs = (p) => (SITE ? `${SITE}/${p}` : p);
 const head = [
@@ -120,4 +130,4 @@ fs.writeFileSync(path.join(DIST, '_headers'), [
   '  Cache-Control: no-cache',
   '',
 ].join('\n'));
-console.log(`dist → index.html ${(Buffer.byteLength(html) / 1024).toFixed(0)} KB, portada.jpg, favicon.svg, _headers${galSrcs.length ? `, galeria/ (${galSrcs.length})` : ''}${SITE ? ' · site ' + SITE : ' · invitations use the page address'}${args.includes('--release') ? ' · DEV chip hidden' : ''}`);
+console.log(`dist → index.html ${(Buffer.byteLength(html) / 1024).toFixed(0)} KB, portada.jpg, favicon.svg, _headers${galSrcs.length ? `, galeria/ (${galSrcs.length})` : ''}${artSrcs.length ? `, portadas/ (${artSrcs.length})` : ''}${SITE ? ' · site ' + SITE : ' · invitations use the page address'}${args.includes('--release') ? ' · DEV chip hidden' : ''}`);
