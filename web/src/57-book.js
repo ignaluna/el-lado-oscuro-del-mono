@@ -1,44 +1,40 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════
-// THE BOOK  (found by the curious: picked up, marked with a fingerprint, filled with pages from the worlds)
-//   Nothing announces it: no mission, no counter. Progress lives in sessionStorage, so it survives a reload and
-//   starts over with a new visit. All texts come from BOOK in the config; empty until the real ones are provided.
+// THE BOOK  (picked up at the steps or earned on a floor, marked with a fingerprint, filled with chapters)
+//   The opening pages come with it; each chapter opens when its floor's challenge is solved (Progress, kept on this
+//   device). The copy itself — found, fingerprint, open page — lives in sessionStorage. Every word is the author's
+//   (05-book-text.js), in the book's own order.
 // ═══════════════════════════════════════════════════════════════════════════════════════════
 const Book = {
   KEY: 'eldom.book',
-  state: { found: false, print: null, pages: [], at: 0 },
+  state: { found: false, print: null, at: 0 },
   load() {
     const s = store.session.json(this.KEY, null);
     if (s && typeof s === 'object') {
       this.state = {
         found: !!s.found,
         print: s.print && typeof s.print.u === 'number' ? s.print : null,
-        pages: Array.isArray(s.pages) ? s.pages.filter((id) => BOOK.pages.some((p) => p.id === id)) : [],
         at: Number.isFinite(s.at) ? s.at : 0,
       };
     }
+    if (Progress.count() > 0) this.state.found = true; // whoever earned a chapter carries the book
     this.mirror();
   },
   save() { store.session.setJson(this.KEY, this.state); this.mirror(); },
   reset() {
     if (App.overlay === 'book') this.close();
-    this.state = { found: false, print: null, pages: [], at: 0 };
+    this.state = { found: false, print: null, at: 0 };
     store.session.remove(this.KEY);
     this.mirror();
     syncUI();
   },
   /** Copies what the renderers need into the world state. */
   mirror() { world.book.found = this.state.found; world.book.print = this.state.print; },
-  pageFor(trackId) { return BOOK.pages.find((p) => p.foundIn === trackId) || null; },
-  has(id) { return this.state.pages.includes(id); },
-  complete() { return BOOK.pages.length > 0 && BOOK.pages.every((p) => this.has(p.id)); },
+  pageFor(trackId) { const t = trackById(trackId); return (t && BOOK.pages.find((p) => p.id === t.chapter)) || null; },
+  has(id) { return Progress.chapterOpen(id); },
+  complete() { return Progress.complete(); },
   canPick() { return BOOK.enabled && !this.state.found; },
-  /** The page that waits in the world the visitor is standing in (only for someone who carries the book). */
-  pageHere() {
-    if (!BOOK.enabled || !this.state.found || world.phase !== 'floor') return null;
-    if (Level.available() && world.floor === LEVEL.floor) return null; // that world's page is earned in its level
-    const tr = trackOf(world.floor), pg = tr && this.pageFor(tr.id);
-    return pg && !this.has(pg.id) ? pg : null;
-  },
+  /** Chapters are no longer loose pages lying in the worlds: they come out of the challenges (Trial). */
+  pageHere() { return null; },
 
   /** Crouch by the steps, touch the cover (the fingerprint stays), lift it and open it. */
   pickUp() {
@@ -78,32 +74,32 @@ const Book = {
     this.mirror();
   },
 
-  /** The loose page of this world flies into the book. */
-  takePage() {
-    const pg = this.pageHere();
-    if (!pg || App.overlay || world.book.take > 0) return;
-    Sound.click();
-    Seq.run('page', async (c) => {
-      await c.to(world.book, { take: 1 }, rm(0.9), Ease.inOutCubic);
-      this.state.pages = [...this.state.pages, pg.id];
-      this.save();
-      world.book.take = 0;
-      const icon = $('#book-open');
-      icon.classList.remove('got'); void icon.offsetWidth; icon.classList.add('got');
-      live(COPY.bookGot);
-      syncUI();
-    });
+  /** A chapter just found: the book's icon answers, and the book opens right on it. */
+  receive(chapterId) {
+    this.state.found = true;
+    if (!this.state.print) this.state.print = { u: 0.6, v: 0.57, r: -0.55 + Math.random() * 0.5 };
+    this.save();
+    syncUI();
+    const icon = $('#book-open');
+    icon.classList.remove('got'); void icon.offsetWidth; icon.classList.add('got');
+    live(COPY.bookGotChapter);
+    this.open(this.leafOf(chapterId));
   },
 
-  /** Everything the book holds, in reading order. Missing pages stay in as blank leaves. */
+  /** Everything the book holds, in reading order. A chapter not found yet stays in as a closed leaf that says where
+   *  it waits; the closing lines wait for the nine chapters; the back cover is always there. */
   leaves() {
     return [
       { kind: 'cover' },
       ...BOOK.opening.map((page) => ({ kind: 'text', page })),
       ...BOOK.pages.map((page) => ({ kind: this.has(page.id) ? 'text' : 'blank', page })),
+      { kind: this.complete() ? 'text' : 'blank', page: BOOK.closing },
+      { kind: 'text', page: BOOK.back },
       { kind: 'colophon' },
     ];
   },
+  /** Leaf index of a page id (for opening the book right on a chapter just found). */
+  leafOf(id) { return this.leaves().findIndex((l) => l.page && l.page.id === id); },
   open(at) {
     if (!this.state.found || App.overlay) return;
     App.overlay = 'book';
@@ -128,6 +124,7 @@ const Book = {
     }
     syncUI();
     Level.onBookClosed();
+    Trial.onBookClosed();
   },
   turn(d) {
     const n = this.leaves().length;
@@ -153,22 +150,30 @@ const Book = {
         wrap.append(mark);
       }
       host.append(wrap);
-    } else if (lf.kind === 'blank') {
+    } else if (lf.kind === 'blank') { // closed: its title and where it waits — never a word of its text
+      const pg = lf.page, tx = pg && bookText(pg.id), tr = pg && trackForChapter(pg.id);
       host.setAttribute('aria-label', COPY.bookBlank);
-    } else if (lf.kind === 'text') {
-      const pg = lf.page;
-      if (pg.heading) host.append(h('h3', { text: pg.heading }));
-      const body = String(pg.text || '').trim();
-      if (body) for (const para of body.split(/\n\s*\n/)) host.append(h('p', { text: para.trim() }));
-      else host.append(h('p', { class: 'bk-provisional', text: COPY.provisional }), h('p', { class: 'bk-pending', text: COPY.bookPending }));
-      const tr = pg.foundIn && tracks.find((t) => t.id === pg.foundIn);
-      if (tr) host.append(h('p', { class: 'bk-from', text: `${COPY.bookFoundIn} «${tr.title}»` }));
+      if (tx && tx.heading) host.append(h('h3', { text: tx.heading }));
+      host.append(h('p', { class: 'bk-closed', text: tr ? `${COPY.bookWaits} ${floorName(tr.floor).toLowerCase()}, «${tr.title}».` : COPY.bookClosing }));
+    } else if (lf.kind === 'text') { // the author's paragraphs exactly as written (the CSS keeps every space)
+      const pg = lf.page, tx = bookText(pg.id), tr = trackForChapter(pg.id);
+      if (tx) {
+        if (tx.heading) host.append(h('h3', { text: tx.heading }));
+        if (tx.qr && tr) host.append(h('p', { class: 'bk-song', text: `♪ «${tx.qr}» · ${floorName(tr.floor)}` }));
+        for (const para of tx.paras) {
+          if (para === '') host.append(h('p', { class: 'bk-pause', 'aria-hidden': 'true' }));
+          else if (typeof para === 'string') host.append(h('p', { text: para }));
+          else host.append(h('p', { class: para.b ? 'bk-b' : null, text: para.t }));
+        }
+      }
+      if (pg.id === BOOK.back.id) host.classList.add('bk-back');
     } else {
       // colophon: the purchase lives here, quietly; the paper copy only for a finished book
       if (BOOK.buy.ebookUrl) host.append(h('a', { class: 'bk-buy', href: BOOK.buy.ebookUrl, target: '_blank', rel: 'noopener', text: COPY.bookEbook }));
       if (BOOK.buy.physicalUrl && this.complete()) host.append(h('a', { class: 'bk-buy', href: BOOK.buy.physicalUrl, target: '_blank', rel: 'noopener', text: COPY.bookPaper }));
     }
     if (lf.kind !== 'blank') host.removeAttribute('aria-label');
+    $('#bk-count').textContent = `${Progress.count()} / ${Progress.total()}`;
     host.scrollTop = 0;
     $('#bk-prev').disabled = i === 0;
     $('#bk-next').disabled = i === leaves.length - 1;
