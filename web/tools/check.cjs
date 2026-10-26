@@ -338,7 +338,7 @@ const SCENARIOS = {
   },
   async invite(p, shot, log) {
     // 1) before the release: a world link is remembered, nothing opens
-    await p.evaluate(() => { location.hash = '#amor-libre'; });
+    await p.evaluate(() => { location.hash = '#que-te-esta-pasando'; });
     await wait(900);
     let s = await state(p);
     log('prelaunch with link: phase=' + s.phase + ' pending=' + s.pendingInvite + ' hash=' + s.hash);
@@ -367,7 +367,7 @@ const SCENARIOS = {
     log('whatsapp href: ' + (await ev(p, () => document.querySelector('#invite-wa').href)));
     await shot('invite-world-plate');
     const box = await p.locator('#invite').boundingBox();
-    const ib = await p.locator(PLAYER_FRAMES).first().boundingBox();
+    const ib = await p.locator('.portal').first().boundingBox();
     log('plate overlaps player: ' + !(box.x + box.width <= ib.x || ib.x + ib.width <= box.x || box.y + box.height <= ib.y || ib.y + ib.height <= box.y));
     await p.click('#invite-copy');
     await wait(500);
@@ -400,62 +400,222 @@ const SCENARIOS = {
     s = await state(p);
     log('dismissed: phase=' + s.phase + ' pending=' + s.pendingInvite + ' hash=' + JSON.stringify(s.hash) + ' visited=' + JSON.stringify(s.visited));
   },
+  // The book: picked up at the steps, the author's texts word for word in the book's own order, closed chapters that
+  // say where they wait (never a word of their text, never "pendiente"), the colophon, and a reload.
   async book(p, shot, log) {
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
     const bk = async () => (await state(p)).book;
-    await ev(p, () => window.__eldom.dev.clearBook());
+    const cfg = await ev(p, () => window.__eldom.config());
+    const paras = (id) => cfg.bookText[id].paras.filter((x) => x !== '').map((x) => (typeof x === 'string' ? x : x.t));
+    const rendered = () => ev(p, () => [...document.querySelectorAll('#bk-page p:not(.bk-song):not(.bk-pause):not(.bk-closed)')].map((e) => e.textContent));
+    await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.clearBook(); });
     await wait(600);
     await shot('book-on-steps');
-    log('before: ' + JSON.stringify(await bk()) + ' icon hidden=' + (await ev(p, () => document.querySelector('#book-open').hidden)));
     await ev(p, () => window.__eldom.ui.pickBook());
-    await wait(1900);
-    await shot('book-crouch');
-    await wait(900);
-    await shot('book-touch');
     await p.waitForFunction(() => window.__eldom.state().overlay === 'book', null, { timeout: 15000 });
     await wait(700);
     await shot('book-open-cover');
-    log('picked: ' + JSON.stringify(await bk()));
-    await ev(p, () => window.__eldom.ui.bookTurn(1));
-    await wait(300);
-    await shot('book-blank-page');
-    await ev(p, () => window.__eldom.ui.closeBook());
-    await wait(1800);
-    await shot('book-carried');
-    log('icon hidden=' + (await ev(p, () => document.querySelector('#book-open').hidden)) + ' hotspot gone=' + (await ev(p, () => !window.__eldom.state().book.found)));
-    // survives a reload
-    await p.reload();
-    await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 });
-    await p.evaluate(() => window.__eldom.ready);
-    await wait(1500);
-    log('after reload: ' + JSON.stringify(await bk()));
-    // a page waits in a world
-    await ev(p, () => window.__eldom.dev.arrive(2));
-    await waitFloor(p, 2);
-    await wait(3200);
-    await shot('book-page-in-world');
-    log('in world 2: pageHere=' + (await bk()).pageHere);
-    await ev(p, () => window.__eldom.ui.takePage());
-    await wait(1600);
-    log('after taking: ' + JSON.stringify(await bk()));
-    await ev(p, () => window.__eldom.ui.openBook(2));
-    await wait(500);
-    await shot('book-page-reader');
-    const bb = await p.locator('#book').boundingBox();
-    const ib = await p.locator(PLAYER_FRAMES).first().boundingBox();
-    log('reader overlaps player: ' + !(bb.x + bb.width <= ib.x || ib.x + ib.width <= bb.x || bb.y + bb.height <= ib.y || ib.y + ib.height <= bb.y) + ' reader=' + JSON.stringify(bb));
-    log('page text: ' + JSON.stringify(await ev(p, () => document.querySelector('#bk-page').innerText)));
+    let b = await bk();
+    const order = ['cover', ...cfg.book.opening, ...cfg.book.pages.map((x) => x.id), cfg.book.closing, cfg.book.back, 'colophon'];
+    check(JSON.stringify(b.leafIds) === JSON.stringify(order), `reading order: ${b.leafIds.join(' · ')}`);
+    check(cfg.book.pages.every((x, i) => x.id === 'cap-' + (i + 1)), 'chapters in the book\'s own order (1 to 9), whatever the floors');
+    // the opening pages, exact
+    for (const id of cfg.book.opening) {
+      await ev(p, (i) => window.__eldom.ui.bookTurn(i - window.__eldom.state().book.at), order.indexOf(id)); await wait(150);
+      const got = await rendered();
+      check(JSON.stringify(got) === JSON.stringify(paras(id)), `${id}: ${got.length} paragraphs, word for word`);
+    }
+    await shot('book-dedication');
+    // a closed chapter says where it waits, and nothing else
+    await ev(p, (i) => window.__eldom.ui.bookTurn(i - window.__eldom.state().book.at), order.indexOf('cap-5')); await wait(200);
+    b = await bk();
+    check(/Te espera en el piso 6, «Pato»/.test(b.text) && !/pendiente/i.test(b.text) && !b.text.includes(paras('cap-5')[0].slice(0, 30)), `closed chapter 5: "${b.text.replace(/\s+/g, ' ')}"`);
+    await shot('book-closed-chapter');
+    await ev(p, () => window.__eldom.ui.closeBook()); await wait(1600);
+    // survives a reload (the copy is this visit's)
+    await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
+    check((await bk()).found, 'after reload: the book is still carried');
+    // all nine found: every chapter, the closing lines and the back cover, exact; no "pendiente" anywhere
+    await ev(p, () => window.__eldom.dev.bookAll());
+    await ev(p, () => window.__eldom.ui.openBook(0)); await wait(300);
+    for (const id of [...cfg.book.pages.map((x) => x.id), cfg.book.closing, cfg.book.back]) {
+      await ev(p, (i) => window.__eldom.ui.bookTurn(i - window.__eldom.state().book.at), order.indexOf(id)); await wait(120);
+      const got = await rendered(), t = (await bk()).text;
+      check(JSON.stringify(got) === JSON.stringify(paras(id)) && !/pendiente/i.test(t), `${id}: ${got.length} paragraphs, word for word`);
+      if (id === 'cap-3') await shot('book-chapter-3');
+    }
+    const songLine = await ev(p, (i) => { window.__eldom.ui.bookTurn(i - window.__eldom.state().book.at); return (document.querySelector('#bk-page .bk-song') || {}).textContent || ''; }, order.indexOf('cap-6'));
+    check(/Explotar.*Piso 5/.test(songLine), `chapter 6 points at its song, floor 5: "${songLine}"`);
+    check((await bk()).count === '9 / 9', `counter ${(await bk()).count}`);
     // purchase: ebook always, paper only when complete
     await ev(p, () => window.__eldom.dev.bookBuy('https://example.com/ebook', 'https://example.com/papel'));
-    await ev(p, () => window.__eldom.ui.bookTurn(99));
-    await wait(300);
-    log('colophon (incomplete): ' + JSON.stringify(await ev(p, () => [...document.querySelectorAll('#bk-page a')].map((a) => a.textContent))));
-    await ev(p, () => window.__eldom.dev.bookAll());
-    await wait(300);
-    log('colophon (complete): ' + JSON.stringify(await ev(p, () => [...document.querySelectorAll('#bk-page a')].map((a) => a.textContent))));
+    await ev(p, () => window.__eldom.ui.bookTurn(99)); await wait(300);
+    const buy = await ev(p, () => [...document.querySelectorAll('#bk-page a')].map((a) => a.textContent));
+    check(buy.length === 2, `colophon (complete): ${JSON.stringify(buy)}`);
     await shot('book-colophon');
     await ev(p, () => window.__eldom.ui.closeBook());
-    await ev(p, () => window.__eldom.dev.clearBook());
-    log('reset: ' + JSON.stringify(await bk()));
+    await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.clearBook(); });
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' book check(s) failed: ' + fails.join(' | '));
+  },
+  // The nine challenges of the record, played with real clicks from the clues on screen, in the elevator's order:
+  // each one gives its own chapter once, the book opens on it; with eight the basements stay shut; the ninth opens
+  // them (shown once), the panel goes down to Pequeño Primate, a basement plays its song, and back up a solved floor
+  // offers its chapter again — playing it again gives nothing twice.
+  async trials(p, shot, log) {
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    const cfg = await ev(p, () => window.__eldom.config());
+    const tr = async () => (await state(p)).trial;
+    const only = (opt('floors', '') || '').split(',').filter(Boolean).map(Number);
+    await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.clearBook(); });
+    await ev(p, () => window.__eldom.dev.released());
+    await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin'); await ev(p, () => window.__eldom.dev.platform('youtube')); await wait(1200);
+    const record = cfg.tracks.filter((t) => t.album === 'elodm');
+    check(record.map((t) => `${t.floor}:${t.id}:${t.chapter}:${t.element}`).join(' ') === '1:en-una:cap-1:realidad-simulada 2:que-te-esta-pasando:cap-2:sistema 3:el-lado-oscuro-del-mono:cap-3:bar-keller 4:que-carajo:cap-4:paloma 5:explotar:cap-6:dolor-heredado 6:pato:cap-5:pato 7:casi-perdido:cap-8:fuego 8:no-me-perdones:cap-7:vacio 9:portales:cap-9:arbol', 'floors, songs, chapters and elements: the band\'s table');
+    check(cfg.catalog.length === 0, `catalog links by id: ${cfg.catalog.join(' · ') || 'all resolved'}`);
+    let solved = 0;
+    for (const t of record) {
+      if (only.length && !only.includes(t.floor)) { await ev(p, (id) => window.__eldom.dev.bookAll(id), t.floor); solved = t.floor; continue; }
+      // ride there with the panel (real tap on the row)
+      if ((await state(p)).phase !== 'cabin') { await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 30000); await wait(500); }
+      await p.locator(`.hot[aria-label^="Piso ${t.floor}:"]`).first().click({ timeout: 10000 });
+      await waitFloor(p, t.floor, 45000); await wait(2600);
+      const s0 = await state(p);
+      check(s0.portal && s0.portal.pending && !(await iframeCount(p)), `${t.floor} «${t.title}»: no player of another record — the audio waits for the release`);
+      let d = await tr();
+      check(d.here && d.element === t.element, `${t.floor}: its element (${d.element}) stands in the world`);
+      await p.locator('#tr-open').click(); await p.waitForFunction(() => window.__eldom.state().overlay === 'trial', null, { timeout: 8000 }); await wait(500);
+      await shot(`${t.floor}-${t.id}`);
+      d = await tr();
+      check(d.clue && cfg.bookText[t.chapter].paras.some((x) => d.clue.split('\n').some((line) => (typeof x === 'string' ? x : x.t).includes(line.replace(/^… ?/, '').slice(0, 40)))), `${t.floor}: its clue is a fragment of chapter ${t.chapter.slice(4)}`);
+      // the hints exist and do not solve anything by themselves
+      await p.locator('#tr-hint').click(); await wait(200);
+      check((await tr()).status.length > 10 && !(await state(p)).progress.solved.includes(t.id), `${t.floor}: a hint ("${(await tr()).status}")`);
+      for (const step of d.walkthrough) {
+        if (typeof step === 'string') await p.locator(`#tr-stage [data-act="${step}"]`).first().click({ timeout: 8000 });
+        else if (step.type) { await p.locator(`#tr-stage [data-act="${step.act}-input"]`).fill(step.type); await p.locator(`#tr-stage [data-act="${step.act}"]`).click(); }
+        else if (step.hold) { await p.locator(`#tr-stage [data-act="${step.hold}"]`).click(); await p.waitForFunction(() => window.__eldom.state().trial.finishing, null, { timeout: 15000 }); }
+        else if (step.when) { await p.waitForFunction((a) => { const e = document.querySelector(`#tr-stage [data-act="${a}"]`); return e && e.dataset.ok === '1'; }, step.act, { timeout: 10000 }); await p.locator(`#tr-stage [data-act="${step.act}"]`).click(); }
+        await wait(140);
+      }
+      await p.waitForFunction(() => window.__eldom.state().trial.finishing, null, { timeout: 8000 }).catch(() => {});
+      d = await tr();
+      check(d.finishing, `${t.floor}: solved from what is on screen (${d.walkthrough.length} steps) — "${d.status}"`);
+      await wait(900); await shot(`${t.floor}-${t.id}-solved`);
+      await p.waitForFunction(() => window.__eldom.state().overlay === 'book', null, { timeout: 12000 });
+      await wait(500);
+      const b = (await state(p)).book;
+      solved++;
+      check(b.leafIds[b.at] === t.chapter && b.text.includes(cfg.bookText[t.chapter].heading.trim()) && b.count === `${solved} / 9`, `${t.floor}: the book opens on «${cfg.bookText[t.chapter].heading.trim()}» (${b.count})`);
+      if (t.floor === 1) await shot('1-book');
+      await p.locator('#bk-close').click(); await wait(900);
+      const pr = (await state(p)).progress;
+      check(pr.count === solved && pr.solved.includes(t.id), `${t.floor}: progress ${pr.count}/9`);
+      if (solved === 8) {
+        check(!pr.open && (await state(p)).overlay !== 'reveal', 'eight chapters: the basements stay shut');
+        await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 30000); await wait(500);
+        check(!(await p.locator('.hot[aria-label="Mostrar los subsuelos"]').isVisible()), 'eight chapters: the panel has no basements switch');
+        await shot('8-panel-still-shut');
+      }
+    }
+    if (only.length) { log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'} (floors ${only.join(',')} only)`); if (fails.length) throw new Error(fails.join(' | ')); return; }
+    // the ninth opens the basements — once
+    await p.waitForFunction(() => window.__eldom.state().overlay === 'reveal', null, { timeout: 10000 });
+    await wait(600); await shot('9-reveal');
+    check((await state(p)).progress.open, 'nine chapters: the basements are open');
+    await p.locator('#reveal-go').click();
+    await waitPhase(p, 'cabin', 40000); await wait(1200);
+    check((await state(p)).panelDown && (await state(p)).progress.revealed, 'down: the elevator shows the basements');
+    await shot('9-panel-basements');
+    await p.locator('.hot[aria-label^="Subsuelo 1:"]').first().click({ timeout: 10000 });
+    await waitFloor(p, -1, 45000); await wait(3000);
+    const src = await ev(p, (sel) => (document.querySelector(sel) || {}).src || '', PLAYER_FRAMES);
+    check(src.includes('/embed/doxiX5RHT7Q'), `−1 «Tan Buena»: Pequeño Primate's own player (${src.slice(0, 60)})`);
+    await shot('basement-1');
+    await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 30000); await wait(500);
+    await p.locator('.hot[aria-label="Mostrar los pisos"]').click(); await p.waitForFunction(() => !window.__eldom.state().panelDown && window.__eldom.state().phase === 'cabin', null, { timeout: 10000 }); await wait(400);
+    // back up: a solved floor gives its chapter to reread; playing it again gives nothing twice
+    await p.locator('.hot[aria-label^="Piso 6:"]').first().click({ timeout: 10000 }); await waitFloor(p, 6, 45000); await wait(2200);
+    check(/^✓/.test(await p.locator('#tr-open').innerText()), `floor 6 remembers it was solved ("${await p.locator('#tr-open').innerText()}")`);
+    await p.locator('#tr-open').click(); await wait(400);
+    await p.locator('#tr-again').click(); await wait(300);
+    for (const step of (await tr()).walkthrough) { await p.locator(`#tr-stage [data-act="${step}"]`).first().click(); await wait(120); }
+    await p.waitForFunction(() => window.__eldom.state().trial.finishing, null, { timeout: 8000 }); await wait(2200);
+    const again = await state(p);
+    check(again.overlay === 'trial' && again.progress.count === 9 && /ya estaba/.test(again.trial.status), `playing it again: "${again.trial.status}" (still ${again.progress.count}/9)`);
+    await p.locator('#tr-read').click(); await p.waitForFunction(() => window.__eldom.state().overlay === 'book', null, { timeout: 8000 });
+    check((await state(p)).book.leafIds[(await state(p)).book.at] === 'cap-5', 'LEER EL CAPÍTULO opens chapter 5 (Pato)');
+    await p.locator('#bk-close').click(); await wait(500);
+    // all of it survives a reload; the reveal is not shown twice
+    await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
+    const after = await state(p);
+    check(after.progress.count === 9 && after.progress.open && after.progress.revealed && after.book.found, `after reload: ${after.progress.count}/9, basements open, book carried`);
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' trial check(s) failed: ' + fails.join(' | '));
+  },
+  // The basements' lock: old progress (the prototype level, visited floors, an old book) unlocks nothing; unreadable
+  // progress is set aside, not lost; eight chapters keep them shut, links included; nine open them, links included.
+  async basements(p, shot, log) {
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    const reload = async (hash) => { await p.evaluate((hh) => { history.replaceState(null, '', location.pathname + (hh || '')); }, hash || ''); await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1400); };
+    // 1. a visitor of the old site: level finished, floors 1 and 2 visited, two old pages in the book
+    await ev(p, () => {
+      window.__eldom.dev.progressReset();
+      localStorage.setItem('eldom.level.v1', JSON.stringify({ v: 1, stage: 4, dials: [0, 1, 2], done: true, tries: 1, hints: 0 }));
+      sessionStorage.removeItem('eldom.visited.v2');
+      sessionStorage.setItem('eldom.visited', '[1,2]');
+      sessionStorage.setItem('eldom.book', JSON.stringify({ found: true, print: null, pages: ['pagina-1', 'pagina-2'], at: 0 }));
+    });
+    await reload();
+    let s = await state(p);
+    check(s.progress.count === 0 && !s.progress.open && s.book.pages.length === 0, `old progress solves nothing (${s.progress.count} chapters, book ${JSON.stringify(s.book.pages)})`);
+    check(JSON.stringify(s.visited) === '[-2,-1]', `old visited floors are Pequeño Primate's, now in the basements (${JSON.stringify(s.visited)})`);
+    check(s.level.done && s.level.floor === -1, 'the old level stays finished, in Tan Buena (−1)');
+    // 2. unreadable progress: set aside under .bad, the visit starts clean
+    await ev(p, () => localStorage.setItem('eldom.progress.v2', '{esto no es json'));
+    await reload();
+    s = await state(p);
+    check(s.progress.count === 0 && (await ev(p, () => localStorage.getItem('eldom.progress.v2.bad'))) === '{esto no es json', 'unreadable progress kept aside (eldom.progress.v2.bad), the visit starts clean');
+    // 3. eight chapters: shut — the panel, the keys, a press, and a link
+    await ev(p, () => window.__eldom.dev.bookAll(8));
+    await reload();
+    s = await state(p);
+    check(s.progress.count === 8 && !s.progress.open, 'eight chapters survive a reload; basements shut');
+    await ev(p, () => window.__eldom.dev.released());
+    await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin'); await ev(p, () => window.__eldom.dev.platform('youtube')); await wait(1300);
+    check(!(await p.locator('.hot[aria-label="Mostrar los subsuelos"]').isVisible()), 'no basements switch on the panel');
+    await p.keyboard.press('-'); await ev(p, () => window.__eldom.dev.press(-1)); await wait(1500);
+    s = await state(p);
+    check(s.phase === 'cabin' && s.floor === 0 && !s.panelDown, 'a basement button cannot be pressed');
+    await shot('shut-panel');
+    await ev(p, () => { location.hash = '#tan-buena'; }); await wait(1400);
+    s = await state(p);
+    check(s.overlay === 'gate' && (await p.locator('#gate-locked').isVisible()) && !(await p.locator('#gate-tokens').isVisible()), `a link to a basement: the lock holds ("${await p.locator('#gate-locked').innerText()}")`);
+    await shot('shut-link');
+    await p.locator('#g-close').click(); await wait(1200);
+    s = await state(p);
+    check(s.phase === 'open' && !s.overlay && s.hash === '', 'and the way back: in front of the elevator, the link cleared');
+    // 4. nine: open — the same link goes in
+    await ev(p, () => window.__eldom.dev.bookAll());
+    await reload('#tan-buena'); // before the release the link is remembered; the doors open; the invitation waits
+    await ev(p, () => window.__eldom.dev.released()); await waitPhase(p, 'open', 20000); await wait(600);
+    await p.locator('#cap-invited-go').click(); await wait(900);
+    s = await state(p);
+    check(s.progress.open && s.overlay === 'gate' && !(await p.locator('#gate-locked').isVisible()), 'nine chapters: the link opens the gate as any world');
+    await p.locator('#g-youtube').click();
+    await waitFloor(p, -1, 45000); await wait(2500);
+    check((await state(p)).floor === -1 && (await iframeCount(p)) === 1, 'and rides down to −1, with its player');
+    await shot('open-link');
+    // 5. nothing is given twice
+    const before = (await state(p)).progress.count;
+    await ev(p, () => window.__eldom.dev.bookAll());
+    check((await state(p)).progress.count === before, 'solving again adds nothing');
+    await ev(p, () => { window.__eldom.dev.progressReset(); localStorage.removeItem('eldom.progress.v2.bad'); localStorage.removeItem('eldom.level.v1'); });
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' basement check(s) failed: ' + fails.join(' | '));
   },
   async pb(p, shot, log) {
     await ev(p, () => window.__eldom.dev.clearBook());
@@ -613,7 +773,7 @@ const SCENARIOS = {
     // a world may already be playing on its own (its song autoplays): press play only if it is still
     const startIfStill = async (prov) => { const s = await until((x) => x.playing, 6000); if (!(s && s.playing)) await (prov === 'youtube' ? playYouTube() : playSpotify()); };
     const only = (opt('floors', '') || '').split(',').filter(Boolean).map(Number);
-    const floors = cfg.tracks.filter((t) => !only.length || only.includes(t.floor));
+    const floors = cfg.tracks.filter((t) => t.youtubeVideoId && (!only.length || only.includes(t.floor))); // the record's floors wait for their audio
 
     // 1. before the release: "Mientras esperás" (demo album) on both platforms
     for (const prov of ['youtube', 'spotify']) {
@@ -683,7 +843,7 @@ const SCENARIOS = {
     const fails = [];
     const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
     const cfg = await ev(p, () => window.__eldom.config());
-    const t = cfg.tracks[0];
+    const t = cfg.tracks.find((x) => x.youtubeVideoId);
     const portal = async () => (await state(p)).portal;
     const until = async (pred, ms) => { const t0 = Date.now(); let s; for (;;) { s = await portal(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(250); } };
     const visible = (sel) => ev(p, (q) => { const e = document.querySelector(q); if (!e) return ''; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? e.textContent.trim() : ''; }, sel);
@@ -772,9 +932,10 @@ const SCENARIOS = {
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' failure-mode check(s) failed: ' + fails.join(' | '));
   },
-  // The puzzle level end to end, with real taps: arrive by elevator, painting, hatch, a wrong try, the hint, the clue
-  // in the water, the deduced combination, the object → page → book, "Nivel completado", no second page, reload,
-  // reset, and the card's way back to the elevator.
+  // The puzzle level end to end, with real taps: arrive by elevator (Pequeño Primate's "Tan Buena", basement −1, once
+  // the basements are open), painting, hatch, a wrong try, the hint, the clue in the water, the deduced combination, the
+  // object breaks into light (no chapter: the book is earned on the record's floors), "Nivel completado", reload, reset,
+  // and the card's way back to the elevator.
   async level(p, shot, log) {
     const fails = [];
     const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
@@ -783,17 +944,19 @@ const SCENARIOS = {
     const lv = async () => (await state(p)).level;
     const untilLv = async (pred, ms = 15000) => { const t0 = Date.now(); let s; for (;;) { s = await lv(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(200); } };
     const cfg = await ev(p, () => window.__eldom.config().level);
-    await ev(p, () => { window.__eldom.dev.clearBook(); window.__eldom.dev.levelReset(); });
+    await ev(p, () => { window.__eldom.dev.clearBook(); window.__eldom.dev.levelReset(); window.__eldom.dev.bookAll(); });
+    const pagesBefore = (await state(p)).book.pages.length;
     await ev(p, () => window.__eldom.dev.released());
     await waitPhase(p, 'open', 20000); await wait(800);
 
     // arrive from the elevator
     await tap('#cap-enter'); await waitPhase(p, 'cabin', 25000); await wait(700);
     await tap(hot('Viajar por YouTube')); await wait(700); await waitPhase(p, 'cabin', 10000); await wait(400);
-    await tap(hot('Piso 1')); await waitFloor(p, 1); await wait(3200);
+    await tap('.hot[aria-label="Mostrar los subsuelos"]'); await p.waitForFunction(() => window.__eldom.state().panelDown && window.__eldom.state().phase === 'cabin', null, { timeout: 10000 }); await wait(500);
+    await tap(hot('Subsuelo 1')); await waitFloor(p, -1); await wait(3200);
     await shot('01-arrive');
     let s = await lv();
-    check(s.here && s.stage === 0 && !s.done, `arrived on floor 1 by elevator: level at the start (stage ${s.stage})`);
+    check(s.here && s.stage === 0 && !s.done, `arrived on basement −1 by elevator: level at the start (stage ${s.stage})`);
     check(((await state(p)).portal || {}).provider === 'youtube', 'the song\'s official player is on screen');
 
     // 1. the painting moves
@@ -835,23 +998,18 @@ const SCENARIOS = {
     await tap(hot('Probar la combinación'));
     s = await untilLv((x) => x.stage === 3 && !x.busy, 9000); await wait(500); await shot('08-open');
     check(s.stage === 3, 'the box opened: something inside');
-    // 6. take it: it turns into a page and joins the book, which opens on it
+    // 6. take it: it breaks into light; the level ends without touching the book
     await tap(hot('Tomar lo que hay en la caja')); await wait(1300); await shot('09-transform');
-    await p.waitForFunction(() => window.__eldom.state().overlay === 'book', null, { timeout: 15000 }); await wait(600);
-    await shot('10-book-page');
-    const pageText = (await p.locator('#bk-page').innerText()).replace(/\s+/g, ' ');
-    check(/CONTENIDO PROVISIONAL/.test(pageText) && /Tan Buena/i.test(pageText), `the book opens on the new page: "${pageText}"`);
+    await p.waitForFunction(() => window.__eldom.state().overlay === 'level', null, { timeout: 15000 }); await wait(600);
     let st = await state(p);
-    check(st.book.found && st.book.pages.filter((x) => x === s.page).length === 1, `page ${s.page} in the book, once`);
-    // close the book → "Nivel completado"
-    await tap('#bk-close'); await wait(700);
+    check(st.book.pages.length === pagesBefore, `the level gives no chapter (book ${st.book.pages.length} chapters, as before)`);
     s = await lv();
     check(s.card && (await p.locator('#lv-card').innerText()).includes('NIVEL COMPLETADO'), '"NIVEL COMPLETADO" after closing the book');
     await shot('11-done');
     // the page cannot be obtained twice
     await ev(p, () => { window.__eldom.ui.levelTake(); window.__eldom.ui.levelTap('lv-object'); }); await wait(900);
     st = await state(p);
-    check(st.book.pages.length === 1 && st.level.done && st.level.stage === 4, 'taking again does nothing (one page)');
+    check(st.book.pages.length === pagesBefore && st.level.done && st.level.stage === 4, 'taking again does nothing');
     // keep exploring
     await tap('#lv-keep'); await wait(1500);
     s = await lv();
@@ -860,8 +1018,8 @@ const SCENARIOS = {
     // reload: completion and page persist
     await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.state && window.__eldom.state().phase !== 'boot', null, { timeout: 60000 }); await wait(1500);
     st = await state(p);
-    check(st.level.done && st.level.stage === 4 && st.book.pages.includes(st.level.page), `after reload: level done (saved ${JSON.stringify(st.level.saved)}), page still in the book`);
-    await ev(p, () => window.__eldom.dev.levelFloor()); await waitFloor(p, 1); await wait(2600);
+    check(st.level.done && st.level.stage === 4, `after reload: level done (saved ${JSON.stringify(st.level.saved)})`);
+    await ev(p, () => window.__eldom.dev.levelFloor()); await waitFloor(p, -1); await wait(2600);
     await shot('12-after-reload');
     s = await lv();
     check(s.here && s.done && !(await p.locator(hot('Tomar')).isVisible().catch(() => false)), 'the finished level shows open and empty');
@@ -870,19 +1028,18 @@ const SCENARIOS = {
     check((await p.locator('#lv-reset').innerText()).includes('REINICIAR?'), `reset asks first ("${await p.locator('#lv-reset').innerText()}")`);
     await tap('#lv-reset'); await wait(900);
     st = await state(p);
-    check(st.level.stage === 0 && !st.level.done && !st.book.pages.includes(st.level.page), 'reset: level from the start, its page out of the book');
+    check(st.level.stage === 0 && !st.level.done && st.book.pages.length === pagesBefore, 'reset: level from the start, the book untouched');
     await shot('13-reset');
     // the card's other way out: back to the elevator (quick solve through the same controls)
     for (const id of ['lv-wall', 'lv-painting', 'lv-hatch']) { await ev(p, (x) => window.__eldom.ui.levelTap(x), id); await untilLv((x) => !x.busy, 6000); await wait(1300); }
     await ev(p, () => window.__eldom.dev.levelSolve());
     await ev(p, () => window.__eldom.ui.levelTap('lv-latch')); await untilLv((x) => x.stage === 3 && !x.busy, 9000);
     await ev(p, () => window.__eldom.ui.levelTap('lv-object'));
-    await p.waitForFunction(() => window.__eldom.state().overlay === 'book', null, { timeout: 15000 }); await wait(400);
-    await tap('#bk-close'); await wait(600);
+    await p.waitForFunction(() => window.__eldom.state().overlay === 'level', null, { timeout: 15000 }); await wait(400);
     await tap('#lv-elev'); await waitPhase(p, 'cabin', 30000); await wait(600);
     st = await state(p);
-    check(st.phase === 'cabin' && st.level.done && st.book.pages.length === 1, '"Volver al ascensor" from the card: back in the cabin, level done');
-    check(JSON.stringify(st.visited) === '[1]', `no other floor touched (visited ${JSON.stringify(st.visited)})`);
+    check(st.phase === 'cabin' && st.level.done, '"Volver al ascensor" from the card: back in the cabin, level done');
+    check(JSON.stringify(st.visited) === '[-1]', `no other floor touched (visited ${JSON.stringify(st.visited)})`);
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' level check(s) failed: ' + fails.join(' | '));
   },
@@ -925,7 +1082,7 @@ const SCENARIOS = {
 
     for (const prov of (opt('providers', 'youtube,spotify')).split(',')) {
       await ev(p, (pv) => window.__eldom.dev.platform(pv), prov); await wait(900);
-      await ev(p, () => window.__eldom.dev.arrive(2)); await waitFloor(p, 2); await wait(2600);
+      await ev(p, () => window.__eldom.dev.arrive(-2)); await waitFloor(p, -2); await wait(2600);
       let s = await st();
       const b0 = await box();
       check(s.portal && !s.portal.mini && !!b0, `${prov}: arrives full size (${sz(b0)}, ${s.portal && s.portal.mode})`);
@@ -959,7 +1116,7 @@ const SCENARIOS = {
       }
       await shot(`02-${prov}-mini`);
       // walking around with it minimized, then the next world: it remembers
-      await ev(p, () => window.__eldom.dev.arrive(3)); await waitFloor(p, 3); await wait(2600);
+      await ev(p, () => window.__eldom.dev.arrive(-3)); await waitFloor(p, -3); await wait(2600);
       s = await st();
       const b2 = await box();
       check(s.portal.mini && b2 && b2.height <= 201, `${prov}: the next world starts minimized, remembered for the visit (${sz(b2)})`);
@@ -1191,12 +1348,14 @@ const SCENARIOS = {
       await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin');
       if (prov) await ev(p, (pv) => window.__eldom.dev.platform(pv), prov); // after entering: the cabin starts from the stored choice
       await wait(1400);
-      await p.locator(`.hot[aria-label^="Piso ${n}:"]`).first().click({ timeout: 10000 });
+      if (n < 0 && !(await state(p)).panelDown) { await p.locator('.hot[aria-label="Mostrar los subsuelos"]').click({ timeout: 10000 }); await p.waitForFunction(() => window.__eldom.state().panelDown && window.__eldom.state().phase === 'cabin', null, { timeout: 10000 }); await wait(500); }
+      await p.locator(`.hot[aria-label^="${n < 0 ? 'Subsuelo ' + -n : 'Piso ' + n}:"]`).first().click({ timeout: 10000 });
       await waitFloor(p, n, 45000);
     };
     await ev(p, () => window.__eldom.dev.released());
+    await ev(p, () => window.__eldom.dev.bookAll()); // Pequeño Primate's songs (with official players) are in the basements
     for (const prov of (opt('providers', 'youtube,spotify')).split(',')) {
-      await tapFloor(2, prov);
+      await tapFloor(-2, prov);
       const s = await until((x) => x.playing, 25000);
       check(!!(s && s.playing && s.provider === prov), `${prov}: the song plays on arrival without touching the player (${s && s.mode}, ${JSON.stringify(s && s.diag).slice(0, 120)})`);
       const clock = (x) => (x.provider === 'youtube' ? x.diag.currentTime || 0 : (x.diag.position || 0) / 1000);
@@ -1206,7 +1365,7 @@ const SCENARIOS = {
     }
     // SONIDO: NO — the visitor chose silence: the world waits for a tap on the player
     if (!(await ev(p, () => document.querySelector('#sound').getAttribute('aria-pressed') === 'false'))) await p.locator('#sound').click();
-    await tapFloor(3);
+    await tapFloor(-3);
     await wait(8000);
     const quiet = await portal();
     check(quiet && !quiet.playing, `SONIDO: NO keeps the song still until the visitor plays it (playing ${quiet && quiet.playing})`);
@@ -1394,7 +1553,7 @@ const SCENARIOS = {
     if (fails.length) throw new Error(fails.length + ' landscape check(s) failed: ' + fails.join(' | '));
   },
   async floors(p, shot, log) {
-    for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9]) {
+    for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, -1, -2, -3, -4, -5, -6, -7, -8, -9]) {
       await ev(p, (f) => window.__eldom.dev.arrive(f), n);
       await waitFloor(p, n);
       await wait(3800);
@@ -1419,8 +1578,8 @@ const SCENARIOS = {
     await waitPhase(p, 'cabin');
     await ev(p, () => window.__eldom.dev.platform('youtube'));
     await wait(1500);
-    await ev(p, () => window.__eldom.dev.arrive(2));
-    await waitFloor(p, 2);
+    await ev(p, () => window.__eldom.dev.arrive(-2));
+    await waitFloor(p, -2);
     await p.waitForSelector('iframe[src*="youtube.com/embed"]', { timeout: 15000 });
     await wait(5000);
     const box = await p.locator('iframe[src*="youtube.com/embed"]').boundingBox();
@@ -1438,8 +1597,8 @@ const SCENARIOS = {
     await waitPhase(p, 'cabin');
     await ev(p, () => window.__eldom.dev.platform('spotify'));
     await wait(1500);
-    await ev(p, () => window.__eldom.dev.arrive(1));
-    await waitFloor(p, 1);
+    await ev(p, () => window.__eldom.dev.arrive(-1));
+    await waitFloor(p, -1);
     await p.waitForSelector('iframe[src*="open.spotify.com/embed"]', { timeout: 15000 });
     await wait(6000);
     await shot('spotify-embed');
@@ -1467,8 +1626,8 @@ const SCENARIOS = {
     log('listen portal: ' + JSON.stringify((await state(p)).portal) + ' blocked=' + (await state(p)).embedsBlocked);
     await shot('csp-listen');
     await ev(p, () => window.__eldom.ui.closeListen());
-    await ev(p, () => window.__eldom.dev.arrive(1));
-    await waitFloor(p, 1);
+    await ev(p, () => window.__eldom.dev.arrive(-1));
+    await waitFloor(p, -1);
     await wait(3500);
     log('floor portal: ' + JSON.stringify((await state(p)).portal));
     await shot('csp-floor');
