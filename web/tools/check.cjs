@@ -486,7 +486,8 @@ const SCENARIOS = {
       check(s0.portal && s0.portal.pending && !(await iframeCount(p)), `${t.floor} «${t.title}»: no player of another record — the audio waits for the release`);
       let d = await tr();
       check(d.here && d.element === t.element, `${t.floor}: its element (${d.element}) stands in the world`);
-      await p.locator('#tr-open').click(); await p.waitForFunction(() => window.__eldom.state().overlay === 'trial', null, { timeout: 8000 }); await wait(500);
+      // the element itself is the way in (floor 1, a tap on it in the world); the button under the floor's name too
+      await p.locator(t.floor === 1 ? '.hot[aria-label^="Acercarte"]' : '#tr-open').first().click(); await p.waitForFunction(() => window.__eldom.state().overlay === 'trial', null, { timeout: 8000 }); await wait(500);
       await shot(`${t.floor}-${t.id}`);
       d = await tr();
       check(d.clue && cfg.bookText[t.chapter].paras.some((x) => d.clue.split('\n').some((line) => (typeof x === 'string' ? x : x.t).includes(line.replace(/^… ?/, '').slice(0, 40)))), `${t.floor}: its clue is a fragment of chapter ${t.chapter.slice(4)}`);
@@ -1462,14 +1463,14 @@ const SCENARIOS = {
       check(Math.abs(s.cam.yaw - y0) > 0.35 && Math.hypot(s.cam.z - z0, s.cam.x - c0.x) > 0.6, `two thumbs: walking and turning together (turned ${((s.cam.yaw - y0) * 57.3).toFixed(0)}°)`);
       await shot('03-two-thumbs');
       // a tap on a hotspot still works (it is not taken by the joystick)
-      await ev(p, () => window.__eldom.dev.arrive(1)); await waitFloor(p, 1); await wait(2500);
+      await ev(p, () => window.__eldom.dev.arrive(-1)); await waitFloor(p, -1); await wait(2500);
       await p.locator('.hot[aria-label^="Una pared"]').first().click({ timeout: 8000 }); await wait(1500);
       check((await st()).level.view === 'wall', 'a tap on the wall still opens the close look');
       await p.locator('#lv-back').click(); await wait(1500);
     }
 
-    // collisions: walk straight into the level wall and the stones; the visitor stops outside
-    await ev(p, () => window.__eldom.dev.arrive(1)); await waitFloor(p, 1); await wait(2200);
+    // collisions: walk straight into the level wall and the stones (Tan Buena, −1); the visitor stops outside
+    await ev(p, () => window.__eldom.dev.arrive(-1)); await waitFloor(p, -1); await wait(2200);
     const solids = await ev(p, () => window.__eldom.state().roam.solids);
     const wall = solids.find((x) => x.kind === 'box');
     await ev(p, ([x, z, y]) => window.__eldom.dev.roamTo(x, z, y), [wall.x - Math.sin(wall.ry) * -2.4, wall.z + Math.cos(wall.ry) * 2.4, wall.ry]);
@@ -1531,7 +1532,9 @@ const SCENARIOS = {
       check(rowBox && rowBox.height >= 26, `after choosing, the view moves to the floor buttons (rows ${rowBox && Math.round(rowBox.height)} px tall)`);
       check(/PLATAFORMA/.test(await cv.innerText()), `the switch now offers "${await cv.innerText()}"`);
       await shot('02-cabin-floors');
-      await p.locator(hot('Piso 2')).click(); await waitFloor(p, 2, 45000); await wait(2600);
+      await ev(p, () => window.__eldom.dev.bookAll()); await wait(600); // the official players live in the basements
+      await p.locator('.hot[aria-label="Mostrar los subsuelos"]').click(); await p.waitForFunction(() => window.__eldom.state().panelDown && window.__eldom.state().phase === 'cabin', null, { timeout: 10000 }); await wait(600);
+      await p.locator(hot('Subsuelo 2')).click(); await waitFloor(p, -2, 45000); await wait(2600);
       const s = await st();
       const fr = await p.locator('.portal iframe').boundingBox();
       check(s.portal.dock === 'compact' && fr && fr.height >= 199 && fr.width >= 199, `in the world the player sits in the corner, slim (${fr && Math.round(fr.width)}×${fr && Math.round(fr.height)}, YouTube minimum 200)`);
