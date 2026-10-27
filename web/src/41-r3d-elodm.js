@@ -16,13 +16,14 @@ function elementSpot(F, ctx, frac = 0.34) {
   if (A.phone || Math.max(roomL, roomR) < 0.2) { // above the docked player, under the title
     const top = A.phone ? 0.29 : 0.2, bottom = r.y / H - 0.02;
     sy = (top + bottom) / 2; f = Math.min(frac, Math.max(0.12, (bottom - top) * 0.92));
+    if (A.phone) sx = 0.58; // a little to the right: the lower left is where the thumb walks (the joystick)
   } else {
     const room = Math.max(roomL, roomR);
     sx = roomR >= roomL ? 1 - roomR / 2 : roomL / 2; sy = 0.56;
     f = Math.min(frac, (room * W) / H * 0.82);
   }
   const pos = A.at(sx, sy, dz), s = A.size(f, dz);
-  ctx.anchors['tr-element'] = { pos: pos.clone(), w: s * 1.15, h: s * 1.15 };
+  ctx.anchors['tr-element'] = { pos: pos.clone(), w: s * (A.phone ? 0.62 : 0.8), h: s * 0.9 }; // its silhouette: the thumb that walks (lower left) stays free
   return { pos, s };
 }
 /** A closed polyline from [x, y] pairs (element units: s = 1), placed at `o`. */
