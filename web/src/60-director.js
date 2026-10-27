@@ -62,6 +62,7 @@ function syncUI() {
   $('#cap-secondary').hidden = p !== 'prelaunch';
   $('#cap-enter').hidden = p !== 'open';
   $('#floor-actions').hidden = p !== 'floor';
+  Trial.sync();
   { // the level: "alejarse" while looking closely; the hint while unsolved; reset once done
     const lv = Level.here(), close = lv && Level.view !== 'wide';
     $('#lv-back').hidden = !(close && !ov);
@@ -93,16 +94,20 @@ function syncUI() {
     if (id === 'call') return p === 'prelaunch' && !ov;
     if (id === 'elevator') return p === 'open' && !ov;
     if (id === 'book') return (p === 'prelaunch' || p === 'open') && !ov && Book.canPick();
-    if (id === 'page') return p === 'floor' && !ov && !!Book.pageHere();
-    if (id === 'gallery') return (p === 'prelaunch' || p === 'open') && !ov && GALLERY.enabled;
+    if (id === 'gallery') return (p === 'prelaunch' || p === 'open' || (p === 'floor' && !Level.inspecting())) && !ov && GALLERY.enabled; // the plaque hangs beside the elevator in every world
     if (id.startsWith('piece-')) return p === 'gallery' && !ov && world.gallery.at < 0;
     if (id.startsWith('lv-')) return p === 'floor' && !ov && Level.hotOn(id);
+    if (id.startsWith('tr-')) return p === 'floor' && !ov && Trial.hotOn(id);
+    if (id === 'panel-section') return p === 'cabin' && !ov && Progress.basementsOpen();
+    if (id.startsWith('floor-')) return p === 'cabin' && !ov && panelRows().some((r) => 'floor-' + r.floor === id);
     return p === 'cabin' && !ov;
   });
-  if (GALLERY.enabled) Hot.label('floor-' + GALLERY_FLOOR, `Piso ${GALLERY_FLOOR}: ${GALLERY.label}${world.floor === GALLERY_FLOOR ? ', estás acá' : ''}`);
+  if (GALLERY.enabled) Hot.label('floor-' + GALLERY_FLOOR, `${floorName(GALLERY_FLOOR)}: ${GALLERY.label}${world.floor === GALLERY_FLOOR ? ', estás acá' : ''}`);
   for (const id of LEVEL_HOTS) Hot.label(id, Level.label(id));
   Hot.label('floor-0', `PB: volver a la entrada${world.floor === 0 ? ', estás acá' : ''}`);
-  for (const tr of tracks) Hot.label('floor-' + tr.floor, `Piso ${tr.floor}: ${tr.title}${world.visited.includes(tr.floor) ? ', visitado' : ''}${world.floor === tr.floor ? ', estás acá' : ''}`);
+  for (const tr of tracks) Hot.label('floor-' + tr.floor, `${floorName(tr.floor)}: ${tr.title}${Progress.solved(tr.id) ? ', capítulo encontrado' : ''}${world.visited.includes(tr.floor) ? ', visitado' : ''}${world.floor === tr.floor ? ', estás acá' : ''}`);
+  Hot.label('panel-section', panelDown() ? COPY.panelUp : COPY.panelDown);
+  Hot.label('tr-element', Trial.label());
   for (const pf of ['youtube', 'spotify']) Hot.label('sel-' + pf, `Viajar por ${pf === 'youtube' ? 'YouTube' : 'Spotify'}${world.platform === pf ? ' (elegido)' : ''}`);
   $('#dev').classList.toggle('shy', !!ov && !Dev.isOpen());
   Dev.refresh();
@@ -307,6 +312,8 @@ function closeOverlays() {
   if (App.overlay === 'form') { App.overlay = null; $('#plate').classList.add('folded'); $('#plate-wrap').hidden = true; $('#privacy').hidden = true; }
   if (App.overlay === 'question' || App.overlay === 'listen') { $('#question').hidden = true; App.overlay = null; }
   if (App.overlay === 'level') { $('#lv-card').hidden = true; App.overlay = null; }
+  if (App.overlay === 'trial') { $('#trial').hidden = true; App.overlay = null; }
+  if (App.overlay === 'reveal') { $('#reveal').hidden = true; App.overlay = null; }
   closePortal();
   for (const ch of ['cam', 'reg']) Seq.cancel(ch);
 }
@@ -331,6 +338,7 @@ function resetWorld() {
   if (App.hum) { App.hum.stop(); App.hum = null; }
   world.gallery.at = -1;
   if (Level.s) Level.leave();
+  Trial.leave();
   setPlace(0);
   Roam.reset();
 }
@@ -350,7 +358,7 @@ function applyOpen() {
 function applyCabin(floor = 0, doorsOpen = true) {
   resetWorld();
   Object.assign(world, { doors: doorsOpen ? 1 : 0, needle: floor, floor, env: floor, line: 1, lineFade: 0.45, lamp: 1, spill: doorsOpen ? 1 : 0 });
-  if (floor > 0 && doorsOpen) setPlace(floor);
+  if (floor !== 0 && doorsOpen) setPlace(floor);
   setPose(poseFromShot(Shots.panel(aspectNow())));
   setPhase('cabin');
 }
@@ -369,8 +377,23 @@ function setPlatform(p) {
   store.session.set('eldom.platform', p);
   world.pressed['sel-youtube'] = p === 'youtube' ? 1 : 0; world.pressed['sel-spotify'] = p === 'spotify' ? 1 : 0;
 }
+/** Visited worlds are kept by id (eldom.visited.v2); world.visited holds their current floors for the panels. */
+const VISITED_KEY = 'eldom.visited.v2';
 function markVisited(n) {
-  if (!world.visited.includes(n)) { world.visited = [...world.visited, n].sort((a, b) => a - b); store.session.setJson('eldom.visited', world.visited); }
+  const tr = trackOf(n);
+  if (!tr || world.visited.includes(n)) return;
+  world.visited = [...world.visited, n].sort((a, b) => a - b);
+  store.session.setJson(VISITED_KEY, world.visited.map((f) => trackOf(f)).filter(Boolean).map((t) => t.id));
+}
+/** Reads the visited worlds; the old list (floor numbers of Pequeño Primate, 1–9) becomes their ids. */
+function loadVisited() {
+  let ids = store.session.json(VISITED_KEY, null);
+  if (!Array.isArray(ids)) {
+    const old = store.session.json('eldom.visited', null), pp = albumTracks(PP);
+    ids = Array.isArray(old) ? old.map((n) => pp.find((t) => t.floor === -n)).filter(Boolean).map((t) => t.id) : [];
+    if (Array.isArray(old)) store.session.setJson(VISITED_KEY, ids);
+  }
+  return ids.map((id) => trackById(id)).filter(Boolean).map((t) => t.floor).sort((a, b) => a - b);
 }
 function arriveOnFloor(n) {
   const tr = trackOf(n);
@@ -378,11 +401,14 @@ function arriveOnFloor(n) {
   markVisited(n);
   Links.setHash(tr.id); // the address now is this world's own link
   setPhase('floor');
+  // the song is the place's music: it starts on arrival (unless the site is set to SONIDO: NO; an iPhone still asks for
+  // a tap on the player, its browser allows no sound without one)
   openPortal({ provider: world.platform || 'youtube', kind: 'floor', align: alignFor(tr), videoId: tr.youtubeVideoId, start: tr.youtubeStartSeconds || 0,
-    trackUri: tr.spotifyTrackUri, albumId: tr.spotifyAlbumId, title: tr.title, duration: tr.durationSeconds, closable: false }, tr.visualAccent);
-  live(`Llegaste al piso ${n}: ${tr.title}.`);
+    trackUri: tr.spotifyTrackUri, albumId: tr.spotifyAlbumId, album: ALBUMS[tr.album].title, title: tr.title, duration: tr.durationSeconds, closable: false, autoplay: !Sound.muted }, tr.visualAccent);
+  live(`Llegaste al ${floorName(n).toLowerCase()}: ${tr.title}.`);
   Roam.reset();
   Level.arrive(n);
+  Trial.arrive(n);
 }
 const prismPulse = (k = 1) => { if (!world.reduced) Seq.run('prism', async (c) => { await c.to(world, { prism: k }, 0.06); await c.to(world, { prism: 0 }, 0.18); }); };
 
@@ -551,10 +577,10 @@ async function stepOut(c, n) {
 }
 /** An invitation: the receiver is already in the cabin with the doors closed; a short ride takes them to the world. */
 function inviteRide(n) {
-  if (!trackOf(n)) return;
+  if (!trackOf(n) || (isBasement(n) && !Progress.basementsOpen())) return;
   Seq.run('main', async (c) => {
     c.spawn((cc) => cc.to(world, { exposure: 1 }, 0.9));
-    live(`Viajando al piso ${n}.`);
+    live(`Viajando al ${floorName(n).toLowerCase()}.`);
     await c.wait(0.4);
     await travel(c, 0, n, rm(3.0));
     await stepOut(c, n);
@@ -563,7 +589,7 @@ function inviteRide(n) {
 
 function pressFloor(n) {
   const tr = trackOf(n);
-  if (world.phase !== 'cabin' || !tr) return;
+  if (world.phase !== 'cabin' || !tr || (isBasement(n) && !Progress.basementsOpen())) return;
   if (!world.platform) {
     Sound.buzz();
     hint(COPY.chooseFirst);
@@ -576,7 +602,7 @@ function pressFloor(n) {
     await handPress(c, id, () => { world.lit[id] = 1; }, () => true);
     setPhase('departing');
     const from = world.floor, same = from === n && world.env === n;
-    live(same ? `Piso ${n}.` : `Viajando al piso ${n}.`);
+    live(same ? `${floorName(n)}.` : `Viajando al ${floorName(n).toLowerCase()}.`);
     await c.wait(0.3);
     if (world.reduced) setPose(poseFromShot(Shots.doors(a))); else c.spawn((cc) => toPose(cc, poseFromShot(Shots.doors(a)), 0.75));
     if (!same) {
@@ -591,6 +617,16 @@ function pressFloor(n) {
     }
     c.spawn(async (cc) => { await cc.wait(0.8); cc.spawn((c3) => c3.to(world.lit, { [id]: 0 }, 0.8)); await cc.to(world.pressed, { [id]: 0 }, 0.2, Ease.outBack); });
     await stepOut(c, n);
+  });
+}
+
+/** The engraved switch over the rows: PISOS ⇄ SUBSUELOS (only once the basements are open). */
+function togglePanelSection() {
+  if (world.phase !== 'cabin' || !Progress.basementsOpen()) return;
+  setPhase('pressing');
+  Seq.run('main', async (c) => {
+    await handPress(c, 'panel-section', () => { world.panelDown = !world.panelDown; Sound.latch(); live(world.panelDown ? 'Subsuelos.' : 'Pisos.'); }, () => false);
+    setPhase('cabin');
   });
 }
 
@@ -635,7 +671,7 @@ function pressLobby() {
       await closeDoors(c, 1.7);
       closePortal();
       await c.wait(0.5);
-      await travel(c, from, 0, rm(Math.min(6.2, 2.8 + 0.35 * from)));
+      await travel(c, from, 0, rm(Math.min(6.2, 2.8 + 0.35 * Math.abs(from))));
     } else await c.wait(0.6);
     c.spawn(async (cc) => { await cc.wait(0.8); cc.spawn((c3) => c3.to(world.lit, { [id]: 0 }, 0.8)); await cc.to(world.pressed, { [id]: 0 }, 0.2, Ease.outBack); });
     if (world.doors < 0.98) await openDoors(c, rm(1.8), false);
@@ -653,10 +689,12 @@ function pressLobby() {
   });
 }
 
-function returnToElevator() {
+/** `then` runs once the visitor stands in front of the panel (e.g. pressing 10 for the gallery). */
+function returnToElevator(then) {
   if (world.phase !== 'floor' && world.phase !== 'gallery') return;
   if (App.overlay === 'invite') Invite.close();
   if (Level.s) Level.leave();
+  Trial.leave();
   world.cabView = null;
   Links.clearWorldHash();
   closePortal();
@@ -680,7 +718,14 @@ function returnToElevator() {
     await toPose(c, poseFromShot(Shots.panel(a)), rm(1.5), Ease.inOutCubic);
     await c.wait(0.9);
     setPhase('cabin');
+    if (then) setTimeout(then, 0); // after this sequence ends
   });
+}
+
+/** The "10 GALERÍA" plaque beside the elevator, seen from a world: back into the elevator, press 10, ride up. */
+function galleryFromFloor() {
+  if (world.phase !== 'floor' || App.overlay || !GALLERY.enabled || Level.inspecting()) return;
+  returnToElevator(() => pressGallery());
 }
 
 /** Per-frame logic that is not a sequence: countdown, launch trigger, derived flags. */
@@ -709,8 +754,8 @@ function directorTick(dt, t) {
   const riding = w.phase === 'departing' || w.phase === 'traveling' || w.phase === 'arriving';
   if (riding !== App.liftOn) { App.liftOn = riding; App.liftKey = ''; $('#lift').hidden = !riding; }
   if (riding) {
-    const n = clamp(Math.round(w.needle), 0, panelTop()), key = n + ':' + w.arrow;
-    if (key !== App.liftKey) { App.liftKey = key; $('#lift-floor').textContent = n === 0 ? 'PB' : String(n); $('#lift-arrow').textContent = w.arrow > 0 ? '▲' : w.arrow < 0 ? '▼' : ''; }
+    const n = clamp(Math.round(w.needle), Progress.basementsOpen() ? -basementCount() : 0, panelTop()), key = n + ':' + w.arrow;
+    if (key !== App.liftKey) { App.liftKey = key; $('#lift-floor').textContent = floorMark(n); $('#lift-arrow').textContent = w.arrow > 0 ? '▲' : w.arrow < 0 ? '▼' : ''; }
   }
 }
 
@@ -751,7 +796,8 @@ const Input = (() => {
       if (e.key === '`' || e.key === 'º') { Dev.toggle(); return; }
       const k = e.key.toLowerCase();
       if (world.phase === 'cabin' && !App.overlay) {
-        if (/^[1-9]$/.test(k) && trackOf(Number(k))) { pressFloor(Number(k)); return; }
+        if (/^[1-9]$/.test(k)) { const n = panelDown() ? -Number(k) : Number(k); if (trackOf(n)) { pressFloor(n); return; } }
+        if (k === '-' && Progress.basementsOpen()) { togglePanelSection(); return; }
         if (k === '0') { pressLobby(); return; }
         if (k === 'y') { choosePlatform('youtube'); return; }
         if (k === 's') { choosePlatform('spotify'); return; }
@@ -767,6 +813,8 @@ const Input = (() => {
     if (!App.overlay && !$('#lv-tip').hidden) { Level.closeTip(); return; }
     if (!App.overlay && Level.inspecting()) { Level.go('wide'); return; }
     if (App.overlay === 'book') Book.close();
+    else if (App.overlay === 'trial') Trial.close();
+    else if (App.overlay === 'reveal') Reveal.stay();
     else if (App.overlay === 'invite') Invite.close();
     else if (App.overlay === 'gate') Gate.dismiss();
     else if (App.overlay === 'form') Register.close(false);
@@ -836,7 +884,16 @@ const Dev = (() => {
     clearLead() { Lead.clear(); world.called = false; syncUI(); },
     clearBook() { Book.reset(); },
     bookFind() { Book.state.found = true; if (!Book.state.print) Book.state.print = { u: 0.6, v: 0.57, r: -0.3 }; Book.save(); syncUI(); },
-    bookAll() { Book.state.found = true; if (!Book.state.print) Book.state.print = { u: 0.6, v: 0.57, r: -0.3 }; Book.state.pages = BOOK.pages.map((pg) => pg.id); Book.save(); if (App.overlay === 'book') Book.render(); syncUI(); },
+    /** Solves the first `count` challenges of the record (all nine by default) without playing them. */
+    bookAll(count) {
+      const ids = albumTracks(ELODM).map((t) => t.id).slice(0, count == null ? undefined : Number(count));
+      for (const id of ids) Progress.solve(id);
+      Book.state.found = true; if (!Book.state.print) Book.state.print = { u: 0.6, v: 0.57, r: -0.3 }; Book.save();
+      if (App.overlay === 'book') Book.render();
+      syncUI();
+    },
+    progressReset() { Progress.reset(); world.panelDown = false; Trial.leave(); syncUI(); },
+    trialSolve() { Trial.solveNow(); },
     bookBuy(ebookUrl, physicalUrl) { BOOK.buy.ebookUrl = ebookUrl || ''; BOOK.buy.physicalUrl = physicalUrl || ''; if (App.overlay === 'book') Book.render(); },
     force2D() { switchTo2D(); },
     /** Opens every floor's official player on this device and waits for it to answer (no playback). */
@@ -847,7 +904,7 @@ const Dev = (() => {
       App.testing = (async () => {
         for (const prov of ['youtube', 'spotify']) {
           setPlatform(prov);
-          for (const tr of tracks) {
+          for (const tr of tracks.filter((t) => t.youtubeVideoId || t.spotifyTrackUri)) { // the record's floors wait for their audio
             say(`probando ${prov === 'youtube' ? 'YouTube' : 'Spotify'} · piso ${tr.floor}…\n${rows.map((r) => r.line).join('\n')}`);
             applyFloor(tr.floor);
             const t0 = performance.now();
@@ -867,7 +924,7 @@ const Dev = (() => {
         }
         applyCabin(0);
         if (saved.platform) setPlatform(saved.platform);
-        world.visited = saved.visited; store.session.setJson('eldom.visited', world.visited);
+        world.visited = saved.visited; store.session.setJson(VISITED_KEY, world.visited.map((f) => trackOf(f).id));
         const bad = rows.filter((r) => !r.ok);
         say(`${bad.length ? '✗ ' + bad.length + ' de ' + rows.length + ' con problemas' : '✓ ' + rows.length + ' de ' + rows.length + ' reproductores respondieron'} · ${navigator.userAgent.slice(0, 90)}\n${rows.map((r) => r.line).join('\n')}`);
         window.__eldomPlayerTest = rows;
@@ -875,7 +932,7 @@ const Dev = (() => {
       })();
       try { return await App.testing; } finally { App.testing = null; }
     },
-    levelFloor() { if (Clock.remaining() > 0) actions.released(); applyFloor(LEVEL.floor); },
+    levelFloor() { if (Clock.remaining() > 0) actions.released(); applyFloor(Level.floor()); },
     /** Checks: stand somewhere, and hold the joystick for a while. */
     roamTo(x, z, yaw) { Object.assign(world.cam, { x, z, yaw, pitch: 0 }); },
     roamPush(mx, mz, ms) { Roam.joy.x = mx; Roam.joy.y = mz; return new Promise((res) => setTimeout(() => { Roam.joy.x = Roam.joy.y = 0; res(); }, ms)); },
@@ -894,12 +951,14 @@ const Dev = (() => {
       grp('Estado', btn('Previo', actions.prelaunch), btn('Últimos 10 s', actions.lastTen), btn('Publicado', actions.released)),
       grp('Puertas', btn('Abrir', actions.openDoors), btn('Cerrar', actions.closeDoors)),
       grp('Vista', btn('Exterior', actions.exterior), btn('Interior', actions.interior), btn('Galería', actions.gallery), btn('Obras de muestra', actions.gallerySample)),
-      grp('Llegar al piso', ...tracks.map((t) => btn(String(t.floor), () => actions.arrive(t.floor)))),
+      grp('Llegar al piso', ...tracks.filter((t) => t.floor > 0).map((t) => btn(floorMark(t.floor), () => actions.arrive(t.floor)))),
+      grp('Subsuelos (sin candado)', ...tracks.filter((t) => t.floor < 0).map((t) => btn(floorMark(t.floor), () => actions.arrive(t.floor)))),
+      grp('Desafíos', btn('Resolver este', actions.trialSolve), btn('Resolver 8', () => actions.bookAll(8)), btn('Resolver 9', () => actions.bookAll()), btn('Reiniciar progreso', actions.progressReset)),
       grp('Plataforma', btn('YouTube', () => actions.platform('youtube'), 'p-youtube'), btn('Spotify', () => actions.platform('spotify'), 'p-spotify')),
       grp('Embeds', btn('Auto', () => actions.embedMode('auto'), 'e-auto'), btn('Embed', () => actions.embedMode('embed'), 'e-embed'), btn('Links', () => actions.embedMode('link'), 'e-link')),
       grp('Reproductores', btn('Probar reproductores', () => actions.playerTest()), (api.testOut = h('pre', { class: 'testout', hidden: true }))),
       grp('Nivel', btn('Ir al piso del nivel', actions.levelFloor), btn('Reiniciar nivel', actions.levelReset), btn('Ruedas resueltas', actions.levelSolve)),
-      grp('Extra', btn('Borrar registro', actions.clearLead), btn('Reiniciar libro', actions.clearBook), btn('Encontrar libro', actions.bookFind), btn('Libro completo', actions.bookAll), btn('Forzar 2D', actions.force2D), btn('Movimiento reducido', () => actions.reducedMotion(), 'rm'), btn('Velocidad ×1/×3', () => actions.timeScale(Seq.scale === 1 ? 3 : 1), 'ts'), btn('Ocultar', () => { root.hidden = true; open = false; })),
+      grp('Extra', btn('Borrar registro', actions.clearLead), btn('Reiniciar libro', actions.clearBook), btn('Encontrar libro', actions.bookFind),  btn('Forzar 2D', actions.force2D), btn('Movimiento reducido', () => actions.reducedMotion(), 'rm'), btn('Velocidad ×1/×3', () => actions.timeScale(Seq.scale === 1 ? 3 : 1), 'ts'), btn('Ocultar', () => { root.hidden = true; open = false; })),
       (readout = h('div', { class: 'readout' })));
     panel.hidden = true;
     const corner = h('button', { class: 'corner', type: 'button', tabindex: '-1', 'aria-hidden': 'true' });
@@ -981,9 +1040,10 @@ function initUI() {
   for (const p of ['youtube', 'spotify']) Hot.add('sel-' + p, p, () => choosePlatform(p));
   for (const tr of [...tracks].sort((a, b) => b.floor - a.floor)) Hot.add('floor-' + tr.floor, tr.title, () => pressFloor(tr.floor));
   Hot.add('floor-0', 'PB', () => pressLobby());
+  Hot.add('panel-section', COPY.panelDown, () => togglePanelSection());
   if (GALLERY.enabled) {
     Hot.add('floor-' + GALLERY_FLOOR, GALLERY.label, () => pressGallery());
-    Hot.add('gallery', `Piso ${GALLERY_FLOOR}: visitar la galería`, () => Gallery.enterFromLobby());
+    Hot.add('gallery', `${floorName(GALLERY_FLOOR)}: visitar la galería`, () => (world.phase === 'floor' ? galleryFromFloor() : Gallery.enterFromLobby()));
     for (let i = 0; i < Gallery.count(); i++) Hot.add('piece-' + i, i < GALLERY.pieces.length ? `Obra ${i + 1}` : 'Agradecimientos', () => Gallery.focus(i));
     $('#gal-back').addEventListener('click', () => (world.gallery.at >= 0 ? Gallery.back() : Gallery.leave()));
     $('#gal-prev').addEventListener('click', () => Gallery.step(-1));
@@ -996,9 +1056,11 @@ function initUI() {
   $('#cap-invite').addEventListener('click', () => { const tr = trackOf(world.floor); if (tr) Invite.open(tr); });
   $('#cap-invite-all').addEventListener('click', () => Invite.open(null));
   Hot.add('book', 'Un libro apoyado en los escalones', () => Book.pickUp());
-  Hot.add('page', 'Una página suelta', () => Book.takePage());
+  Hot.add('tr-element', '', () => Trial.open());
   for (const id of LEVEL_HOTS) Hot.add(id, id, () => Level.tap(id));
   $('#lv-back').addEventListener('click', () => Level.go('wide'));
+  Trial.init();
+  $('#reveal-stay').addEventListener('click', () => Reveal.stay());
   $('#rot-keep').addEventListener('click', () => { store.session.set('eldom.rot', '1'); $('#rot-invite').hidden = true; });
   $('#cab-view').addEventListener('click', () => {
     if (world.phase !== 'cabin' || Seq.busy('main')) return;
@@ -1071,9 +1133,25 @@ function reframe() {
   else if (p === 'gallery') Gallery.reframe();
 }
 
+/** The links between record, floors, chapters and texts are made by id: a broken one is reported, never guessed. */
+function checkCatalog() {
+  const bad = [];
+  for (const t of albumTracks(ELODM)) {
+    if (!BOOK.pages.some((p) => p.id === t.chapter)) bad.push(`${t.id}: capítulo ${t.chapter}`);
+    if (!COVER_ELEMENTS[t.element]) bad.push(`${t.id}: elemento ${t.element}`);
+    if (!TRIALS[t.id]) bad.push(`${t.id}: desafío`);
+  }
+  for (const p of [...BOOK.opening, ...BOOK.pages, BOOK.closing, BOOK.back]) if (!bookText(p.id)) bad.push(`texto ${p.id}`);
+  for (const p of BOOK.pages) { const t = trackForChapter(p.id); if (!t || t.id !== p.foundIn) bad.push(`${p.id}: piso`); }
+  if (new Set(tracks.map((t) => t.floor)).size !== tracks.length || tracks.some((t) => t.floor === 0 || t.floor === GALLERY_FLOOR)) bad.push('pisos repetidos');
+  if (bad.length) console.error('[eldom] catálogo: ' + bad.join(' · '));
+  App.catalog = bad;
+}
 async function boot() {
   const fill = $('#boot-fill');
   const progress = (v) => { fill.style.transform = `scaleX(${v})`; };
+  Progress.load(); // first: the panels and the book are drawn from it
+  checkCatalog();
   progress(0.12);
   await loadFonts();
   progress(0.4);
@@ -1089,8 +1167,7 @@ async function boot() {
   progress(0.9);
   const p = store.session.get('eldom.platform');
   if (p === 'youtube' || p === 'spotify') world.platform = p;
-  const vis = store.session.json('eldom.visited', []);
-  world.visited = Array.isArray(vis) ? vis.filter((n) => trackOf(n)) : [];
+  world.visited = loadVisited();
   initUI(); Input.init(); Dev.init();
   Book.load();
   Level.load();
@@ -1119,7 +1196,8 @@ async function boot() {
   let readyRes;
   window.__eldom = {
     ready: new Promise((res) => { readyRes = res; }),
-    config: () => ({ release: RELEASE_AT, demo: DEMO_ALBUM, tracks: tracks.map((t) => ({ floor: t.floor, id: t.id, title: t.title, youtubeVideoId: t.youtubeVideoId, youtubeStartSeconds: t.youtubeStartSeconds, spotifyTrackUri: t.spotifyTrackUri, spotifyAlbumId: t.spotifyAlbumId, durationSeconds: t.durationSeconds })), level: { floor: LEVEL.floor, symbols: LEVEL.symbols, stones: LEVEL.stones } }),
+    config: () => ({ release: RELEASE_AT, demo: DEMO_ALBUM, gallery: { pieces: GALLERY.pieces.map(({ id, src, title, caption, thanks }) => ({ id, src, title, caption, thanks })), thanks: GALLERY.thanks.lines }, tracks: tracks.map((t) => ({ album: t.album, floor: t.floor, id: t.id, title: t.title, chapter: t.chapter || null, element: t.element || null, youtubeVideoId: t.youtubeVideoId, youtubeStartSeconds: t.youtubeStartSeconds, spotifyTrackUri: t.spotifyTrackUri, spotifyAlbumId: t.spotifyAlbumId, durationSeconds: t.durationSeconds })), level: { floor: Level.floor(), trackId: LEVEL.trackId, symbols: LEVEL.symbols, stones: LEVEL.stones }, catalog: App.catalog || [],
+      book: { opening: BOOK.opening.map((p) => p.id), pages: BOOK.pages.map((p) => ({ id: p.id, foundIn: p.foundIn })), closing: BOOK.closing.id, back: BOOK.back.id }, bookText: BOOK_TEXT }),
     state() {
       const port = PlayerPortal.current;
       return {
@@ -1133,7 +1211,10 @@ async function boot() {
         cam: { x: world.cam.x, y: world.cam.y, z: world.cam.z, yaw: world.cam.yaw, pitch: world.cam.pitch, fov: world.cam.fov },
         roam: { scene: Roam.scene(), moved: Roam.moved, docked: Roam.docked, joy: !$('#joy').hidden, ghost: !$('#joy-ghost').hidden, solids: R && R.levelSolids ? R.levelSolids() : [] },
         panel: { logos: world.panelLogos || 0 },
-        book: { found: Book.state.found, pages: [...Book.state.pages], printed: !!Book.state.print, at: Book.state.at, leaves: Book.leaves().map((l) => l.kind), pageHere: !!Book.pageHere(), complete: Book.complete() },
+        book: { found: Book.state.found, pages: BOOK.pages.filter((p) => Book.has(p.id)).map((p) => p.id), printed: !!Book.state.print, at: Book.state.at, leaves: Book.leaves().map((l) => l.kind),
+          leafIds: Book.leaves().map((l) => (l.page ? l.page.id : l.kind)), complete: Book.complete(), count: $('#bk-count').textContent,
+          text: App.overlay === 'book' ? $('#bk-page').innerText : null },
+        progress: Progress.debug(), panelDown: panelDown(), trial: Trial.debug(),
       };
     },
     waitFor(target, timeoutMs = 20000) {
@@ -1143,12 +1224,13 @@ async function boot() {
     ui: {
       openForm: () => Register.open(), closeForm: () => Register.close(false), openListen: () => Listen.ask(), chooseListen: (p) => Listen.choose(p),
       closeListen: () => Listen.close(), enter: () => enterCabin(), returnToElevator: () => returnToElevator(),
-      pressLobby: () => pressLobby(), pressGallery: () => pressGallery(), openGallery: () => Gallery.enterFromLobby(), galleryFocus: (i) => Gallery.focus(i), galleryStep: (dlt) => Gallery.step(dlt), galleryBack: () => Gallery.back(), leaveGallery: () => Gallery.leave(), pickBook: () => Book.pickUp(), openBook: (at) => Book.open(at), closeBook: () => Book.close(), takePage: () => Book.takePage(), bookTurn: (dlt) => Book.turn(dlt),
+      pressLobby: () => pressLobby(), pressGallery: () => pressGallery(), openGallery: () => Gallery.enterFromLobby(), galleryFocus: (i) => Gallery.focus(i), galleryStep: (dlt) => Gallery.step(dlt), galleryBack: () => Gallery.back(), leaveGallery: () => Gallery.leave(), pickBook: () => Book.pickUp(), openBook: (at) => Book.open(at), closeBook: () => Book.close(), bookTurn: (dlt) => Book.turn(dlt),
       levelTap: (id) => Level.tap(id), levelGo: (v) => Level.go(v), levelHint: () => Level.hint(), levelKeep: () => Level.keep(), levelElevator: () => Level.toElevator(), levelReset: (force) => Level.reset(force), levelTake: () => Level.take(),
+      trialOpen: () => Trial.open(), trialClose: () => Trial.close(), trialHint: () => Trial.hint(), trialAct: (...a) => Trial.act(...a), panelSection: () => togglePanelSection(),
       invite: (n) => Invite.open(n ? trackOf(n) : null), closeInvite: () => Invite.close(), gateChoose: (p) => Gate.choose(p), gateDismiss: () => Gate.dismiss(),
     },
     dev: { prelaunch: A.prelaunch, lastTen: A.lastTen, released: A.released, openDoors: A.openDoors, closeDoors: A.closeDoors, exterior: A.exterior, interior: A.interior, gallery: A.gallery, gallerySample: A.gallerySample,
-      arrive: A.arrive, platform: A.platform, press: A.press, embedMode: A.embedMode, clearLead: A.clearLead, clearBook: A.clearBook, levelFloor: A.levelFloor, levelReset: A.levelReset, levelSolve: A.levelSolve, playerTest: A.playerTest, roamTo: A.roamTo, roamPush: A.roamPush, bookFind: A.bookFind, bookAll: A.bookAll, bookBuy: A.bookBuy, force2D: A.force2D, reducedMotion: A.reducedMotion, timeScale: A.timeScale },
+      arrive: A.arrive, platform: A.platform, press: A.press, embedMode: A.embedMode, clearLead: A.clearLead, clearBook: A.clearBook, levelFloor: A.levelFloor, levelReset: A.levelReset, levelSolve: A.levelSolve, playerTest: A.playerTest, roamTo: A.roamTo, roamPush: A.roamPush, bookFind: A.bookFind, bookAll: A.bookAll, progressReset: A.progressReset, trialSolve: A.trialSolve, bookBuy: A.bookBuy, force2D: A.force2D, reducedMotion: A.reducedMotion, timeScale: A.timeScale },
   };
   boot().then(readyRes, (e) => { console.error(e); readyRes(); });
 }

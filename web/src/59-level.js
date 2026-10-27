@@ -1,7 +1,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════
 // LEVEL  (one exploration level in a song's world — playable prototype)
-//   painting → hatch → box with three dials → the order is in the water → the prism → a page for the book.
-//   Saved in localStorage, so a finished level stays finished; the page it gives can be obtained once per play.
+//   painting → hatch → box with three dials → the order is in the water → the prism breaks into light.
+//   Lives in Pequeño Primate's "Tan Buena" (basement −1). Saved in localStorage, so a finished level stays finished.
+//   It gives no chapter: the book is earned on the nine floors of the record (an old finished level unlocks nothing).
 //   Stages: 0 painting hung · 1 painting moved · 2 hatch open (box locked) · 3 box open · 4 done (page taken).
 // ═══════════════════════════════════════════════════════════════════════════════════════════
 const Level = {
@@ -14,12 +15,13 @@ const Level = {
   resetArmed: 0,
 
   fresh() { return { v: 1, stage: 0, dials: LEVEL.start.map((id) => Math.max(0, LEVEL.symbols.indexOf(id))), done: false, tries: 0, hints: 0 }; },
-  hosts(track) { return !!(LEVEL.enabled && track && track.floor === LEVEL.floor); },
+  /** The floor of the world that hosts it (found by id: floors may move, ids do not). */
+  floor() { const t = trackById(LEVEL.trackId); return t ? t.floor : null; },
+  hosts(track) { return !!(LEVEL.enabled && track && track.id === LEVEL.trackId); },
   /** The level needs the 3D world (the 2D fallback shows the floor without it). */
-  available() { return !!(LEVEL.enabled && R && R.kind === '3d' && R.levelPose && trackOf(LEVEL.floor)); },
-  here() { return this.available() && world.phase === 'floor' && world.floor === LEVEL.floor; },
+  available() { return !!(LEVEL.enabled && R && R.kind === '3d' && R.levelPose && this.floor() != null); },
+  here() { return this.available() && world.phase === 'floor' && world.floor === this.floor(); },
   inspecting() { return this.here() && this.view !== 'wide'; },
-  page() { const t = trackOf(LEVEL.floor); return t ? Book.pageFor(t.id) : null; },
 
   load() {
     const d = store.local.json(this.KEY, null), f = this.fresh();
@@ -31,9 +33,6 @@ const Level = {
       f.tries = Number(d.tries) || 0; f.hints = Number(d.hints) || 0;
     }
     this.s = f;
-    // a finished level keeps its page, even if the book (session storage) started over
-    const pg = this.page();
-    if (this.s.done && pg && BOOK.enabled && !Book.has(pg.id)) { Book.state.found = true; Book.state.pages = [...Book.state.pages, pg.id]; Book.save(); }
     this.applyVisual();
   },
   save() { store.local.setJson(this.KEY, this.s); },
@@ -47,7 +46,7 @@ const Level = {
 
   /** Phones: the floor's first view turns toward the wall, above the docked player. Wide screens keep theirs. */
   floorAim(a) {
-    if (a >= 1 || !LEVEL.enabled || world.env !== LEVEL.floor || !this.available()) return null;
+    if (a >= 1 || !LEVEL.enabled || world.env !== this.floor() || !this.available()) return null;
     const ST = LEVEL_SET, fov = 62, tanV = Math.tan((fov * Math.PI) / 360), tanH = tanV * a;
     const dx = ST.x, dz = ST.z - 2.7, dy = ST.hole.y - 1.6;
     const yaw = Math.atan2(-dx, -dz) - Math.atan((0.5 - 0.44) * 2 * tanH);
@@ -57,7 +56,7 @@ const Level = {
 
   // ---- arriving, leaving, looking ----
   arrive(n) {
-    if (n !== LEVEL.floor || !this.available()) return;
+    if (n !== this.floor() || !this.available()) return;
     this.back = null;
     this.view = 'wide'; this.busy = false; this.awaitCard = false;
     this.applyVisual();
@@ -183,24 +182,10 @@ const Level = {
       world.level.obj = 0; world.level.morph = 0;
       this.s.done = true;
       this.setStage(4);
-      this.givePage();
+      this.showCard();
     });
   },
-  givePage() {
-    const pg = this.page();
-    if (!pg || !BOOK.enabled) { this.showCard(); return; }
-    Book.state.found = true;
-    if (!Book.has(pg.id)) Book.state.pages = [...Book.state.pages, pg.id];
-    Book.save();
-    syncUI();
-    const icon = $('#book-open');
-    icon.classList.remove('got'); void icon.offsetWidth; icon.classList.add('got');
-    live(COPY.bookGot);
-    const at = Book.leaves().findIndex((l) => l.page && l.page.id === pg.id);
-    this.awaitCard = true;
-    Book.open(at);
-  },
-  /** Called by the book when it closes: right after reading the new page comes the end of the level. */
+  /** Called by the book when it closes (the level no longer opens it). */
   onBookClosed() { if (this.awaitCard && this.here()) { this.awaitCard = false; this.showCard(); } },
 
   // ---- end of the level ----
@@ -228,8 +213,6 @@ const Level = {
     }
     this.resetArmed = 0;
     for (const b of ['#lv-reset', '#lv-card-reset']) $(b).textContent = COPY.lvReset;
-    const pg = this.page();
-    if (pg && Book.has(pg.id)) { Book.state.pages = Book.state.pages.filter((id) => id !== pg.id); Book.save(); }
     this.s = this.fresh(); this.save();
     Seq.cancel('lv');
     this.busy = false; this.awaitCard = false; this.hintStage = -1;
@@ -284,7 +267,7 @@ const Level = {
   debug() {
     return { stage: this.s.stage, done: this.s.done, dials: this.s.dials.map((i) => LEVEL.symbols[i]), tries: this.s.tries, hints: this.s.hints, view: this.view, busy: this.busy,
       here: this.here(), card: !$('#lv-card').hidden, tip: $('#lv-tip').hidden ? '' : $('#lv-tip-text').textContent, set: R && R.levelInfo ? R.levelInfo() : null,
-      page: this.page() ? this.page().id : null, saved: store.local.json(this.KEY, null) };
+      floor: this.floor(), saved: store.local.json(this.KEY, null) };
   },
 };
 world.floorAim = (a) => Level.floorAim(a);

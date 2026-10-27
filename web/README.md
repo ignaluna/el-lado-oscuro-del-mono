@@ -1,8 +1,9 @@
 # La web de lanzamiento — el ascensor
 
 Página estática de **El Lado Oscuro del Mono**: el vacío con agua, el ascensor como en la portada, la cuenta regresiva
-con el registro, los pisos-canción con los reproductores oficiales de YouTube y Spotify, el nivel de exploración, el
-libro escondido y la galería. No necesita servidor: es un solo `index.html` con todo adentro (Three.js se carga de un
+con el registro, los nueve pisos del disco con sus desafíos y su libro, Pequeño Primate en los subsuelos con los
+reproductores oficiales de YouTube y Spotify y su nivel de exploración, y la galería. El recorrido, piso por piso, está
+en [RECORRIDO.md](RECORRIDO.md). No necesita servidor: es un solo `index.html` con todo adentro (Three.js se carga de un
 CDN).
 
 Es independiente de la app del resto del repo (Railway): no comparte código ni dependencias, salvo Playwright para
@@ -11,14 +12,17 @@ las pruebas.
 ## Cómo está armada
 
 - `src/` — las partes de la página, en orden. `00-base.html` tiene el HTML, el CSS y la configuración: `tracks`,
-  `BOOK`, `GALLERY`, `LEVEL`, `RELEASE_AT`, `LEAD_ENDPOINT`, `PRIVACY_URL`.
+  `ALBUMS`, `COVER_ELEMENTS`, `BOOK`, `GALLERY`, `LEVEL`, `RELEASE_AT`, `LEAD_ENDPOINT`, `PRIVACY_URL`. Los textos del
+  libro están en `05-book-text.js` (se generan con `tools/book-text.cjs`, no se editan a mano) y cada desafío en
+  `58-trial-<piso>-<id>.js`.
+- `assets/` — las fotos de la galería (`galeria/`) y, cuando existan, las tapas de Luján (`portadas/`).
 - `tools/build.cjs` — junta `src/` y escribe:
   - `dist/`: la web para publicar (`index.html`, `portada.jpg` para la vista previa al compartir, `favicon.svg` y
     `_headers` con los encabezados que necesitan los reproductores). Hay que subir los cuatro juntos: `_headers`
     lleva el hash del script de ese `index.html`.
   - `artifact/index.html`: la versión para claude.ai (ahí los reproductores son enlaces).
-- `tools/check.cjs` — pruebas de punta a punta en el navegador (escenarios `smoke`, `cabin`, `mini`, `level`,
-  `roam`, `integrations`, …). `--dist` las corre sobre `dist/` con sus encabezados; `--url` sobre el sitio publicado.
+- `tools/check.cjs` — pruebas de punta a punta en el navegador (escenarios `smoke`, `cabin`, `mini`, `trials`,
+  `book`, `basements`, `level`, `roam`, `integrations`, …). `--dist` las corre sobre `dist/` con sus encabezados; `--url` sobre el sitio publicado.
 - `tools/preflight.cjs` — verifica los ids de YouTube y Spotify y, con `--site`, el sitio publicado.
 - `tools/leads/` — la planilla de Google donde caen los registros: el programa (`Code.gs`), sus pruebas y cómo
   armarla ([LEEME.md](tools/leads/LEEME.md)).
@@ -68,6 +72,7 @@ con `#dev` al final).
 
 - Registros: `LEAD_ENDPOINT` apunta a la planilla de la banda ([tools/leads/LEEME.md](tools/leads/LEEME.md)). Las
   pruebas nunca escriben en ella, salvo el escenario `leadslive` con `--real-leads`.
-- Los datos de música son los del disco de prueba (*Pequeño Primate*): reemplazar por los ids reales en `tracks`,
-  revisar `RELEASE_AT` (provisoria) y `PRIVACY_URL`.
+- El audio de *El Lado Oscuro del Mono* todavía no está: sus pisos muestran «El audio llega con el disco». Completar
+  los ids reales en `tracks` (ver [RECORRIDO.md](RECORRIDO.md)), revisar `RELEASE_AT` (provisoria) y `PRIVACY_URL`.
+- Las tapas de Luján: `assets/portadas/` + `COVER_ELEMENTS[].art`.
 - Los textos provisorios están listados en cada documento de `odd/tasks/`.

@@ -35,7 +35,7 @@ const Invite = {
     this.restore = document.activeElement;
     const el = $('#invite');
     $('#invite-title').textContent = track ? COPY.inviteAsk : COPY.inviteAnyAsk;
-    $('#invite-song').textContent = track ? `PISO ${track.floor} · ${track.title}` : COPY.title;
+    $('#invite-song').textContent = track ? `${floorName(track.floor).toUpperCase()} · ${track.title}` : COPY.title;
     const msg = this.message();
     const cut = msg.lastIndexOf(this.url);
     $('#invite-msg').replaceChildren(msg.slice(0, cut), h('span', { id: 'invite-url', text: this.url }));
@@ -101,20 +101,27 @@ const Gate = {
   pending() { const id = store.local.get(this.KEY); return tracks.find((t) => t.id === id) || null; },
   remember(tr) { store.local.set(this.KEY, tr.id); },
   forget() { store.local.remove(this.KEY); },
+  /** A basement link opened before the nine chapters are found: the lock holds, and the way back is right there. */
+  locked(tr) { return !!(tr && isBasement(tr.floor) && !Progress.basementsOpen()); },
   open(tr) {
     this.track = tr;
     applyCabin(0, false);
     setPose(poseFromShot(Shots.doors(aspectNow())));
     world.exposure = 0.5;
     App.overlay = 'gate';
+    const lock = this.locked(tr);
+    $('#gate-pre').textContent = lock ? COPY.gateLockedPre : 'TE INVITARON A UN MUNDO';
     $('#gate-title').textContent = tr.title;
+    $('#gate-locked').hidden = !lock; $('#gate-locked').textContent = lock ? COPY.gateLocked : '';
+    $('#gate-ask').hidden = lock; $('#gate-tokens').hidden = lock;
+    $('#g-close').textContent = lock ? COPY.gateLockedBack : 'AHORA NO';
     $('#gate').hidden = false;
-    $(world.platform === 'spotify' ? '#g-spotify' : '#g-youtube').focus({ preventScroll: true });
-    live(`Te invitaron a ${tr.title}. Elegí por dónde viajar.`);
+    $(lock ? '#g-close' : world.platform === 'spotify' ? '#g-spotify' : '#g-youtube').focus({ preventScroll: true });
+    live(lock ? `${tr.title}: ${COPY.gateLocked}` : `Te invitaron a ${tr.title}. Elegí por dónde viajar.`);
     syncUI();
   },
   choose(platform) {
-    if (App.overlay !== 'gate') return;
+    if (App.overlay !== 'gate' || this.locked(this.track)) return;
     const tr = this.track;
     $('#gate').hidden = true;
     App.overlay = null;

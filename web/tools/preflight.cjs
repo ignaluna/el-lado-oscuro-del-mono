@@ -64,9 +64,20 @@ function checkFormat(cfg) {
   const T = cfg.tracks;
   if (!Array.isArray(T) || !T.length) { err('tracks', 'empty'); return; }
   const ids = new Set(), uris = new Set();
-  T.forEach((t, i) => {
+  // the record on floors 1..N, Pequeño Primate in the basements −1..−N, each in its own order
+  const up = T.filter((t) => t.floor > 0), down = T.filter((t) => t.floor < 0);
+  up.forEach((t, i) => { if (t.floor !== i + 1) err(`piso ${t.floor} «${t.title}»`, `floor should be ${i + 1} (the record's floors are 1..N in order)`); });
+  down.forEach((t, i) => { if (t.floor !== -(i + 1)) err(`piso ${t.floor} «${t.title}»`, `floor should be ${-(i + 1)} (the basements are −1..−N in order)`); });
+  if (up.length + down.length !== T.length) err('tracks', 'a track sits on floor 0 (the entrance)');
+  T.forEach((t) => {
     const w = `piso ${t.floor} «${t.title}»`;
-    if (t.floor !== i + 1) err(w, `floor should be ${i + 1} (floors are 1..N in order)`);
+    if (!t.youtubeVideoId && !t.spotifyTrackUri && !t.spotifyAlbumId) { // not published yet: the floor shows the pending-audio plate
+      if (t.album === 'elodm') warn(w, 'audio pending (no YouTube or Spotify ids yet): the floor shows "El audio llega con el disco"');
+      else err(w, 'no audio ids');
+      if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(t.id || '')) err(w, `id "${t.id}" is not a lowercase slug (it is the invitation hash)`);
+      if (ids.has(t.id)) err(w, `id "${t.id}" repeated`); ids.add(t.id);
+      return;
+    }
     if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(t.id || '')) err(w, `id "${t.id}" is not a lowercase slug (it is the invitation hash)`);
     if (ids.has(t.id)) err(w, `id "${t.id}" repeated`); ids.add(t.id);
     if (!t.title) err(w, 'title empty');
@@ -81,8 +92,9 @@ function checkFormat(cfg) {
   });
   // several floors sharing one video (a full-album video with chapters): the starts must climb with the floors
   const byVideo = new Map();
-  for (const t of T) { if (!byVideo.has(t.youtubeVideoId)) byVideo.set(t.youtubeVideoId, []); byVideo.get(t.youtubeVideoId).push(t); }
-  for (const [vid, list] of byVideo) {
+  for (const t of T) { if (!t.youtubeVideoId) continue; if (!byVideo.has(t.youtubeVideoId)) byVideo.set(t.youtubeVideoId, []); byVideo.get(t.youtubeVideoId).push(t); }
+  for (const [vid, list0] of byVideo) {
+    const list = [...list0].sort((a, b) => Math.abs(a.floor) - Math.abs(b.floor));
     if (list.length < 2) continue;
     for (let i = 1; i < list.length; i++) {
       const a = list[i - 1], b = list[i];
@@ -242,12 +254,12 @@ async function checkSite(site) {
   if (!OFFLINE) {
     const rel = Date.parse(cfg.RELEASE_AT);
     const videos = new Map();
-    for (const t of cfg.tracks) { if (!videos.has(t.youtubeVideoId)) videos.set(t.youtubeVideoId, []); videos.get(t.youtubeVideoId).push(t); }
+    for (const t of cfg.tracks) { if (!t.youtubeVideoId) continue; if (!videos.has(t.youtubeVideoId)) videos.set(t.youtubeVideoId, []); videos.get(t.youtubeVideoId).push(t); }
     const jobs = [];
     for (const [vid, users] of videos) jobs.push(checkYouTube(vid, users, rel));
     if (cfg.DEMO_ALBUM && !videos.has(cfg.DEMO_ALBUM.youtubeVideoId)) jobs.push(checkYouTube(cfg.DEMO_ALBUM.youtubeVideoId, [], rel));
     const albums = new Map();
-    for (const t of cfg.tracks) { if (!albums.has(t.spotifyAlbumId)) albums.set(t.spotifyAlbumId, []); albums.get(t.spotifyAlbumId).push(t); }
+    for (const t of cfg.tracks) { if (!t.spotifyAlbumId) continue; if (!albums.has(t.spotifyAlbumId)) albums.set(t.spotifyAlbumId, []); albums.get(t.spotifyAlbumId).push(t); }
     for (const [aid, list] of albums) jobs.push(checkSpotifyAlbum(aid, list, rel));
     if (cfg.DEMO_ALBUM && !albums.has(cfg.DEMO_ALBUM.spotifyAlbumId)) jobs.push(checkSpotifyAlbum(cfg.DEMO_ALBUM.spotifyAlbumId, [], NaN));
     for (const t of cfg.tracks) if (t.spotifyTrackUri) jobs.push(checkSpotifyTrack(t, rel));

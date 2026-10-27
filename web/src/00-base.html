@@ -72,13 +72,21 @@ button{font-family:inherit;color:inherit}
 #bk-page{flex:1;min-height:0;overflow:auto;padding:6px 26px 14px;outline:none;scrollbar-width:thin;scrollbar-color:#34343b transparent;touch-action:pan-y}
 #bk-page h3{margin:8px 0 16px;font-family:var(--f-display);font-style:italic;font-weight:400;font-size:24px;line-height:1.2;color:var(--ivory);text-wrap:balance}
 #bk-page p{margin:0 0 14px;font-family:var(--f-mono);font-size:15px;line-height:1.62;color:rgba(235,229,213,.88);max-width:62ch}
+#bk-page p{white-space:pre-wrap;overflow-wrap:break-word}
+#bk-page .bk-b{font-weight:700;color:var(--ivory)}
+#bk-page .bk-pause{margin:0;height:14px}
+#bk-page .bk-song{margin:-8px 0 18px;font-family:var(--f-caps);font-size:10.5px;letter-spacing:.22em;color:rgba(235,229,213,.55)}
+#bk-page .bk-closed{font-style:italic;color:rgba(235,229,213,.5)}
+#bk-page.bk-blank h3{opacity:.42}
+#bk-page.bk-back{background:rgba(235,229,213,.03);box-shadow:inset 0 0 0 1px rgba(235,229,213,.12)}
+#bk-count{margin-right:auto;align-self:center;font-family:var(--f-caps);font-size:10.5px;letter-spacing:.22em;color:rgba(235,229,213,.55)}
 #bk-page .bk-pending{font-style:italic;color:rgba(235,229,213,.42)}
 #bk-page .bk-from{margin-top:22px;font-family:var(--f-caps);font-size:10.5px;letter-spacing:.24em;color:rgba(235,229,213,.5)}
 #bk-page.bk-cover{display:flex;align-items:center;justify-content:center;padding:6px 22px 10px}
 .bk-art{position:relative;width:100%;max-width:min(100%,56vh);aspect-ratio:1/1;box-shadow:0 0 0 1px rgba(235,229,213,.3)}
 .bk-art img{display:block;width:100%;height:100%;object-fit:cover}
 .bk-art .bk-print{position:absolute;width:26%;height:auto}
-#bk-page.bk-blank{margin:14px 26px;padding:0;background-image:repeating-linear-gradient(180deg,transparent 0 31px,rgba(235,229,213,.05) 31px 32px)}
+#bk-page.bk-blank{background-image:repeating-linear-gradient(180deg,transparent 0 31px,rgba(235,229,213,.05) 31px 32px)}
 #bk-page.bk-colophon{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:10px;padding-bottom:26px}
 .bk-buy{font-family:var(--f-caps);font-size:11px;letter-spacing:.22em;color:rgba(235,229,213,.7);text-decoration:none;padding:10px 4px;border-bottom:1px solid rgba(235,229,213,.25)}
 .bk-buy:hover,.bk-buy:focus-visible{color:var(--ivory);border-bottom-color:var(--ivory)}
@@ -109,6 +117,7 @@ button{font-family:inherit;color:inherit}
 #gate h2{margin:0 0 6px;font-family:var(--f-display);font-style:italic;font-weight:400;font-size:clamp(30px,6.4vw,58px);line-height:1.08;color:var(--ivory);text-wrap:balance;text-shadow:0 2px 14px rgba(0,0,0,.7)}
 .gate-ask{margin:0;font-family:var(--f-caps);font-size:clamp(12px,1.5vw,15px);letter-spacing:.28em;padding-left:.28em;color:var(--ivory);text-shadow:0 1px 0 #000}
 #gate .plate-x{position:static;margin-top:6px;min-height:40px}
+.gate-note{margin:0;max-width:30em;font-family:var(--f-mono);font-size:14px;line-height:1.5;color:rgba(235,229,213,.86);text-shadow:0 1px 0 #000}
 
 /* ---- sound toggle ---- */
 #sound{position:fixed;z-index:12;top:calc(env(safe-area-inset-top,0px) + 12px);right:14px;background:none;border:0;padding:8px 4px;font-family:var(--f-caps);font-size:11px;letter-spacing:.24em;color:rgba(235,229,213,.6);cursor:pointer;transition:color .3s}
@@ -137,8 +146,47 @@ button{font-family:inherit;color:inherit}
 .cap-invite{font-size:11px;letter-spacing:.22em;padding:10px 4px 8px;color:rgba(235,229,213,.72)}
 .cap-invite:hover,.cap-invite:focus-visible{color:var(--ivory)}
 .cap-back:hover,.cap-back:focus-visible{box-shadow:inset 0 -1px 0 var(--ivory)}
+@media (max-width:639px){#floor-actions{flex-direction:row!important;flex-wrap:wrap;gap:0 20px;max-width:calc(100vw - 96px)}#floor-actions .cap-long{display:none}#floor-actions #tr-open{order:5}}
 @media (max-width:639px),(max-height:480px){#floor-actions{bottom:auto;top:calc(env(safe-area-inset-top,0px) + 4px);flex-direction:column;align-items:flex-start}.cap-back{font-size:11px;letter-spacing:.2em}.cap-invite{font-size:10px;letter-spacing:.18em;min-height:40px}}
 #captions.busy .cap:not(#cap-hint){opacity:0;pointer-events:none}
+.cap-trial{color:var(--ivory);box-shadow:inset 0 -2px 0 var(--tr-accent,#ebe5d5)}
+.cap-trial.done{box-shadow:inset 0 -1px 0 rgba(235,229,213,.35);color:rgba(235,229,213,.8)}
+/* ---- the record's challenges ---- */
+#trial{position:fixed;z-index:40;left:12px;top:12px;width:min(440px,calc(100vw - 24px));max-height:calc(100% - 24px);display:flex;flex-direction:column;background-color:#121114;background-image:var(--metal-noise,none);
+  box-shadow:inset 0 0 0 1px rgba(235,229,213,.42),inset 0 0 0 6px #0c0c0e,inset 0 0 0 7px rgba(235,229,213,.14),0 18px 60px rgba(0,0,0,.55)}
+.tr-bar{display:flex;align-items:center;gap:10px;padding:10px 16px 0}
+.tr-where{margin:0 auto 0 0;font-family:var(--f-caps);font-size:10.5px;letter-spacing:.24em;color:rgba(235,229,213,.6)}
+.tr-bar .plate-x{position:static;min-height:36px}
+.tr-body{flex:1;min-height:0;overflow:auto;padding:4px 18px 12px;scrollbar-width:thin;scrollbar-color:#34343b transparent}
+#tr-title{margin:2px 0 6px;font-family:var(--f-display);font-style:italic;font-weight:400;font-size:22px;line-height:1.2;color:var(--ivory)}
+.tr-clue{margin:0 0 10px;padding-left:10px;border-left:2px solid var(--tr-accent,#ebe5d5);font-family:var(--f-display);font-style:italic;font-size:15.5px;line-height:1.42;color:rgba(235,229,213,.86);white-space:pre-line}
+.tr-art{display:block;width:100%;max-height:180px;object-fit:contain;margin:0 0 8px}
+.tr-stage svg{display:block;width:100%;height:auto;max-height:min(230px,30vh);margin:0 0 8px;overflow:visible}
+.tr-stage svg text{font-family:"Courier Prime","Courier New",monospace;fill:#ebe5d5}
+.tr-acts{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:7px;margin:0 0 6px}
+.tr-act{min-height:46px;padding:8px 8px;background:#0b0b0d;border:0;cursor:pointer;font-family:var(--f-caps);font-size:11px;letter-spacing:.14em;line-height:1.3;color:var(--ivory);text-align:center;
+  box-shadow:inset 0 0 0 1px rgba(235,229,213,.45),inset 0 0 0 4px #0b0b0d,inset 0 0 0 5px rgba(235,229,213,.14);touch-action:manipulation}
+.tr-act:hover:not(:disabled),.tr-act:focus-visible{background:#1a1a20;box-shadow:inset 0 0 0 1px var(--ivory),inset 0 0 0 4px #0b0b0d,inset 0 0 0 5px rgba(235,229,213,.3)}
+.tr-act[aria-pressed="true"],.tr-act.on{background:#24211b;box-shadow:inset 0 0 0 1px var(--tr-accent,#ebe5d5),inset 0 0 0 4px #24211b,inset 0 0 0 5px var(--tr-accent,#ebe5d5)}
+.tr-act:disabled{opacity:.32;cursor:default}
+.tr-act.wide{grid-column:1 / -1}
+.tr-act.gone{visibility:hidden}
+.tr-field{display:flex;gap:7px;margin:0 0 6px}
+.tr-field input{flex:1;min-width:0;min-height:46px;padding:8px 10px;background:#0b0b0d;border:0;box-shadow:inset 0 0 0 1px rgba(235,229,213,.45);font-family:var(--f-mono);font-size:16px;color:var(--ivory)}
+.tr-field input:focus-visible{outline:2px solid var(--tr-accent,#ebe5d5);outline-offset:1px}
+#tr-status{min-height:22px;margin:4px 0 8px;font-family:var(--f-mono);font-size:13.5px;line-height:1.45;color:rgba(235,229,213,.85)}
+.tr-foot{display:flex;flex-wrap:wrap;gap:7px;padding:0 18px 14px}
+.tr-foot .tr-act{flex:1}
+#trial.solved .tr-stage{animation:tr-glow 2.4s ease}
+@keyframes tr-glow{0%{filter:none}35%{filter:brightness(1.6) drop-shadow(0 0 14px rgba(255,240,210,.6))}100%{filter:none}}
+.tr-page{transform-origin:50% 60%;animation:tr-page 2.2s ease forwards}
+@keyframes tr-page{0%{opacity:0;transform:scale(.4) rotate(-8deg)}40%{opacity:1}100%{opacity:1;transform:scale(1) rotate(0)}}
+@media (prefers-reduced-motion:reduce){#trial.solved .tr-stage,.tr-page{animation:none}}
+#reveal{position:fixed;inset:0;z-index:45;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:0 20px;text-align:center;background:radial-gradient(ellipse at 50% 60%,rgba(20,18,16,.72),rgba(0,0,0,.92))}
+#reveal h2{margin:0;font-family:var(--f-display);font-style:italic;font-weight:400;font-size:clamp(28px,6vw,52px);line-height:1.1;color:var(--ivory)}
+#reveal p{margin:0;max-width:30em;font-family:var(--f-mono);font-size:15px;line-height:1.55;color:rgba(235,229,213,.86)}
+#reveal .tr-act{min-width:220px}
+#reveal .plate-x{position:static;min-height:40px}
 /* ---- level ---- */
 #lv-tip{position:fixed;z-index:36;left:16px;top:16px;width:min(330px,calc(100vw - 24px));overflow:auto;padding:14px 16px 8px;background:rgba(16,14,13,.95);box-shadow:inset 0 0 0 1px rgba(235,229,213,.34),inset 0 0 0 5px rgba(16,14,13,.95),inset 0 0 0 6px rgba(235,229,213,.12)}
 #lv-tip p{margin:0 0 6px;font-family:var(--f-display);font-style:italic;font-size:17px;line-height:1.38;color:var(--ivory)}
@@ -173,6 +221,8 @@ button{font-family:inherit;color:inherit}
 .portal.mini .portal-linkbox{gap:6px;padding:8px}
 .portal.mini .portal-linkbox>:not(.pl){display:none}
 .portal.mini .portal-linkbox .pl{padding:9px 12px;font-size:11px;letter-spacing:.18em}
+.portal.mini .portal-pending>.pt{display:block;font-size:15px}
+.portal-pending .pn{max-width:28em;line-height:1.5}
 .portal-mini{margin-left:auto;background:none;border:0;padding:6px 2px;font-family:var(--f-caps);font-size:11px;letter-spacing:.26em;color:rgba(235,229,213,.78);cursor:pointer}
 .portal-mini:hover,.portal-mini:focus-visible{color:var(--ivory)}
 .portal-mini+.portal-close{margin-left:0}
@@ -329,7 +379,8 @@ button{font-family:inherit;color:inherit}
 <div id="floor-actions" hidden>
   <button id="lv-back" class="cap cap-back" type="button" hidden>← ALEJARSE</button>
   <button id="cap-back" class="cap cap-back" type="button">← VOLVER AL ASCENSOR</button>
-  <button id="cap-invite" class="cap cap-invite" type="button">INVITAR A ALGUIEN A ESTE MUNDO</button>
+  <button id="tr-open" class="cap cap-back cap-trial" type="button" hidden></button>
+  <button id="cap-invite" class="cap cap-invite" type="button" aria-label="Invitar a alguien a este mundo">INVITAR<span class="cap-long"> A ALGUIEN A ESTE MUNDO</span></button>
   <button id="lv-hint" class="cap cap-invite" type="button" hidden>PISTA</button>
   <button id="lv-reset" class="cap cap-invite" type="button" hidden>REINICIAR NIVEL</button>
 </div>
@@ -382,7 +433,7 @@ button{font-family:inherit;color:inherit}
 </div>
 <button id="book-open" type="button" hidden aria-label="Abrir tu libro"><svg width="26" height="30" viewBox="0 0 26 30" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3h16a2 2 0 0 1 2 2v20a2 2 0 0 1-2 2H4z"/><path d="M7.5 3v24" opacity=".5"/><ellipse cx="14.5" cy="15" rx="3.2" ry="4.2"/><ellipse cx="14.5" cy="15" rx="1.4" ry="2"/></svg></button>
 <div id="book" hidden role="dialog" aria-label="Tu libro">
-  <div class="bk-bar"><button id="bk-close" class="plate-x" type="button">CERRAR</button></div>
+  <div class="bk-bar"><span id="bk-count" aria-label="Capítulos encontrados"></span><button id="bk-close" class="plate-x" type="button">CERRAR</button></div>
   <div id="bk-page" tabindex="0"></div>
   <div class="bk-nav"><button id="bk-prev" type="button" aria-label="Página anterior">‹</button><button id="bk-next" type="button" aria-label="Página siguiente">›</button></div>
 </div>
@@ -401,10 +452,11 @@ button{font-family:inherit;color:inherit}
 </div>
 
 <div id="gate" hidden role="dialog" aria-labelledby="gate-title">
-  <p class="gate-pre">TE INVITARON A UN MUNDO</p>
+  <p id="gate-pre" class="gate-pre">TE INVITARON A UN MUNDO</p>
   <h2 id="gate-title"></h2>
-  <p class="gate-ask">¿POR DÓNDE QUERÉS VIAJAR?</p>
-  <div class="tokens">
+  <p id="gate-locked" class="gate-note" hidden></p>
+  <p id="gate-ask" class="gate-ask">¿POR DÓNDE QUERÉS VIAJAR?</p>
+  <div id="gate-tokens" class="tokens">
     <button id="g-youtube" class="token" type="button">YOUTUBE</button>
     <button id="g-spotify" class="token" type="button">SPOTIFY</button>
   </div>
@@ -424,6 +476,27 @@ button{font-family:inherit;color:inherit}
     <button id="q-spotify" class="token" type="button">SPOTIFY</button>
   </div>
   <button id="q-close" class="plate-x" type="button">CERRAR</button>
+</div>
+
+<div id="trial" hidden role="dialog" aria-labelledby="tr-title">
+  <div class="tr-bar"><p id="tr-where" class="tr-where"></p><button id="tr-close" class="plate-x" type="button">CERRAR</button></div>
+  <div class="tr-body">
+    <h3 id="tr-title"></h3>
+    <p id="tr-clue" class="tr-clue"></p>
+    <div id="tr-stage" class="tr-stage"></div>
+    <p id="tr-status" role="status" aria-live="polite"></p>
+  </div>
+  <div class="tr-foot">
+    <button id="tr-hint" class="tr-act" type="button">PISTA</button>
+    <button id="tr-read" class="tr-act" type="button" hidden>LEER EL CAPÍTULO</button>
+    <button id="tr-again" class="tr-act" type="button" hidden>VOLVER A HACERLO</button>
+  </div>
+</div>
+<div id="reveal" hidden role="dialog" aria-labelledby="reveal-title">
+  <h2 id="reveal-title"></h2>
+  <p id="reveal-text"></p>
+  <button id="reveal-go" class="tr-act" type="button"></button>
+  <button id="reveal-stay" class="plate-x" type="button">QUEDARME ACÁ</button>
 </div>
 
 <div id="portal-root"></div>
@@ -464,62 +537,120 @@ const DEMO_ALBUM = {
 };
 
 /**
+ * The two records of the building. "elodm" fills floors 1–9; "pp" (Pequeño Primate) lives in the basements −1..−9,
+ * which open once the nine chapters of the book are found.
+ * El Lado Oscuro del Mono is not out yet: its YouTube and Spotify ids stay null until the band publishes them
+ * (nothing here is invented). A floor without ids shows a "pending audio" box instead of a player.
+ */
+const ALBUMS = {
+  elodm: { id: "elodm", title: "El Lado Oscuro del Mono", youtubeVideoId: null, spotifyAlbumId: null },
+  pp: { id: "pp", title: DEMO_ALBUM.title, youtubeVideoId: DEMO_ALBUM.youtubeVideoId, spotifyAlbumId: DEMO_ALBUM.spotifyAlbumId },
+};
+
+/**
+ * The cover elements Luján is drawing, one per song of the record (the band's table, 2026-10-26).
+ * art: the illustration once it exists — a file in web/assets/portadas published next to the page ("portadas/…").
+ * null = the challenge draws the element itself. This is the only place that links a song to its illustration.
+ */
+const COVER_ELEMENTS = {
+  "realidad-simulada": { name: "Una realidad simulada por computadora", art: null },
+  "sistema": { name: "El sistema", art: null },
+  "bar-keller": { name: "El bar Keller", art: null }, // a scenic interpretation, not a faithful picture of the bar
+  "paloma": { name: "Una paloma", art: null },
+  "dolor-heredado": { name: "El dolor heredado", art: null },
+  "pato": { name: "Un pato", art: null },
+  "fuego": { name: "El fuego", art: null },
+  "vacio": { name: "Vacío", art: null },
+  "arbol": { name: "Un árbol grande", art: null },
+};
+
+/**
  * One entry per floor. Navigation, panel, floors and players are generated from this list only.
  * id: stable slug of the world; it is the hash of its invitation link. Do not change it once links are out.
+ * album: "elodm" (floors 1–9) or "pp" (basements −1..−9). Album order and book order meet through ids (`chapter`),
+ *   never through positions in a list.
+ * chapter: the book chapter the floor's challenge reveals (BOOK.pages[].id). element: COVER_ELEMENTS key.
  * youtubeStartSeconds: verified 2026-09-28 from the chapters in the public YouTube description.
  * spotifyTrackUri: verified 2026-09-28 from the official Spotify album embed. null = album embed fallback.
  * durationSeconds: from Spotify (display only).
  */
 const tracks = [
-  { floor: 1, id: "tan-buena", title: "Tan Buena", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 0,
+  // El Lado Oscuro del Mono — the band's definitive order (floor ≠ chapter on 5–8, on purpose)
+  { album: "elodm", floor: 1, id: "en-una", title: "En una", chapter: "cap-1", element: "realidad-simulada",
+    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#9fb6c9", durationSeconds: null, visual: { kind: "screens" } },
+  { album: "elodm", floor: 2, id: "que-te-esta-pasando", title: "¿Qué te está pasando?", chapter: "cap-2", element: "sistema",
+    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#bdb29b", durationSeconds: null, visual: { kind: "machine" } },
+  { album: "elodm", floor: 3, id: "el-lado-oscuro-del-mono", title: "El lado oscuro del mono", chapter: "cap-3", element: "bar-keller",
+    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#cf8f5c", durationSeconds: null, visual: { kind: "bar" } },
+  { album: "elodm", floor: 4, id: "que-carajo", title: "¿Qué carajo?", chapter: "cap-4", element: "paloma",
+    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#d9d4c9", durationSeconds: null, visual: { kind: "dove" } },
+  { album: "elodm", floor: 5, id: "explotar", title: "Explotar", chapter: "cap-6", element: "dolor-heredado",
+    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#bd7f8f", durationSeconds: null, visual: { kind: "letter" } },
+  { album: "elodm", floor: 6, id: "pato", title: "Pato", chapter: "cap-5", element: "pato",
+    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#dcc36d", durationSeconds: null, visual: { kind: "duck" } },
+  { album: "elodm", floor: 7, id: "casi-perdido", title: "Casi Perdido", chapter: "cap-8", element: "fuego",
+    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#e3874c", durationSeconds: null, visual: { kind: "fire" } },
+  { album: "elodm", floor: 8, id: "no-me-perdones", title: "No me perdones", chapter: "cap-7", element: "vacio",
+    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#8d97ad", durationSeconds: null, visual: { kind: "void" } },
+  { album: "elodm", floor: 9, id: "portales", title: "Portales", chapter: "cap-9", element: "arbol",
+    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#93b27c", durationSeconds: null, visual: { kind: "tree" } },
+  // Pequeño Primate — the basements, in the record's own order (its ids and links stay as they were)
+  { album: "pp", floor: -1, id: "tan-buena", title: "Tan Buena", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 0,
     spotifyTrackUri: "spotify:track:7xmiGFAeOF15ZN6QAsENFk", spotifyAlbumId: "0p8WjCX93rdndct41myh0x",
     visualAccent: "#ded8c8", shortText: "", durationSeconds: 192, visual: { kind: "halo" } },
-  { floor: 2, id: "amor-libre", title: "Amor Libre", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 189,
+  { album: "pp", floor: -2, id: "amor-libre", title: "Amor Libre", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 189,
     spotifyTrackUri: "spotify:track:7mzy5OVBJhlgVKvG7RVlVj", spotifyAlbumId: "0p8WjCX93rdndct41myh0x",
     visualAccent: "#d6a3a0", shortText: "", durationSeconds: 218, visual: { kind: "flock" } },
-  { floor: 3, id: "ni-un-whatsapp", title: "Ni un WhatsApp", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 408,
+  { album: "pp", floor: -3, id: "ni-un-whatsapp", title: "Ni un WhatsApp", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 408,
     spotifyTrackUri: "spotify:track:1dtZfodLIHHyqO8shTfXNE", spotifyAlbumId: "0p8WjCX93rdndct41myh0x",
     visualAccent: "#9db8ad", shortText: "", durationSeconds: 201, visual: { kind: "chat" } },
-  { floor: 4, id: "te-necesito", title: "Te Necesito", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 609,
+  { album: "pp", floor: -4, id: "te-necesito", title: "Te Necesito", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 609,
     spotifyTrackUri: "spotify:track:0V2SLoxbJK8jzMqBUOzXg8", spotifyAlbumId: "0p8WjCX93rdndct41myh0x",
     visualAccent: "#c0645a", shortText: "", durationSeconds: 245, visual: { kind: "thread" } },
-  { floor: 5, id: "cebadora-de-mates-internacional", title: "Cebadora de Mates Internacional", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 852,
+  { album: "pp", floor: -5, id: "cebadora-de-mates-internacional", title: "Cebadora de Mates Internacional", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 852,
     spotifyTrackUri: "spotify:track:39aaLfBeqRi3MFEHWz3ZrN", spotifyAlbumId: "0p8WjCX93rdndct41myh0x",
     visualAccent: "#b9b071", shortText: "", durationSeconds: 213, visual: { kind: "mate" } },
-  { floor: 6, id: "estas-aca", title: "Estás Acá", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 1065,
+  { album: "pp", floor: -6, id: "estas-aca", title: "Estás Acá", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 1065,
     spotifyTrackUri: "spotify:track:0gqx6nE1tY3cLFVLYLcJ3T", spotifyAlbumId: "0p8WjCX93rdndct41myh0x",
     visualAccent: "#d9a45e", shortText: "", durationSeconds: 160, visual: { kind: "pin" } },
-  { floor: 7, id: "coca-y-fernet", title: "Coca y Fernet", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 1227,
+  { album: "pp", floor: -7, id: "coca-y-fernet", title: "Coca y Fernet", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 1227,
     spotifyTrackUri: "spotify:track:3jPLD7tdaol3b69Q3IXsOG", spotifyAlbumId: "0p8WjCX93rdndct41myh0x",
     visualAccent: "#a8744f", shortText: "", durationSeconds: 192, visual: { kind: "glass" } },
-  { floor: 8, id: "la-frase-magica", title: "La Frase Mágica", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 1419,
+  { album: "pp", floor: -8, id: "la-frase-magica", title: "La Frase Mágica", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 1419,
     spotifyTrackUri: "spotify:track:1zkaXH1LT2rOPzXqlsnP4E", spotifyAlbumId: "0p8WjCX93rdndct41myh0x",
     visualAccent: "#a79bd8", shortText: "", durationSeconds: 188, visual: { kind: "letters" } },
-  { floor: 9, id: "yo-no-hago-musica", title: "Yo No Hago Música", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 1606,
+  { album: "pp", floor: -9, id: "yo-no-hago-musica", title: "Yo No Hago Música", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 1606,
     spotifyTrackUri: "spotify:track:7FAnf2IhSYJVvCZlFDxkXb", spotifyAlbumId: "0p8WjCX93rdndct41myh0x",
     visualAccent: "#86a3bd", shortText: "", durationSeconds: 198, visual: { kind: "staff" } },
 ];
 
 /**
- * The hidden book. Every text must be the authentic one from the book: leave "" until it is provided — nothing here
- * is invented. One page waits in each world; `foundIn` is the id of that world (tracks[].id).
- * `opening` holds pages that come with the book itself (for example a dedication): { id, heading, text }.
- * `buy` links show up inside the book only when set: the ebook always, the paper copy once every page was found.
+ * The book "El lado oscuro del mono", in its own reading order. Every word comes from the author's manuscript
+ * (El lado oscuro del mono.docx): the texts live in 05-book-text.js, generated by tools/book-text.cjs — never typed
+ * by hand. Here only the order and what unlocks what.
+ *   opening: comes with the book from the first moment (dedication, thanks, the prologue).
+ *   pages: the nine chapters, in book order; each one opens when the challenge of the floor whose track has
+ *     `chapter` = its id is solved (tracks[].chapter). `foundIn` is that floor's track id (checked at boot).
+ *   closing: the last lines of the book, once the nine chapters are in.
+ *   back: the back cover, always readable at the end.
+ * `buy` links show up inside the book only when set: the ebook always, the paper copy once every chapter was found.
  */
 const BOOK = {
   enabled: true,
-  opening: [],
+  opening: [{ id: "dedicatoria" }, { id: "agradecimientos" }, { id: "prologo" }],
   pages: [
-    { id: "pagina-1", foundIn: "tan-buena", heading: "", text: "" },
-    { id: "pagina-2", foundIn: "amor-libre", heading: "", text: "" },
-    { id: "pagina-3", foundIn: "ni-un-whatsapp", heading: "", text: "" },
-    { id: "pagina-4", foundIn: "te-necesito", heading: "", text: "" },
-    { id: "pagina-5", foundIn: "cebadora-de-mates-internacional", heading: "", text: "" },
-    { id: "pagina-6", foundIn: "estas-aca", heading: "", text: "" },
-    { id: "pagina-7", foundIn: "coca-y-fernet", heading: "", text: "" },
-    { id: "pagina-8", foundIn: "la-frase-magica", heading: "", text: "" },
-    { id: "pagina-9", foundIn: "yo-no-hago-musica", heading: "", text: "" },
+    { id: "cap-1", chapter: 1, foundIn: "en-una" },
+    { id: "cap-2", chapter: 2, foundIn: "que-te-esta-pasando" },
+    { id: "cap-3", chapter: 3, foundIn: "el-lado-oscuro-del-mono" },
+    { id: "cap-4", chapter: 4, foundIn: "que-carajo" },
+    { id: "cap-5", chapter: 5, foundIn: "pato" },
+    { id: "cap-6", chapter: 6, foundIn: "explotar" },
+    { id: "cap-7", chapter: 7, foundIn: "no-me-perdones" },
+    { id: "cap-8", chapter: 8, foundIn: "casi-perdido" },
+    { id: "cap-9", chapter: 9, foundIn: "portales" },
   ],
+  closing: { id: "cierre" },
+  back: { id: "contraportada" },
   buy: { ebookUrl: "", physicalUrl: "" },
 };
 
@@ -535,22 +666,32 @@ const GALLERY = {
   enabled: true,
   id: "galeria", // its link: page address + "#galeria"
   label: "GALERÍA",
+  // Photos and words from the band (2026-10-25); the files live in assets/galeria and the build publishes them next
+  // to the page. Still without photos, from the first plan: San Luis · momentos con el Pato · integrantes de la banda
+  // · Noe y el trabajo con la ropa.
   pieces: [
-    { id: "obra-01", group: "San Luis y la grabación en la Casa de la Música", src: "", title: "", caption: "", thanks: "" },
-    { id: "obra-02", group: "San Luis y la grabación en la Casa de la Música", src: "", title: "", caption: "", thanks: "" },
-    { id: "obra-03", group: "Momentos con el Pato, risas y escenas del proceso", src: "", title: "", caption: "", thanks: "" },
-    { id: "obra-04", group: "Momentos con el Pato, risas y escenas del proceso", src: "", title: "", caption: "", thanks: "" },
-    { id: "obra-05", group: "Fotos con los integrantes de la banda", src: "", title: "", caption: "", thanks: "" },
-    { id: "obra-06", group: "Fotos con los integrantes de la banda", src: "", title: "", caption: "", thanks: "" },
-    { id: "obra-07", group: "Noe y el trabajo con la ropa", src: "", title: "", caption: "", thanks: "" },
-    { id: "obra-08", group: "Noe y el trabajo con la ropa", src: "", title: "", caption: "", thanks: "" },
+    { id: "obra-01", group: "Portales: cuerda de tambores", src: "galeria/01-marea-del-tesoro.jpg",
+      title: "Marea del Tesoro", caption: "Las chicas que hicieron la cuerda de tambores en «Portales».", thanks: "" },
+    { id: "obra-02", group: "La grabación en la Casa de la Música", src: "galeria/02-casa-de-la-musica.jpg",
+      title: "Casa de la Música", caption: "", thanks: "Agradecimiento especial a Martin Valenzuela, Luis Ocampo y Luis Maldonado." },
+    { id: "obra-03", group: "Producción", src: "galeria/03-nico-archilla.jpg",
+      title: "Nico Archilla", caption: "Produ, mezcla y master.", thanks: "" },
+    { id: "obra-04", group: "Portales: featuring", src: "galeria/04-seione.jpg",
+      title: "Seione", caption: "Featuring en «Portales».", thanks: "" },
   ],
-  thanks: { heading: "", lines: [] },
+  thanks: {
+    heading: "",
+    lines: [
+      "Facu Berberian · mezcla, master y produ",
+      "A todo el Tesoro, donde nos inspiramos, donde surgieron las canciones y donde está gran parte de nuestra comunidad.",
+    ],
+  },
 };
 
 /**
- * One exploration level inside a song's world (playable prototype; the full route comes later).
- * floor: the world that hosts it — its song keeps playing in the official player while the visitor explores.
+ * The first exploration level, kept in Pequeño Primate's "Tan Buena" (basement −1). It gives no chapter: the book is
+ * earned on the nine floors of the record.
+ * trackId: the world that hosts it — its song keeps playing in the official player while the visitor explores.
  * symbols: the faces of each dial, in turning order (all four come from the cover: ring, arch, two bars, fingerprint).
  * stones: the three stones floating over the water, left to right as seen from the elevator.
  * solution: the combination. Under each stone the water shows as many marks as its place (1, 2, 3); the air shows none.
@@ -558,7 +699,7 @@ const GALLERY = {
  */
 const LEVEL = {
   enabled: true,
-  floor: 1,
+  trackId: "tan-buena",
   symbols: ["anillo", "arco", "dos", "huella"],
   stones: ["dos", "anillo", "arco"],
   solution: ["anillo", "arco", "dos"],
@@ -622,6 +763,7 @@ const COPY = {
   bookPending: "Texto del libro pendiente.",
   bookFoundIn: "ENCONTRADA EN",
   provisional: "CONTENIDO PROVISIONAL",
+  audioPending: "El audio llega con el disco. Mientras tanto, este piso ya se puede recorrer.",
   playerMin: "MINIMIZAR",
   playerMax: "AMPLIAR",
   playerMinAria: "Minimizar el reproductor (la canción sigue sonando)",
@@ -652,7 +794,22 @@ const COPY = {
     ["Los símbolos de la caja también están en las piedras que flotan sobre el agua.", "Mirá las piedras de cerca: el agua muestra algo que en el aire no está.", "En el reflejo, debajo de cada piedra, hay puntos: uno, dos y tres. Ese es el orden de las ruedas, de izquierda a derecha."],
     ["Lo que hay en la caja se puede tomar."],
   ],
-  bookBlank: "Página en blanco",
+  bookBlank: "Capítulo cerrado",
+  bookWaits: "Este capítulo todavía no apareció. Te espera en el",
+  bookClosing: "Estas páginas se abren cuando están los nueve capítulos.",
+  bookGotChapter: "Encontraste un capítulo del libro.",
+  gateLockedPre: "ESTE MUNDO ESTÁ EN LOS SUBSUELOS",
+  gateLocked: "Los subsuelos se abren cuando el libro está completo: sus nueve capítulos esperan en los pisos 1 a 9.",
+  gateLockedBack: "VOLVER AL ASCENSOR",
+  panelUp: "Mostrar los pisos",
+  trialHint: "PISTA",
+  trialHintMore: "OTRA PISTA",
+  trialDoneBefore: "Este capítulo ya está en tu libro.",
+  trialAgainDone: "Lo volviste a hacer. El capítulo ya estaba en tu libro.",
+  revealTitle: "Se abrieron los subsuelos",
+  revealText: "El libro está completo. Debajo de la planta baja, el ascensor guarda otro disco: Pequeño Primate. Sus nueve canciones te esperan en los subsuelos, del −1 al −9.",
+  revealGo: "BAJAR A LOS SUBSUELOS",
+  panelDown: "Mostrar los subsuelos",
   bookEbook: "CONSEGUIR EL EBOOK ↗",
   bookPaper: "CONSEGUIR EL LIBRO EN PAPEL ↗",
   inviteWorld: "INVITAR A ALGUIEN A ESTE MUNDO",
@@ -1117,6 +1274,10 @@ class PlayerPortal {
     this.provider = o.provider;
     this.kind = o.kind || 'floor';
     this.mode = Embeds.effective();
+    // a song whose official audio is not published yet (El Lado Oscuro del Mono before its release): a quiet plate in
+    // the player's place, same size, so nothing else moves the day the ids arrive
+    this.pending = this.provider === 'youtube' ? !o.videoId : !(o.trackUri || o.albumId);
+    if (this.pending) this.mode = 'pending';
     this.playing = false;
     this.preview = false;
     this.loaded = false;
@@ -1129,7 +1290,7 @@ class PlayerPortal {
     this.restoreFocus = document.activeElement;
     this.mini = this.kind === 'floor' && store.session.get('eldom.mini') === '1'; // remembered for the visit
     PlayerPortal.current = this;
-    Sound.setPortalActive(true);
+    Sound.setPortalActive(!this.pending);
     this.build();
     this.onMessage = (e) => this.handleMessage(e);
     window.addEventListener('message', this.onMessage);
@@ -1193,7 +1354,8 @@ class PlayerPortal {
     this.body.replaceChildren();
     this.body.style.padding = pad + 'px';
     for (const c of ['tl', 'tr', 'bl', 'brr']) this.body.append(h('i', { class: `br ${c}`, 'aria-hidden': 'true' }));
-    if (this.mode === 'link') this.buildLinkBox(iw, ih);
+    if (this.mode === 'pending') this.buildPendingBox(iw, ih);
+    else if (this.mode === 'link') this.buildLinkBox(iw, ih);
     else this.buildEmbed(iw, ih);
     this.renderLinks();
   }
@@ -1205,7 +1367,10 @@ class PlayerPortal {
     if (this.provider === 'youtube') {
       src = `https://www.youtube.com/embed/${o.videoId}?start=${o.start || 0}&enablejsapi=1&playsinline=1&rel=0`;
       if (/^http/.test(location.origin)) src += `&origin=${encodeURIComponent(location.origin)}`;
-      iframe.setAttribute('allow', 'accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+      // A world plays its song on arrival through YouTube's own autoplay parameter: the player is already in view and it
+      // is the only one on the page (Required Minimum Functionality, "Autoplay and scripted playbacks"). No playVideo().
+      if (o.autoplay) src += '&autoplay=1';
+      iframe.setAttribute('allow', `accelerometer; ${o.autoplay ? 'autoplay; ' : ''}clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share`);
       iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
       iframe.setAttribute('allowfullscreen', '');
       iframe.title = `YouTube: ${o.title}`;
@@ -1250,6 +1415,17 @@ class PlayerPortal {
     this.body.append(box);
   }
 
+  /** No official audio yet: the song's name and a line that says so. Nothing to click, nothing invented. */
+  buildPendingBox(iw, ih) {
+    const o = this.o;
+    const box = h('div', { class: 'portal-linkbox portal-pending', role: 'note' },
+      h('div', { class: 'pv', text: o.album ? o.album.toUpperCase() : '' }),
+      h('div', { class: 'pt', text: o.title }),
+      h('div', { class: 'pn', text: COPY.audioPending }));
+    box.style.width = iw + 'px'; box.style.height = ih + 'px';
+    this.body.append(box);
+  }
+
   renderLinks() {
     this.links.replaceChildren();
     const yt = this.provider === 'youtube';
@@ -1258,7 +1434,7 @@ class PlayerPortal {
       this.links.append(h('a', { href: this.linkUrl(), target: '_blank', rel: 'noopener', class: strong ? 'strong' : '', text: yt ? COPY.openYoutube : (strong ? COPY.continueSpotify : COPY.openSpotify) }));
     }
     // Spotify: a track player also offers the whole album; link mode always offers it (the album is the fallback).
-    if (!yt && (this.o.trackUri || this.mode === 'link')) this.links.append(h('a', { href: this.albumUrl(), target: '_blank', rel: 'noopener', text: COPY.openAlbum }));
+    if (!yt && this.mode !== 'pending' && (this.o.trackUri || this.mode === 'link')) this.links.append(h('a', { href: this.albumUrl(), target: '_blank', rel: 'noopener', text: COPY.openAlbum }));
     if (PlayerPortal.canMini(this.kind)) this.links.append(h('button', { class: 'portal-mini', type: 'button', 'aria-pressed': String(!!this.mini),
       'aria-label': this.mini ? COPY.playerMaxAria : COPY.playerMinAria, text: this.mini ? COPY.playerMax : COPY.playerMin, onclick: () => this.setMini(!this.mini) }));
     if (this.o.closable) this.links.append(h('button', { class: 'portal-close', type: 'button', text: COPY.close, onclick: () => this.o.onClose && this.o.onClose() }));
@@ -1284,8 +1460,13 @@ class PlayerPortal {
     this.timers.add(iv);
   }
 
+  /** YouTube's widget protocol: messages travel as JSON text. */
   post(msg, origin) {
     try { if (this.iframe && this.iframe.contentWindow) this.iframe.contentWindow.postMessage(typeof msg === 'string' ? msg : JSON.stringify(msg), origin); } catch { /* frame gone */ }
+  }
+  /** Spotify's embed reads its commands as objects (as its own iframe controller sends them), not as JSON text. */
+  postSpotify(msg) {
+    try { if (this.iframe && this.iframe.contentWindow) this.iframe.contentWindow.postMessage(msg, SP_ORIGIN); } catch { /* frame gone */ }
   }
 
   handleMessage(e) {
@@ -1315,7 +1496,11 @@ class PlayerPortal {
   }
 
   handleSpotify(d) {
-    if (d.type === 'ready') this.diag.ready = true;
+    if (d.type === 'ready') {
+      this.diag.ready = true;
+      // a world's song starts on its own: the same play command Spotify's official iframe controller sends, once
+      if (this.o.autoplay && !this.diag.autoplay) { this.diag.autoplay = 'requested'; this.postSpotify({ command: 'play' }); }
+    }
     if (d.type === 'playback_update' && d.payload) {
       const p = d.payload;
       Object.assign(this.diag, { uri: p.playingURI, duration: p.duration, position: p.position, paused: p.isPaused });
@@ -1340,12 +1525,12 @@ class PlayerPortal {
   }
 
   setPlaying(v) { if (v === this.playing) return; this.playing = v; this.emit(); }
-  info() { return { provider: this.provider, mode: this.mode, playing: this.playing, preview: this.preview, dock: this.dock || 'normal', mini: !!this.mini, diag: { ...this.diag } }; }
+  info() { return { provider: this.provider, pending: !!this.pending, mode: this.mode, playing: this.playing, preview: this.preview, dock: this.dock || 'normal', mini: !!this.mini, diag: { ...this.diag } }; }
   emit() { if (this.o.onChange) this.o.onChange(this.info()); }
 
   /** CSP refused the frame: same portal, same size, official links inside. */
   switchToLink() {
-    if (this.destroyed || this.mode === 'link') return;
+    if (this.destroyed || this.mode === 'link' || this.mode === 'pending') return;
     this.stopFrame();
     this.mode = 'link';
     this.slow = false;
@@ -1377,7 +1562,7 @@ class PlayerPortal {
     if (!this.iframe) return;
     try {
       if (this.provider === 'youtube') this.post({ event: 'command', func: 'pauseVideo', args: [], id: 1, channel: 'widget' }, 'https://www.youtube.com');
-      else this.post({ command: 'pause' }, SP_ORIGIN);
+      else this.postSpotify({ command: 'pause' });
     } catch { /* ignore */ }
   }
 

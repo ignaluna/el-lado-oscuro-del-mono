@@ -44,6 +44,26 @@ fs.writeFileSync(path.join(DIST, 'favicon.svg'),
   '<path d="M17 57V29a15 15 0 0 1 30 0v28" fill="none" stroke="#ebe5d5" stroke-width="3.4" stroke-linecap="round"/>' +
   '<rect x="25.5" y="21" width="4.5" height="11" fill="#ebe5d5"/><rect x="34" y="21" width="4.5" height="11" fill="#ebe5d5"/></svg>\n');
 
+// gallery photos, published next to the page (GALLERY.pieces[].src: "galeria/…"); a missing file stops the build
+const GAL = path.join(ROOT, 'assets', 'galeria');
+const galSrcs = [...body.matchAll(/src: "galeria\/([^"]+)"/g)].map((m) => m[1]);
+for (const f of galSrcs) if (!fs.existsSync(path.join(GAL, f))) { console.error(`build: gallery photo assets/galeria/${f} not found`); process.exit(1); }
+fs.rmSync(path.join(DIST, 'galeria'), { recursive: true, force: true });
+if (galSrcs.length) {
+  fs.mkdirSync(path.join(DIST, 'galeria'), { recursive: true });
+  for (const f of galSrcs) fs.copyFileSync(path.join(GAL, f), path.join(DIST, 'galeria', f));
+}
+
+// cover illustrations (COVER_ELEMENTS[].art: "portadas/…"), published next to the page the same way
+const ART = path.join(ROOT, 'assets', 'portadas');
+const artSrcs = [...body.matchAll(/art: "portadas\/([^"]+)"/g)].map((m) => m[1]);
+for (const f of artSrcs) if (!fs.existsSync(path.join(ART, f))) { console.error(`build: cover illustration assets/portadas/${f} not found`); process.exit(1); }
+fs.rmSync(path.join(DIST, 'portadas'), { recursive: true, force: true });
+if (artSrcs.length) {
+  fs.mkdirSync(path.join(DIST, 'portadas'), { recursive: true });
+  for (const f of artSrcs) fs.copyFileSync(path.join(ART, f), path.join(DIST, 'portadas', f));
+}
+
 const DESC = 'El Lado Oscuro del Mono, de Monos del Ambiente.';
 const abs = (p) => (SITE ? `${SITE}/${p}` : p);
 const head = [
@@ -110,4 +130,4 @@ fs.writeFileSync(path.join(DIST, '_headers'), [
   '  Cache-Control: no-cache',
   '',
 ].join('\n'));
-console.log(`dist → index.html ${(Buffer.byteLength(html) / 1024).toFixed(0)} KB, portada.jpg, favicon.svg, _headers${SITE ? ' · site ' + SITE : ' · invitations use the page address'}${args.includes('--release') ? ' · DEV chip hidden' : ''}`);
+console.log(`dist → index.html ${(Buffer.byteLength(html) / 1024).toFixed(0)} KB, portada.jpg, favicon.svg, _headers${galSrcs.length ? `, galeria/ (${galSrcs.length})` : ''}${artSrcs.length ? `, portadas/ (${artSrcs.length})` : ''}${SITE ? ' · site ' + SITE : ' · invitations use the page address'}${args.includes('--release') ? ' · DEV chip hidden' : ''}`);
