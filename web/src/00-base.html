@@ -217,7 +217,9 @@ button{font-family:inherit;color:inherit}
 .portal.slim .portal-links{order:-1;min-height:0;padding:0 0 5px;gap:4px 14px}
 .portal.slim .portal-links a,.portal.slim .portal-close,.portal.slim .portal-mini{padding:3px 0;font-size:10px}
 .portal.slim .portal-note{font-size:11px;margin-top:4px}
-.portal.mini .portal-links a:not(.strong){display:none}
+.portal.mini .portal-links a:not(.strong):not(.sess){display:none}
+.portal.slim .portal-session{font-size:10.5px}
+@media (pointer:coarse){.portal.slim .portal-links a.sess,.portal.slim .portal-mini{padding:0;font-size:11px;line-height:44px}.portal.slim .portal-links a.sess{border-bottom:0;text-decoration:underline;text-underline-offset:5px}}
 .portal.mini .portal-linkbox{gap:6px;padding:8px}
 .portal.mini .portal-linkbox>:not(.pl){display:none}
 .portal.mini .portal-linkbox .pl{padding:9px 12px;font-size:11px;letter-spacing:.18em}
@@ -319,6 +321,8 @@ button{font-family:inherit;color:inherit}
 .portal-links a{font-family:var(--f-caps);font-size:11px;letter-spacing:.22em;color:rgba(235,229,213,.72);text-decoration:none;padding:6px 0;border-bottom:1px solid rgba(235,229,213,.25)}
 .portal-links a:hover,.portal-links a:focus-visible{color:var(--ivory);border-bottom-color:var(--ivory)}
 .portal-links a.strong{font-size:12.5px;color:var(--ivory);border-bottom-color:var(--ivory)}
+.portal-links a.sess{color:var(--ivory);border-bottom-color:var(--ivory)}
+.portal-session{flex:1 0 100%;margin:0;font-family:var(--f-mono);font-size:11.5px;line-height:1.4;color:rgba(235,229,213,.78)}
 .portal-close{margin-left:auto;background:none;border:0;padding:6px 2px;font-family:var(--f-caps);font-size:11px;letter-spacing:.3em;color:rgba(235,229,213,.7);cursor:pointer}
 .portal-close:hover,.portal-close:focus-visible{color:var(--ivory)}
 
@@ -742,6 +746,8 @@ const COPY = {
   openSpotify: "ABRIR EN SPOTIFY ↗",
   openAlbum: "Abrir el álbum ↗",
   preview: "Estás escuchando una muestra.",
+  spSession: "Sin sesión de Spotify, suena una muestra.", // true on every device: it never says what a phone can or cannot play
+  spSignIn: "INICIAR SESIÓN EN SPOTIFY ↗",
   continueSpotify: "CONTINUAR EN SPOTIFY ↗",
   newTab: "Se abre en una pestaña nueva.",
   ytFail: "Este video no se pudo cargar acá.",
@@ -1295,6 +1301,7 @@ class PlayerPortal {
     this.onMessage = (e) => this.handleMessage(e);
     window.addEventListener('message', this.onMessage);
     this.onResize = () => this.layout();
+    this.onSwitch = (e) => this.handleSwitch(e);
     // a click inside a cross-origin frame takes the focus away from this window: the visitor is using the player
     this.onBlur = () => { if (this.iframe && document.activeElement === this.iframe) this.touched = true; };
     window.addEventListener('blur', this.onBlur);
@@ -1347,6 +1354,53 @@ class PlayerPortal {
     return id ? `https://open.spotify.com/track/${id}` : `https://open.spotify.com/album/${o.albumId}`;
   }
   albumUrl() { return `https://open.spotify.com/album/${this.o.albumId}`; }
+  /** Spotify's own login page, which comes back to the same song or album once the visitor is in. */
+  signInUrl() { return 'https://accounts.spotify.com/login?continue=' + encodeURIComponent(this.linkUrl()); }
+  static coarse() { return matchMedia('(pointer: coarse)').matches; }
+
+  /** The sign-in link was used: when the visitor leaves for Spotify's tab and comes back, the embed loads once more. */
+  armSignIn() {
+    if (this.destroyed || this.mode !== 'embed') return;
+    this.signin = 'armed';
+    if (this.signinOn) return;
+    this.signinOn = true;
+    document.addEventListener('visibilitychange', this.onSwitch);
+    window.addEventListener('blur', this.onSwitch);
+    window.addEventListener('focus', this.onSwitch);
+  }
+  disarmSignIn() {
+    this.signin = 'idle';
+    if (!this.signinOn) return;
+    this.signinOn = false;
+    document.removeEventListener('visibilitychange', this.onSwitch);
+    window.removeEventListener('blur', this.onSwitch);
+    window.removeEventListener('focus', this.onSwitch);
+  }
+  handleSwitch(e) {
+    if (this.destroyed || this.mode !== 'embed') return this.disarmSignIn();
+    const t = e.type;
+    if (t === 'blur' || (t === 'visibilitychange' && document.hidden)) { // away (a click into the frame is not leaving)
+      if (this.signin === 'armed' && !(t === 'blur' && this.iframe && document.activeElement === this.iframe)) this.signin = 'away';
+      return;
+    }
+    if (this.signin !== 'away' || document.hidden) return;
+    this.disarmSignIn(); // one reload per use of the link: back on this tab it can never repeat by itself
+    this.reloadEmbed();
+  }
+  /** The same frame loads again (never the page): the session the visitor just opened takes effect. */
+  reloadEmbed() {
+    if (this.destroyed || this.mode !== 'embed' || !this.iframe) return;
+    this.reloads = (this.reloads || 0) + 1;
+    for (const t of this.timers) { clearTimeout(t); clearInterval(t); }
+    this.timers.clear();
+    Object.assign(this, { preview: false, slow: false, heard: false, loaded: false, playing: false });
+    this.diag = {};
+    this.notes.replaceChildren();
+    this.renderLinks();
+    this.iframe.src = this.iframe.src;
+    this.armWatchdogs();
+    this.emit();
+  }
 
   /** Builds the frame content for the current mode (embed iframe or link box) and the links row. */
   fill() {
@@ -1386,6 +1440,10 @@ class PlayerPortal {
     this.iframe = iframe;
     this.body.append(iframe);
     iframe.src = src;
+    this.armWatchdogs();
+  }
+
+  armWatchdogs() {
     this.watch = this.later(() => { // slow network, blocked domain, a player that never started
       if (this.heard || this.destroyed || this.mode !== 'embed') return;
       this.slow = true;
@@ -1431,7 +1489,15 @@ class PlayerPortal {
     const yt = this.provider === 'youtube';
     if (this.mode === 'embed') {
       const strong = (!yt && this.preview) || !!this.slow;
-      this.links.append(h('a', { href: this.linkUrl(), target: '_blank', rel: 'noopener', class: strong ? 'strong' : '', text: yt ? COPY.openYoutube : (strong ? COPY.continueSpotify : COPY.openSpotify) }));
+      // Spotify only plays the whole song to a visitor it has signed in, and the page cannot tell. From the first moment
+      // one short line says so (until the sample itself is detected: its own note takes over), and the way to fix it is
+      // on hand: on a computer, Spotify's own login page; on a phone (coarse pointer), the song itself in the app.
+      const phone = !yt && PlayerPortal.coarse();
+      if (!yt && !this.preview && !this.slow) this.links.append(h('p', { class: 'portal-session', id: 'portal-session', text: COPY.spSession }));
+      if (!yt && !phone) this.links.append(h('a', { href: this.signInUrl(), target: '_blank', rel: 'noopener', 'aria-describedby': this.preview || this.slow ? null : 'portal-session',
+        class: this.preview ? 'sess strong' : 'sess', text: COPY.spSignIn, onclick: () => this.armSignIn(), onauxclick: () => this.armSignIn() }));
+      this.links.append(h('a', { href: this.linkUrl(), target: '_blank', rel: 'noopener', 'aria-describedby': phone && !this.preview && !this.slow ? 'portal-session' : null,
+        class: [strong ? 'strong' : '', phone ? 'sess' : ''].join(' ').trim(), text: yt ? COPY.openYoutube : (strong ? COPY.continueSpotify : COPY.openSpotify) }));
     }
     // Spotify: a track player also offers the whole album; link mode always offers it (the album is the fallback).
     if (!yt && this.mode !== 'pending' && (this.o.trackUri || this.mode === 'link')) this.links.append(h('a', { href: this.albumUrl(), target: '_blank', rel: 'noopener', text: COPY.openAlbum }));
@@ -1525,13 +1591,14 @@ class PlayerPortal {
   }
 
   setPlaying(v) { if (v === this.playing) return; this.playing = v; this.emit(); }
-  info() { return { provider: this.provider, pending: !!this.pending, mode: this.mode, playing: this.playing, preview: this.preview, dock: this.dock || 'normal', mini: !!this.mini, diag: { ...this.diag } }; }
+  info() { return { provider: this.provider, pending: !!this.pending, mode: this.mode, playing: this.playing, preview: this.preview, dock: this.dock || 'normal', mini: !!this.mini, signin: this.signin || 'idle', reloads: this.reloads || 0, diag: { ...this.diag } }; }
   emit() { if (this.o.onChange) this.o.onChange(this.info()); }
 
   /** CSP refused the frame: same portal, same size, official links inside. */
   switchToLink() {
     if (this.destroyed || this.mode === 'link' || this.mode === 'pending') return;
     this.stopFrame();
+    this.disarmSignIn();
     this.mode = 'link';
     this.slow = false;
     this.notes.replaceChildren();
@@ -1652,6 +1719,7 @@ class PlayerPortal {
     window.removeEventListener('message', this.onMessage);
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('blur', this.onBlur);
+    this.disarmSignIn();
     Embeds.subs.delete(this.blockedCb);
     this.stopFrame();
     this.el.remove();

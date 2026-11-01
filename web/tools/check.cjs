@@ -1676,6 +1676,156 @@ const SCENARIOS = {
     await waitPhase(p, 'cabin', 25000);
     log('iframes after return=' + (await iframeCount(p)));
   },
+  // The Spotify sign-in flow, on a stand-in for the embed that speaks Spotify's message protocol (a sample on the first load,
+  // the whole song on the next), so it can count loads: the line about the sample from the first moment, the right action per
+  // device (a computer: Spotify's login; a phone: the song in the app), exact official URLs, one reload per use of the link
+  // when the visitor comes back, none without the click, minimized and "Mientras esperás" included, no line in link mode or
+  // where the audio is still pending.
+  async signin(p, shot, log) {
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    const vw = p.viewportSize();
+    const coarse = await ev(p, () => matchMedia('(pointer: coarse)').matches);
+    const cfg = await ev(p, () => window.__eldom.config());
+    const t = cfg.tracks.find((x) => x.floor < 0 && (x.spotifyTrackUri || x.spotifyAlbumId));
+    const canon = t.spotifyTrackUri ? 'https://open.spotify.com/track/' + t.spotifyTrackUri.split(':').pop() : 'https://open.spotify.com/album/' + t.spotifyAlbumId;
+    const login = (u) => 'https://accounts.spotify.com/login?continue=' + encodeURIComponent(u);
+    const SIGN = 'INICIAR SESIÓN EN SPOTIFY', OPEN = 'ABRIR EN SPOTIFY', CONT = 'CONTINUAR EN SPOTIFY';
+    const portal = async () => (await state(p)).portal;
+    const until = async (pred, ms) => { const t0 = Date.now(); let s; for (;;) { s = await portal(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(150); } };
+    const links = () => ev(p, () => [...document.querySelectorAll('.portal-links a, .portal-links button')].filter((a) => a.getBoundingClientRect().width > 0)
+      .map((a) => ({ text: a.textContent.trim(), href: a.href, cls: a.className, target: a.target, rel: a.rel, h: a.getBoundingClientRect().height })));
+    const line = () => ev(p, () => { const e = document.querySelector('.portal-session'); return e && e.getBoundingClientRect().width > 0 ? e.textContent.trim() : ''; });
+    const note = () => ev(p, () => { const e = document.querySelector('.portal-note'); return e ? e.textContent.trim() : ''; });
+    // the embed: a sample (30 s) the first time, the whole song after a reload
+    let hits = 0;
+    await p.route('https://open.spotify.com/embed/**', (r) => {
+      hits++;
+      const dur = hits === 1 ? 30000 : 215000;
+      r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><body style="background:#111"><script>parent.postMessage({type:"ready"},"*");setTimeout(()=>parent.postMessage({type:"playback_update",payload:{isPaused:false,isBuffering:false,duration:' + dur + ',position:1000,playingURI:"spotify:track:stub"}},"*"),500);</script></body>' });
+    });
+    await p.context().route(/^https:\/\/accounts\.spotify\.com\//, (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>login</title>' }));
+    // the visitor goes to the other tab (the page hides, the window blurs) or only to another window (the window blurs): and back
+    const away = (focusOnly) => ev(p, (fo) => { if (!fo) { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); } window.dispatchEvent(new Event('blur')); }, !!focusOnly);
+    const back = (focusOnly) => ev(p, (fo) => { if (!fo) { delete document.hidden; document.dispatchEvent(new Event('visibilitychange')); } window.dispatchEvent(new Event('focus')); }, !!focusOnly);
+    const clickSign = async () => {
+      const [pop] = await Promise.all([p.waitForEvent('popup'), p.locator('.portal-links a', { hasText: SIGN }).click()]);
+      await pop.waitForLoadState().catch(() => {});
+      const u = pop.url(); await pop.close(); return u;
+    };
+
+    // 0. "Mientras esperás" (before the release): the album player has the same line and the album URL
+    await ev(p, () => window.__eldom.ui.openListen()); await wait(700);
+    await ev(p, () => window.__eldom.ui.chooseListen('spotify'));
+    await p.waitForSelector('.portal-session', { timeout: 15000 });
+    const album = 'https://open.spotify.com/album/' + cfg.demo.spotifyAlbumId;
+    let ls = await links();
+    check(/^Sin sesión de Spotify/.test(await line()) && ls.some((l) => l.text.startsWith(coarse ? OPEN : SIGN) && l.href === (coarse ? album : login(album))), `"Mientras esperás": the line and the album's own ${coarse ? 'open' : 'login'} URL`);
+    await shot('04-listen');
+    await ev(p, () => window.__eldom.ui.closeListen()); await wait(900);
+    hits = 0;
+
+    await ev(p, () => window.__eldom.dev.released());
+    await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin');
+    await ev(p, () => window.__eldom.dev.platform('spotify')); await wait(1200);
+    await ev(p, (n) => window.__eldom.dev.arrive(n), t.floor); await waitFloor(p, t.floor);
+    await p.waitForSelector('.portal-session', { timeout: 15000 });
+    await ev(p, () => { window.__same = true; const f = document.querySelector('.portal iframe'); if (f) f.dataset.stamp = 'same-frame'; });
+
+    // 1. the line, from the first moment, and the action for this device
+    const l0 = await line();
+    check(/^Sin sesión de Spotify, suena una muestra\.$/.test(l0) && !/tel[eé]fono|celular|m[oó]vil/i.test(l0), `the line is there from the start and never blames a device ("${l0}")`);
+    ls = await links();
+    const sign = ls.find((l) => l.text.startsWith(SIGN)), open = ls.find((l) => l.text.startsWith(OPEN));
+    check(!!open && open.href === canon && open.target === '_blank' && /noopener/.test(open.rel), `${OPEN} is the official song URL (${open && open.href})`);
+    if (coarse) {
+      check(!sign, 'phone: no sign-in link');
+      check(!!open && /sess/.test(open.cls), 'phone: ABRIR EN SPOTIFY is the primary action');
+    } else {
+      check(!!sign && sign.href === login(canon) && sign.target === '_blank' && /noopener/.test(sign.rel), `computer: sign-in goes to Spotify's own login and comes back to the song (${sign && sign.href})`);
+    }
+    await wait(900); await shot('01-line');
+
+    // 2. no click, no reload
+    await away(); await wait(300); await back(); await wait(900);
+    await away(true); await wait(300); await back(true); await wait(900);
+    let s0 = await portal();
+    check(hits === 1 && s0.reloads === 0, `leaving and coming back without using the link reloads nothing (loads ${hits}, reloads ${s0.reloads})`);
+
+    // 3. the sample is detected: its message, the action strong
+    s0 = await until((x) => x.preview, 8000);
+    check(s0.preview && /Estás escuchando una muestra/.test(await note()), 'the sample is detected and its own note shows');
+    check((await line()) === '', 'the line gives way to that note');
+    ls = await links();
+    if (coarse) check(ls.some((l) => l.text.startsWith(CONT) && /strong/.test(l.cls) && l.href === canon), 'phone: the same action turns strong ("CONTINUAR EN SPOTIFY")');
+    else check(ls.some((l) => l.text.startsWith(SIGN) && /strong/.test(l.cls)) && ls.some((l) => l.text.startsWith(CONT) && /strong/.test(l.cls)), 'computer: sign-in and "CONTINUAR EN SPOTIFY" are strong');
+    await shot('02-sample');
+
+    if (!coarse) {
+      // 4. the link is used: Spotify's tab opens, and coming back reloads this player once, never the page
+      const popUrl = await clickSign();
+      check(popUrl === login(canon), `the new tab opens Spotify's login (${popUrl.slice(0, 80)})`);
+      await wait(600);
+      check(hits === 1, 'nothing reloads while the visitor is away');
+      await away(); await wait(400); await back(); await wait(1500);
+      s0 = await portal();
+      check(hits === 2 && s0.reloads === 1, `coming back reloads the player once (loads ${hits}, reloads ${s0.reloads})`);
+      check(await ev(p, () => window.__same === true && document.querySelector('.portal iframe').dataset.stamp === 'same-frame'), 'the page and the frame element stay (no page reload)');
+      s0 = await until((x) => x.diag.duration > 100000 && x.playing, 6000);
+      check(!s0.preview && !(await note()) && (await line()).length > 0, `the sample state resets: no note, the line is back (preview ${s0.preview})`);
+      await away(); await wait(300); await back(); await wait(300); await away(true); await wait(300); await back(true); await wait(1000);
+      check(hits === 2 && (await portal()).reloads === 1, `and it never repeats by itself (loads ${hits})`);
+
+      // 5. minimized: the line, the action and AMPLIAR stay, the minimized state survives a reload
+      await p.locator('.portal-mini').click(); await wait(700);
+      ls = await links();
+      check(ls.some((l) => l.text.startsWith(SIGN)) && ls.some((l) => /AMPLIAR/.test(l.text)), 'minimized: the sign-in link and AMPLIAR are still there');
+      const frameBox = await p.locator('.portal iframe').boundingBox(), rowBox = await p.locator('.portal-links').boundingBox();
+      check(frameBox.height >= 79 && frameBox.height <= 81 && rowBox.y + rowBox.height <= frameBox.y + 1, `minimized: Spotify's 80 px bar is uncovered, the controls sit above it (bar ${Math.round(frameBox.width)}×${Math.round(frameBox.height)}, controls end ${Math.round(rowBox.y + rowBox.height)}, bar starts ${Math.round(frameBox.y)})`);
+      await clickSign(); await away(true); await wait(300); await back(true); await wait(1500); // focus only, as when the other tab is a window
+      s0 = await portal();
+      check(hits === 3 && s0.reloads === 2 && s0.mini, `a second use reloads once more and the player stays minimized (loads ${hits}, mini ${s0.mini})`);
+      check(await ev(p, () => document.querySelector('.portal iframe').dataset.stamp === 'same-frame'), 'minimized: still the same frame');
+      await shot('03-mini');
+      await p.locator('.portal-mini').click(); await wait(500);
+
+      // 6. a player that is gone ignores the visitor coming back
+      await clickSign();
+      await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 25000);
+      await away(); await wait(300); await back(); await wait(900);
+      check(hits === 3 && (await iframeCount(p)) === 0, `a destroyed player is never reloaded (loads ${hits})`);
+    } else {
+      // 4. phone: minimized, the action is the one thing to tap and stays inside the screen, clear of the bar
+      await p.locator('.portal-mini').click(); await wait(700);
+      ls = await links();
+      const act = ls.find((l) => l.text.startsWith(CONT) || l.text.startsWith(OPEN));
+      const frameBox = await p.locator('.portal iframe').boundingBox(), rowBox = await p.locator('.portal-links').boundingBox(), pb = await p.locator('.portal').boundingBox();
+      check(!!act && act.h >= 43.5 && ls.some((l) => /AMPLIAR/.test(l.text) && l.h >= 43.5), `minimized: the action and AMPLIAR are at least 44 px tall (${act && Math.round(act.h)} px)`);
+      check(frameBox.height >= 79 && frameBox.height <= 81 && rowBox.y + rowBox.height <= frameBox.y + 1, `minimized: Spotify's bar is uncovered (controls end ${Math.round(rowBox.y + rowBox.height)}, bar starts ${Math.round(frameBox.y)}, ${Math.round(frameBox.height)} px tall)`);
+      check(pb.x >= 0 && pb.x + pb.width <= vw.width && pb.y >= 0 && pb.y + pb.height <= vw.height, `minimized: the whole player is on screen (${Math.round(pb.x)},${Math.round(pb.y)} ${Math.round(pb.width)}×${Math.round(pb.height)} in ${vw.width}×${vw.height})`);
+      await shot('03-mini');
+      await p.locator('.portal-mini').click(); await wait(500);
+      await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 25000);
+    }
+
+    // 8. no line where it would be redundant: the link-box fallback, or audio that is not out yet
+    await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin');
+    await ev(p, (n) => window.__eldom.dev.arrive(n), t.floor); await waitFloor(p, t.floor);
+    await p.waitForSelector('.portal-session', { timeout: 15000 });
+    await ev(p, () => document.dispatchEvent(new SecurityPolicyViolationEvent('securitypolicyviolation', { effectiveDirective: 'frame-src', blockedURI: 'https://open.spotify.com/embed' })));
+    s0 = await until((x) => x.mode === 'link', 5000);
+    check(s0.mode === 'link' && (await line()) === '' && !(await links()).some((l) => l.text.startsWith(SIGN)), 'link mode: no line, no sign-in link (its own official link is the action)');
+    await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 25000);
+    const pend = cfg.tracks.find((x) => x.floor > 0 && !x.spotifyTrackUri && !x.spotifyAlbumId) || cfg.tracks.find((x) => x.floor > 0);
+    await ev(p, (n) => window.__eldom.dev.arrive(n), pend.floor); await waitFloor(p, pend.floor); await wait(1500);
+    s0 = await portal();
+    check(s0.pending && (await line()) === '' && !(await links()).some((l) => l.text.startsWith(SIGN)), `audio pending (floor ${pend.floor}): no line, no sign-in link`);
+    await shot('05-pending');
+    await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 25000);
+    await p.unroute('https://open.spotify.com/embed/**');
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' signin check(s) failed: ' + fails.join(' | '));
+  },
   async csp(p, shot, log) {
     await ev(p, () => window.__eldom.ui.openListen());
     await wait(900);
