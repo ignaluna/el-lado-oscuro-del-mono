@@ -229,7 +229,7 @@ Secondary caption → in-scene question "¿DÓNDE QUERÉS ESCUCHAR?" with two br
 Desktop: portal on the left (≈5vw from the edge, width min(36vw, 620px)) so the elevator stays visible;
 mobile: portal in the lower half (full width − 32px), camera pitches up so the elevator sits in the upper half.
 World exposure −15%, countdown dimmed but alive. "CERRAR" returns to the countdown and fully unloads the player.
-Never autoplay.
+Never autoplay here: the listening player starts with a tap (worlds: see §12).
 
 ## 6. Launch sequence (countdown reaches 0 while the page is open, or dev "Últimos 10 s")
 T = 0 at zero. No reload. Cancellable.
@@ -361,14 +361,16 @@ else 232. Only one portal can exist; opening a new one fully destroys the previo
 YouTube (official embed, no API script):
 - `src = https://www.youtube.com/embed/${videoId}?start=${s}&enablejsapi=1&playsinline=1&rel=0` + `&origin=${location.origin}`
   only when `location.origin` starts with `http`. Attributes: `title`, `allow="accelerometer; clipboard-write;
-  encrypted-media; gyroscope; picture-in-picture; web-share"` (no autoplay), `allowfullscreen`,
+  encrypted-media; gyroscope; picture-in-picture; web-share"` (the worlds add `autoplay`), `allowfullscreen`,
   `referrerpolicy="strict-origin-when-cross-origin"`.
 - Bridge (verified): after `load`, post `JSON.stringify({event:'listening', id:1, channel:'widget'})` to
   `https://www.youtube.com` every 250 ms until an `initialDelivery`/`onReady` arrives (max 40 tries). Accept messages
   only from `https://www.youtube.com` / `https://www.youtube-nocookie.com` AND `event.source === iframe.contentWindow`.
   State from `onStateChange.info` or `infoDelivery.info.playerState` (1 = playing, 2 = paused, 0 = ended, 3 = buffering).
   `onError.info` → show a row under the player: "Este video no se pudo cargar acá." + link.
-- NEVER call `playVideo`, never autoplay, never mute. Stop = post
+- NEVER call `playVideo`, never mute. Autoplay only on the worlds (user decision 2026-10-25: the song is the place's
+  music), through `&autoplay=1` plus `autoplay` in `allow`: Required Minimum Functionality allows it once the player
+  is visible and more than half of it is in view, one autoplaying player per page. Not when the site is muted. Stop = post
   `{event:'command', func:'pauseVideo', args:[], id:1, channel:'widget'}`, then remove the iframe on the next frame.
 - Link: `https://www.youtube.com/watch?v=${videoId}&t=${s}s`.
 
@@ -378,6 +380,7 @@ Spotify (official embed, no API script):
   Attribute exactly: `allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"`, `title`.
 - Listener (verified): from `https://open.spotify.com` and the iframe's window: `{type:'ready'}`,
   `{type:'playback_update', payload:{isPaused,isBuffering,duration,position,playingURI}}`, `{type:'playback_started'}`.
+- Worlds (2026-10-25): after `ready`, post `{command:'play'}` once (the command Spotify's own iframe controller sends).
   playing = `!isPaused && !isBuffering`. Preview detection: `duration > 0 && duration < 35000` while the configured
   track is longer than 60 s → reveal "Estás escuchando una muestra." + prominent "CONTINUAR EN SPOTIFY ↗".
   Logged-out visitors get previews (verified: ~21.8 s, "Muestra" badge). Never try to bypass login.
