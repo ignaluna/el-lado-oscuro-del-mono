@@ -174,6 +174,8 @@ const waitFloor = (p, n, timeout = 40000) =>
     { timeout },
   );
 const state = (p) => ev(p, () => window.__eldom.state());
+// GALLERY.enabled in 00-base.html: the gallery scenarios (and the gallery steps of the others) only run while the floor is open
+const galleryOn = (p) => ev(p, () => window.__eldom.config().gallery.enabled);
 // Official players only: a host may add frames of its own (Netlify's badge on free sites is an empty iframe).
 const PLAYER_FRAMES = 'iframe[src*="youtube.com"], iframe[src*="youtube-nocookie.com"], iframe[src*="open.spotify.com"]';
 const iframeCount = (p) => ev(p, (sel) => document.querySelectorAll(sel).length, PLAYER_FRAMES);
@@ -650,6 +652,7 @@ const SCENARIOS = {
   },  // The gallery with the band's photos: every photo loads from where the build publishes it, and each piece and the
   // closing plate read what the band wrote (GALLERY in 00-base.html).
   async galleryphotos(p, shot, log) {
+    if (!(await galleryOn(p))) return log('skipped: the gallery floor is disabled (GALLERY.enabled; see galleryoff)');
     const fails = [];
     const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
     const cfg = await ev(p, () => window.__eldom.config().gallery);
@@ -668,6 +671,7 @@ const SCENARIOS = {
   },
 
   async gallery(p, shot, log) {
+    if (!(await galleryOn(p))) return log('skipped: the gallery floor is disabled (GALLERY.enabled; see galleryoff)');
     const st = async () => { const s = await state(p); return 'phase=' + s.phase + ' floor=' + s.floor + ' gallery=' + JSON.stringify(s.gallery) + ' hash=' + s.hash; };
     // before the release, from the entrance
     await shot('gallery-plate');
@@ -716,6 +720,53 @@ const SCENARIOS = {
     await wait(800);
     log('back in the cabin: ' + (await st()));
   },
+  // The gallery floor while GALLERY.enabled is false: no route leads to it (plaque, panel row, #galeria at boot and on
+  // hashchange, the dev jump) and the cabin panel closes at the last song without a gap. Skipped once the floor is open again.
+  async galleryoff(p, shot, log) {
+    if (await galleryOn(p)) return log('skipped: the gallery floor is enabled (see gallery, galleryphotos)');
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    const hotLabels = () => ev(p, () => [...document.querySelectorAll('.hot')].map((b) => b.getAttribute('aria-label')));
+    const noGallery = async (where) => {
+      const labels = await hotLabels();
+      check(!labels.some((l) => /galer|^Piso 10/i.test(l)), where + ': no hotspot for the plaque, the panel row or the pieces (' + labels.length + ' hotspots)');
+    };
+    await noGallery('at the entrance');
+    // the routes that used to open it do nothing
+    await ev(p, () => window.__eldom.ui.openGallery());
+    await ev(p, () => window.__eldom.dev.gallery());
+    await wait(1500);
+    let s = await state(p);
+    check(s.phase === 'prelaunch' && s.gallery.at < 0, 'openGallery and the dev jump stay at the entrance (phase=' + s.phase + ')');
+    await ev(p, () => { location.hash = '#galeria'; });
+    await wait(1500);
+    s = await state(p);
+    check(s.phase === 'prelaunch', '#galeria on hashchange does not open it (phase=' + s.phase + ')');
+    // #galeria at boot, before and after the release
+    await p.goto(p.url().split('#')[0] + '#galeria');
+    await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 });
+    await ev(p, () => window.__eldom.ready); await wait(1800);
+    s = await state(p);
+    check(s.phase === 'prelaunch', '#galeria at boot (before the release) leaves the entrance as usual (phase=' + s.phase + ')');
+    await ev(p, () => window.__eldom.dev.released());
+    await waitPhase(p, 'open', 20000); await wait(1200);
+    await noGallery('at the open entrance');
+    await shot('01-open');
+    // the cabin panel: PB and the nine songs, closing at the last one
+    await ev(p, () => window.__eldom.dev.interior());
+    await waitPhase(p, 'cabin'); await wait(1500);
+    s = await state(p);
+    const tracksN = await ev(p, () => window.__eldom.config().tracks.filter((t) => t.floor > 0).length);
+    check(JSON.stringify(s.panelFloors) === JSON.stringify([0, ...Array.from({ length: tracksN }, (_, i) => i + 1)]) && s.panelTop === tracksN,
+      'the panel lists PB and floors 1…' + tracksN + ' only (' + JSON.stringify(s.panelFloors) + ', top ' + s.panelTop + ')');
+    await noGallery('in the cabin');
+    await shot('02-cabin-panel');
+    await ev(p, () => window.__eldom.ui.pressGallery());
+    await wait(1500);
+    check((await state(p)).phase === 'cabin', 'pressGallery from the cabin does nothing');
+    log(fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed');
+    if (fails.length) throw new Error(fails.length + ' galleryoff check(s) failed: ' + fails.join(' | '));
+  },
   // A visitor's whole trip in one pass, with real taps on the real controls wherever one exists.
   async tour(p, shot, log) {
     const tap = async (sel) => { await p.locator(sel).first().click({ timeout: 8000 }); };
@@ -746,13 +797,15 @@ const SCENARIOS = {
     await tap('#invite-close'); await wait(300);
     await tap('#cap-back'); await wait(1500); await shot('15-returning');
     await waitPhase(p, 'cabin', 25000); await wait(900); await shot('16-cabin-visited');
-    await tap(hot('Piso 10')); await waitPhase(p, 'gallery', 40000); await wait(1500); await shot('17-gallery');
-    await wait(1800);
-    if ((await state(p)).gallery.at >= 0) { await shot('17b-gallery-first-piece'); await tap('#gal-next'); } else await tap(hot('Obra 2'));
-    await wait(1900); await shot('18-piece');
-    await tap('#gal-back'); await wait(1300);
-    if ((await state(p)).phase === 'gallery') await tap('#gal-back');
-    await waitPhase(p, 'cabin', 30000); await wait(800);
+    if (await galleryOn(p)) {
+      await tap(hot('Piso 10')); await waitPhase(p, 'gallery', 40000); await wait(1500); await shot('17-gallery');
+      await wait(1800);
+      if ((await state(p)).gallery.at >= 0) { await shot('17b-gallery-first-piece'); await tap('#gal-next'); } else await tap(hot('Obra 2'));
+      await wait(1900); await shot('18-piece');
+      await tap('#gal-back'); await wait(1300);
+      if ((await state(p)).phase === 'gallery') await tap('#gal-back');
+      await waitPhase(p, 'cabin', 30000); await wait(800);
+    }
     await tap(hot('PB')); await waitPhase(p, 'open', 45000); await wait(1200); await shot('19-entrance-again');
     await tap(hot('Un libro')); await wait(2300); await shot('20-book-crouch');
     await p.waitForFunction(() => window.__eldom.state().overlay === 'book', null, { timeout: 15000 }); await wait(600); await shot('21-book');
@@ -1371,24 +1424,26 @@ const SCENARIOS = {
     const quiet = await portal();
     check(quiet && !quiet.playing, `SONIDO: NO keeps the song still until the visitor plays it (playing ${quiet && quiet.playing})`);
     await p.locator('#sound').click(); // back to SONIDO: SÍ
-    // the gallery plaque, seen from a world
-    // walk up to the elevator, in front of the plaque (left of the doors): on wide screens the player moves to its corner
-    await ev(p, () => window.__eldom.dev.roamTo(-1.2, 4.4, 0)); await ev(p, () => window.__eldom.dev.roamPush(0, 0.6, 1100)); await wait(1200); // ~1 m at walking pace
-    const plaque = p.locator('.hot[aria-label^="Piso 10: visitar la galería"]');
-    const pb = await plaque.boundingBox(), port = await p.locator('.portal').boundingBox();
-    // where a visitor would tap: the part of the plaque the player does not cover (on a phone held upright the player
-    // takes the bottom of the screen)
-    const clear = pb && (!port || pb.y + pb.height <= port.y || pb.y >= port.y + port.height || pb.x + pb.width <= port.x || pb.x >= port.x + port.width)
-      ? { x: pb.width / 2, y: pb.height / 2 } : pb && port && port.y > pb.y + 8 ? { x: pb.width / 2, y: Math.max(4, (port.y - pb.y) / 2) } : null;
-    check(!!(await plaque.isVisible()) && !!clear, `from a world, the "10 GALERÍA" plaque beside the elevator can be tapped (plaque ${pb && Math.round(pb.y)}–${pb && Math.round(pb.y + pb.height)}, player from ${port && Math.round(port.y)})`);
-    await shot('02-plaque');
-    await plaque.click({ position: clear || undefined });
-    await waitPhase(p, 'gallery', 60000); await wait(1500);
-    check((await state(p)).phase === 'gallery' && /ASCENSOR/.test(await p.locator('#gal-back').innerText()), `it rides up to the gallery ("${await p.locator('#gal-back').innerText()}")`);
-    await shot('03-gallery');
-    await p.locator('#gal-back').click();
-    await waitPhase(p, 'cabin', 30000);
-    check((await state(p)).phase === 'cabin', 'and the gallery hands the visitor back to the elevator');
+    // the gallery plaque, seen from a world (only while the floor is open; with it hidden, see galleryoff)
+    if (await galleryOn(p)) {
+      // walk up to the elevator, in front of the plaque (left of the doors): on wide screens the player moves to its corner
+      await ev(p, () => window.__eldom.dev.roamTo(-1.2, 4.4, 0)); await ev(p, () => window.__eldom.dev.roamPush(0, 0.6, 1100)); await wait(1200); // ~1 m at walking pace
+      const plaque = p.locator('.hot[aria-label^="Piso 10: visitar la galería"]');
+      const pb = await plaque.boundingBox(), port = await p.locator('.portal').boundingBox();
+      // where a visitor would tap: the part of the plaque the player does not cover (on a phone held upright the player
+      // takes the bottom of the screen)
+      const clear = pb && (!port || pb.y + pb.height <= port.y || pb.y >= port.y + port.height || pb.x + pb.width <= port.x || pb.x >= port.x + port.width)
+        ? { x: pb.width / 2, y: pb.height / 2 } : pb && port && port.y > pb.y + 8 ? { x: pb.width / 2, y: Math.max(4, (port.y - pb.y) / 2) } : null;
+      check(!!(await plaque.isVisible()) && !!clear, `from a world, the "10 GALERÍA" plaque beside the elevator can be tapped (plaque ${pb && Math.round(pb.y)}–${pb && Math.round(pb.y + pb.height)}, player from ${port && Math.round(port.y)})`);
+      await shot('02-plaque');
+      await plaque.click({ position: clear || undefined });
+      await waitPhase(p, 'gallery', 60000); await wait(1500);
+      check((await state(p)).phase === 'gallery' && /ASCENSOR/.test(await p.locator('#gal-back').innerText()), `it rides up to the gallery ("${await p.locator('#gal-back').innerText()}")`);
+      await shot('03-gallery');
+      await p.locator('#gal-back').click();
+      await waitPhase(p, 'cabin', 30000);
+      check((await state(p)).phase === 'cabin', 'and the gallery hands the visitor back to the elevator');
+    }
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' autoplay check(s) failed: ' + fails.join(' | '));
   },

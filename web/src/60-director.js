@@ -1196,7 +1196,7 @@ async function boot() {
   let readyRes;
   window.__eldom = {
     ready: new Promise((res) => { readyRes = res; }),
-    config: () => ({ release: RELEASE_AT, demo: DEMO_ALBUM, gallery: { pieces: GALLERY.pieces.map(({ id, src, title, caption, thanks }) => ({ id, src, title, caption, thanks })), thanks: GALLERY.thanks.lines }, tracks: tracks.map((t) => ({ album: t.album, floor: t.floor, id: t.id, title: t.title, chapter: t.chapter || null, element: t.element || null, youtubeVideoId: t.youtubeVideoId, youtubeStartSeconds: t.youtubeStartSeconds, spotifyTrackUri: t.spotifyTrackUri, spotifyAlbumId: t.spotifyAlbumId, durationSeconds: t.durationSeconds })), level: { floor: Level.floor(), trackId: LEVEL.trackId, symbols: LEVEL.symbols, stones: LEVEL.stones }, catalog: App.catalog || [],
+    config: () => ({ release: RELEASE_AT, demo: DEMO_ALBUM, gallery: { enabled: GALLERY.enabled, pieces: GALLERY.pieces.map(({ id, src, title, caption, thanks }) => ({ id, src, title, caption, thanks })), thanks: GALLERY.thanks.lines }, tracks: tracks.map((t) => ({ album: t.album, floor: t.floor, id: t.id, title: t.title, chapter: t.chapter || null, element: t.element || null, youtubeVideoId: t.youtubeVideoId, youtubeStartSeconds: t.youtubeStartSeconds, spotifyTrackUri: t.spotifyTrackUri, spotifyAlbumId: t.spotifyAlbumId, durationSeconds: t.durationSeconds })), level: { floor: Level.floor(), trackId: LEVEL.trackId, symbols: LEVEL.symbols, stones: LEVEL.stones }, catalog: App.catalog || [],
       book: { opening: BOOK.opening.map((p) => p.id), pages: BOOK.pages.map((p) => ({ id: p.id, foundIn: p.foundIn })), closing: BOOK.closing.id, back: BOOK.back.id }, bookText: BOOK_TEXT }),
     state() {
       const port = PlayerPortal.current;
@@ -1214,7 +1214,7 @@ async function boot() {
         book: { found: Book.state.found, pages: BOOK.pages.filter((p) => Book.has(p.id)).map((p) => p.id), printed: !!Book.state.print, at: Book.state.at, leaves: Book.leaves().map((l) => l.kind),
           leafIds: Book.leaves().map((l) => (l.page ? l.page.id : l.kind)), complete: Book.complete(), count: $('#bk-count').textContent,
           text: App.overlay === 'book' ? $('#bk-page').innerText : null },
-        progress: Progress.debug(), panelDown: panelDown(), trial: Trial.debug(),
+        progress: Progress.debug(), panelDown: panelDown(), panelFloors: panelRows().map((r) => r.floor), panelTop: panelTop(), trial: Trial.debug(),
       };
     },
     waitFor(target, timeoutMs = 20000) {

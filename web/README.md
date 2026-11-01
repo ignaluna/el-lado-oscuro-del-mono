@@ -2,7 +2,8 @@
 
 Página estática de **El Lado Oscuro del Mono**: el vacío con agua, el ascensor como en la portada, la cuenta regresiva
 con el registro, los nueve pisos del disco con sus desafíos y su libro, Pequeño Primate en los subsuelos con los
-reproductores oficiales de YouTube y Spotify y su nivel de exploración, y la galería. El recorrido, piso por piso, está
+reproductores oficiales de YouTube y Spotify y su nivel de exploración. La galería (piso 10) está escondida con
+`GALLERY.enabled = false` hasta que esté lista para abrirse. El recorrido, piso por piso, está
 en [RECORRIDO.md](RECORRIDO.md). No necesita servidor: es un solo `index.html` con todo adentro (Three.js se carga de un
 CDN).
 
@@ -15,7 +16,7 @@ las pruebas.
   `ALBUMS`, `COVER_ELEMENTS`, `BOOK`, `GALLERY`, `LEVEL`, `RELEASE_AT`, `LEAD_ENDPOINT`, `PRIVACY_URL`. Los textos del
   libro están en `05-book-text.js` (se generan con `tools/book-text.cjs`, no se editan a mano) y cada desafío en
   `58-trial-<piso>-<id>.js`.
-- `assets/` — las fotos de la galería (`galeria/`) y, cuando existan, las tapas de Luján (`portadas/`).
+- `assets/` — las fotos de la galería (`galeria/`; se publican aunque la galería esté escondida) y, cuando existan, las tapas de Luján (`portadas/`).
 - `tools/build.cjs` — junta `src/` y escribe:
   - `dist/`: la web para publicar (`index.html`, `portada.jpg` para la vista previa al compartir, `favicon.svg` y
     `_headers` con los encabezados que necesitan los reproductores). Hay que subir los cuatro juntos: `_headers`
