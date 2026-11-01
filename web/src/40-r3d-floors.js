@@ -100,6 +100,7 @@ function buildFloors3D(ctx) {
       circle(r, n = 64) { const pts = []; for (let i = 0; i < n; i++) { const a = (i / n) * TAU; pts.push(V3(Math.cos(a) * r, Math.sin(a) * r, 0)); } return pts; },
       /** One Points object with a few motion modes (0 rise, 1 fall, 2 orbit). */
       particles(n, o) {
+        n = Math.max(8, Math.round(n * ctx.pscale)); // the lite tier draws fewer of them
         const r = mulberry32(track.floor * 97 + 3);
         const pos = new Float32Array(n * 3), seed = new Float32Array(n * 4);
         for (let i = 0; i < n; i++) {

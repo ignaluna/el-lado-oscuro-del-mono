@@ -115,11 +115,13 @@ function syncUI() {
 function setPhase(p) { world.phase = p; syncUI(); }
 const LEVEL_HOTS = ['lv-wall', 'lv-stones', 'lv-painting', 'lv-hatch', 'lv-box', 'lv-dial-0', 'lv-dial-1', 'lv-dial-2', 'lv-latch', 'lv-object'];
 let hintTimer = 0;
-function hint(text) {
-  const el = $('#cap-hint');
+function hint(text, ms = 2600) {
+  const el = $('#cap-hint'), caps = $('#captions'), port = PlayerPortal.current;
+  // on a phone the player waits at the bottom: the line sits just above it
+  caps.style.bottom = port && window.innerWidth < 640 ? `${Math.round(window.innerHeight - port.el.getBoundingClientRect().top + 8)}px` : '';
   el.textContent = text; el.hidden = false; live(text);
   clearTimeout(hintTimer);
-  hintTimer = setTimeout(() => { el.hidden = true; }, 2600);
+  hintTimer = setTimeout(() => { el.hidden = true; caps.style.bottom = ''; }, ms);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -993,7 +995,7 @@ const Dev = (() => {
       fps = Math.round(frames / acc); acc = 0; frames = 0;
       const rem = Clock.remaining(), p = Clock.parts(rem);
       const port = PlayerPortal.current;
-      readout.textContent = `fase ${world.phase} · piso ${world.floor} · ${R.kind} · dpr ${R.dpr.toFixed(2)} · ${fps} fps\n` +
+      readout.textContent = `fase ${world.phase} · piso ${world.floor} · ${R.kind}${R.lite ? ' lite · espejo ' + R.perf().mirror : ''} · dpr ${R.dpr.toFixed(2)} · ${fps} fps\n` +
         `falta ${rem > 0 ? `${p.d}d ${p.h}h ${p.m}m ${p.s}s` : 'publicado'} · embeds ${Embeds.effective()}${Embeds.blocked ? ' (bloqueados)' : ''}\n` +
         `reproductor ${port ? `${port.provider}/${port.mode}${port.playing ? ' ▶' : ''}${port.preview ? ' muestra' : ''}` : '—'}`;
     },
@@ -1018,6 +1020,7 @@ function switchTo2D() {
 function frame(now) {
   if (!App.running) return;
   App.raf = requestAnimationFrame(frame);
+  if (R.lite && now - App.lastNow < 31) return; // the lite tier draws at most 30 frames a second: the time carries over to the next one
   const dt = Math.min(0.1, Math.max(0, (now - App.lastNow) / 1000));
   App.lastNow = now;
   App.time += dt;
@@ -1061,7 +1064,6 @@ function initUI() {
   $('#lv-back').addEventListener('click', () => Level.go('wide'));
   Trial.init();
   $('#reveal-stay').addEventListener('click', () => Reveal.stay());
-  $('#rot-keep').addEventListener('click', () => { store.session.set('eldom.rot', '1'); $('#rot-invite').hidden = true; });
   $('#cab-view').addEventListener('click', () => {
     if (world.phase !== 'cabin' || Seq.busy('main')) return;
     world.cabView = (world.cabView || (world.platform ? 'rows' : 'top')) === 'rows' ? 'top' : 'rows';
@@ -1201,7 +1203,7 @@ async function boot() {
     state() {
       const port = PlayerPortal.current;
       return {
-        phase: world.phase, renderer: R ? R.kind : null, platform: world.platform, floor: world.floor, visited: [...world.visited], doors: world.doors,
+        phase: world.phase, renderer: R ? R.kind : null, tier: R && R.perf ? R.perf() : null, platform: world.platform, floor: world.floor, visited: [...world.visited], doors: world.doors,
         embedMode: Embeds.mode, embedsBlocked: Embeds.blocked, portal: port ? port.info() : null, remainingMs: Clock.remaining(),
         formOpen: App.overlay === 'form', overlay: App.overlay, reducedMotion: world.reduced, registered: world.called,
         invite: App.overlay === 'invite' ? { floor: Invite.track ? Invite.track.floor : 0, url: Invite.url, message: Invite.message(), status: $('#invite-status').textContent } : null,
@@ -1230,7 +1232,7 @@ async function boot() {
       invite: (n) => Invite.open(n ? trackOf(n) : null), closeInvite: () => Invite.close(), gateChoose: (p) => Gate.choose(p), gateDismiss: () => Gate.dismiss(),
     },
     dev: { prelaunch: A.prelaunch, lastTen: A.lastTen, released: A.released, openDoors: A.openDoors, closeDoors: A.closeDoors, exterior: A.exterior, interior: A.interior, gallery: A.gallery, gallerySample: A.gallerySample,
-      arrive: A.arrive, platform: A.platform, press: A.press, embedMode: A.embedMode, clearLead: A.clearLead, clearBook: A.clearBook, levelFloor: A.levelFloor, levelReset: A.levelReset, levelSolve: A.levelSolve, playerTest: A.playerTest, roamTo: A.roamTo, roamPush: A.roamPush, bookFind: A.bookFind, bookAll: A.bookAll, progressReset: A.progressReset, trialSolve: A.trialSolve, bookBuy: A.bookBuy, force2D: A.force2D, reducedMotion: A.reducedMotion, timeScale: A.timeScale },
+      arrive: A.arrive, platform: A.platform, press: A.press, embedMode: A.embedMode, clearLead: A.clearLead, clearBook: A.clearBook, levelFloor: A.levelFloor, levelReset: A.levelReset, levelSolve: A.levelSolve, playerTest: A.playerTest, adaptTest: (ms, s) => (R && R.adaptTest ? R.adaptTest(ms, s) : null), roamTo: A.roamTo, roamPush: A.roamPush, bookFind: A.bookFind, bookAll: A.bookAll, progressReset: A.progressReset, trialSolve: A.trialSolve, bookBuy: A.bookBuy, force2D: A.force2D, reducedMotion: A.reducedMotion, timeScale: A.timeScale },
   };
   boot().then(readyRes, (e) => { console.error(e); readyRes(); });
 }

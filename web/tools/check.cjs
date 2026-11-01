@@ -1124,6 +1124,7 @@ const SCENARIOS = {
     const playSpotify = async () => p.frameLocator('iframe[src*="open.spotify.com/embed"]').locator('button[data-testid="play-pause-button"]').first().click({ timeout: 10000 });
     const clock = (s) => (s.provider === 'youtube' ? s.diag.currentTime || 0 : (s.diag.position || 0) / 1000);
 
+    const phoneUp = (await ev(p, () => matchMedia('(pointer: coarse)').matches)) && vw.width < 640 && vw.height > vw.width; // a phone held upright: worlds open the player minimized
     await ev(p, () => window.__eldom.dev.released());
     await ev(p, () => sessionStorage.removeItem('eldom.mini'));
     // the panel
@@ -1136,10 +1137,16 @@ const SCENARIOS = {
 
     for (const prov of (opt('providers', 'youtube,spotify')).split(',')) {
       await ev(p, (pv) => window.__eldom.dev.platform(pv), prov); await wait(900);
+      await ev(p, () => sessionStorage.removeItem('eldom.mini'));
       await ev(p, () => window.__eldom.dev.arrive(-2)); await waitFloor(p, -2); await wait(2600);
       let s = await st();
-      const b0 = await box();
-      check(s.portal && !s.portal.mini && !!b0, `${prov}: arrives full size (${sz(b0)}, ${s.portal && s.portal.mode})`);
+      let b0 = await box();
+      if (phoneUp) { // nothing chosen yet: minimized, at the smallest official size; AMPLIAR then gives the full size the rest of the checks start from
+        check(s.portal && s.portal.mini && !!b0 && (prov === 'youtube' ? b0.width >= 199.5 && b0.height >= 199.5 && b0.height <= 201 : b0.height >= 79 && b0.height <= 81), `${prov}: opens minimized on a phone held upright, never under the smallest official size (${sz(b0)})`);
+        await p.locator('.portal-mini').click(); await wait(800);
+        s = await st(); b0 = await box();
+      }
+      check(s.portal && !s.portal.mini && !!b0, `${prov}: full size (${sz(b0)}, ${s.portal && s.portal.mode})`);
       if (prov === 'youtube') check(b0 && b0.width >= 199.5 && b0.height >= 199.5, `${prov}: full size is never under YouTube's 200 px minimum (${sz(b0)})`);
       const embed = s.portal.mode === 'embed';
       let playing = false;
@@ -1556,8 +1563,211 @@ const SCENARIOS = {
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' roam check(s) failed: ' + fails.join(' | '));
   },
+  // The rendering tier: "lite" for a phone-class device (coarse pointer, data saver, 4 GB or less, 4 cores or fewer), the full
+  // one for the rest. Each case opens a page with the device signals faked before the page starts. Frame times here come from
+  // a software renderer (SwiftShader) and say nothing about a phone: only the counts and settings are checked.
+  async tier(p, shot, log) {
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    const coarse = await ev(p, () => matchMedia('(pointer: coarse)').matches);
+    log('real signals: ' + JSON.stringify(await ev(p, () => ({ cores: navigator.hardwareConcurrency, memory: navigator.deviceMemory, saveData: navigator.connection ? navigator.connection.saveData : undefined, coarse: matchMedia('(pointer: coarse)').matches }))));
+    const open = async (signals) => {
+      const q = await p.context().newPage();
+      q.on('pageerror', (e) => fails.push('pageerror: ' + e.message.split('\n')[0]));
+      await q.addInitScript((sg) => {
+        const def = (o, k, v) => Object.defineProperty(o, k, { configurable: true, get: () => v });
+        def(navigator, 'hardwareConcurrency', sg.cores); def(navigator, 'deviceMemory', sg.memory); def(navigator, 'connection', sg.saveData === undefined ? undefined : { saveData: sg.saveData });
+      }, signals);
+      await q.goto(p.url().split('#')[0]);
+      await q.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 });
+      await q.evaluate(() => window.__eldom.ready);
+      await wait(1500);
+      return q;
+    };
+    const cases = [
+      ['plenty of everything', { cores: 8, memory: 8, saveData: false }, false],
+      ['no signal at all (APIs absent)', { cores: undefined, memory: undefined, saveData: undefined }, false],
+      ['4 cores', { cores: 4, memory: 8, saveData: false }, true],
+      ['5 cores, 8 GB', { cores: 5, memory: 8, saveData: false }, false],
+      ['4 GB of memory', { cores: 8, memory: 4, saveData: false }, true],
+      ['2 GB of memory', { cores: 8, memory: 2, saveData: false }, true],
+      ['data saver on', { cores: 8, memory: 8, saveData: true }, true],
+    ];
+    const measure = async (q) => { // renders per second and the distance a 1.5 s push walks, at a world
+      await q.evaluate(() => window.__eldom.dev.released());
+      await q.evaluate(() => window.__eldom.dev.arrive(2));
+      await q.waitForFunction(() => window.__eldom.state().phase === 'floor' && window.__eldom.state().floor === 2, null, { timeout: 40000 });
+      await wait(2500);
+      await q.evaluate(() => window.__eldom.dev.roamTo(0, 6, 0)); await wait(500);
+      const r0 = (await q.evaluate(() => window.__eldom.state())).tier.renders, z0 = (await q.evaluate(() => window.__eldom.state())).cam.z, t0 = Date.now();
+      await q.evaluate(() => window.__eldom.dev.roamPush(0, 1, 1500));
+      await wait(1500);
+      const s1 = await q.evaluate(() => window.__eldom.state());
+      return { fps: (s1.tier.renders - r0) / ((Date.now() - t0) / 1000), walked: Math.abs(s1.cam.z - z0) };
+    };
+    let fullRun = null, liteRun = null;
+    for (const [name, sg, wantLite] of cases) {
+      if (coarse && !wantLite) continue; // a touch screen is lite whatever else it reports (its own case below)
+      const q = await open(sg);
+      const t = (await q.evaluate(() => window.__eldom.state())).tier;
+      check(t && (t.tier === 'lite') === wantLite, `${name}: ${wantLite ? 'lite' : 'full'} tier (${t && t.tier})`);
+      check(wantLite ? t.samples === 0 && t.particles === 0.4 && t.mirror === '1/4' && t.dpr <= 1 : t.samples === 4 && t.particles === 1 && t.mirror === '1/2', `${name}: ${wantLite ? 'no MSAA, 40% particles, mirror at 1/4, dpr ≤ 1' : 'MSAA 4, all particles, mirror at 1/2'} (${JSON.stringify({ s: t.samples, p: t.particles, m: t.mirror, dpr: t.dpr })})`);
+      if (name === 'plenty of everything') fullRun = await measure(q);
+      if (name === '4 cores') liteRun = await measure(q);
+      if (name === '4 cores' || name === 'plenty of everything') { // the adaptive ladder, fed synthetic frame times
+        const ad = (ms, sec) => q.evaluate(([a, b]) => window.__eldom.dev.adaptTest(a, b), [ms, sec]);
+        let a = await ad(60, 2.1);
+        check(a.dpr === 0.75 && a.mirror === '1/4', `${name}: slow frames lower the resolution first (dpr ${a.dpr}, mirror ${a.mirror})`);
+        a = await ad(60, 2.1);
+        check(wantLite ? a.mirror === 'off' : a.mirror === '1/4' && a.dpr === 0.75, `${name}: and then ${wantLite ? 'the lite tier drops the mirror pass altogether' : 'the full tier changes nothing more'} (mirror ${a.mirror})`);
+        if (wantLite) {
+          await q.evaluate(() => { window.__eldom.dev.arrive(-1); });
+          await q.waitForFunction(() => window.__eldom.state().phase === 'floor' && window.__eldom.state().floor === -1, null, { timeout: 40000 }); await wait(1500);
+          const lv = (await q.evaluate(() => window.__eldom.state())).tier;
+          check(lv.mirror === '1/4', `the level's world keeps its mirror (the clue lives in the reflection): ${lv.mirror}`);
+          await q.evaluate(() => window.__eldom.ui.returnToElevator()); await q.waitForFunction(() => window.__eldom.state().phase === 'cabin', null, { timeout: 40000 });
+        }
+        a = await ad(wantLite ? 33.4 : 8, 6.1);
+        check(a.mirror !== 'off', `${name}: frames that recover bring the mirror back first (mirror ${a.mirror}, dpr ${a.dpr})`);
+        a = await ad(wantLite ? 33.4 : 8, 12.1);
+        check(a.dpr === 1 && a.mirror === (wantLite ? '1/4' : '1/2'), `${name}: then the resolution (dpr ${a.dpr}, mirror ${a.mirror})`);
+      }
+      await q.close();
+    }
+    if (coarse) { // the phone profile itself: lite although every other signal is generous
+      const q = await open({ cores: 8, memory: 8, saveData: false });
+      const t = (await q.evaluate(() => window.__eldom.state())).tier;
+      check(t.tier === 'lite' && t.samples === 0 && t.mirror === '1/4', `touch screen with plenty of everything: still lite (${t.tier})`);
+      liteRun = await measure(q);
+      await q.close();
+    }
+    if (liteRun) {
+      check(liteRun.fps <= 33, `lite draws at most 30 frames a second (${liteRun.fps.toFixed(1)} /s, emulated)`);
+      check(liteRun.walked > 1.2, `and motion stays time-based: a 1.5 s push walks ${liteRun.walked.toFixed(2)} m`);
+      if (fullRun) { log(`full tier here: ${fullRun.fps.toFixed(1)} frames/s, ${fullRun.walked.toFixed(2)} m (emulated, software renderer)`); check(Math.abs(liteRun.walked - fullRun.walked) / fullRun.walked < 0.25, `the same push walks about the same distance on both tiers (${liteRun.walked.toFixed(2)} vs ${fullRun.walked.toFixed(2)} m)`); }
+    }
+    // the 2D fallback has no tier
+    await ev(p, () => window.__eldom.dev.force2D()); await wait(2000);
+    const s2 = await state(p);
+    check(s2.renderer === '2d' && s2.tier === null, '2D fallback: no tier, nothing changes');
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' tier check(s) failed: ' + fails.join(' | '));
+  },
+  // What a phone shows at once (run with --viewport small|mobile): the entrance, the cabin, a basement world with its player
+  // and the book, each with the list of controls on screen and any two that overlap, plus the rules of a world on a phone
+  // held upright: no dialog in the way, the player minimized, one hint at a time, the actions row short and tappable.
+  // Screenshots land in shots/ (phoneview-*.json lists what was on screen). `--baseline` only reports, asserts nothing.
+  async phoneview(p, shot, log) {
+    const fails = [];
+    const base = flag('baseline');
+    const check = (cond, msg) => { if (!base && !cond) fails.push(msg); log((cond ? 'ok    ' : base ? 'info  ' : 'FAIL  ') + msg); };
+    const vp = p.viewportSize();
+    const portrait = vp.width < vp.height;
+    const coarse = await ev(p, () => matchMedia('(pointer: coarse)').matches);
+    const scan = async (name) => {
+      const { items, over } = await ev(p, () => {
+        const rows = [];
+        const sel = 'button, a[href], #joy-ghost, #joy, #cap-hint, #lv-hint, #rot-invite, .portal iframe, .portal-linkbox, #title, #cap-primary';
+        const own = (e) => { // the box of what is written (padding is not what the visitor sees collide); frames and rings are their own box
+          if (e.matches('iframe, #joy-ghost, .portal-linkbox') || !e.textContent.trim()) return e.getBoundingClientRect();
+          const r = document.createRange(); r.selectNodeContents(e); return r.getBoundingClientRect();
+        };
+        for (const e of document.querySelectorAll(sel)) {
+          if (e.closest('#hotspots') || e.closest('#dev') || !e.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+          const b = e.getBoundingClientRect(), r = own(e);
+          if (b.width < 1 || b.height < 1 || b.right <= 0 || b.bottom <= 0 || b.left >= innerWidth || b.top >= innerHeight) continue;
+          const pe = e.style.pointerEvents; e.style.pointerEvents = 'auto'; // (the title lets taps through: ask who is on top anyway)
+          const top = document.elementFromPoint(Math.min(innerWidth - 1, Math.max(0, b.left + b.width / 2)), Math.min(innerHeight - 1, Math.max(0, b.top + b.height / 2)));
+          e.style.pointerEvents = pe;
+          if (top && !(e === top || e.contains(top) || top.contains(e))) continue; // covered by something else (an overlay): not on screen
+          rows.push({ id: e.id || e.className || e.tagName.toLowerCase(), text: (e.getAttribute('aria-label') || e.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 40), x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height), bh: Math.round(b.height), bw: Math.round(b.width), el: e });
+        }
+        const hit = (a, b) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 2 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 2;
+        const over = [];
+        for (let i = 0; i < rows.length; i++) for (let j = i + 1; j < rows.length; j++) {
+          const a = rows[i], b = rows[j];
+          if (a.el.contains(b.el) || b.el.contains(a.el) || !hit(a, b)) continue;
+          over.push(`${a.id}[${a.text}] × ${b.id}[${b.text}]`);
+        }
+        return { items: rows.map(({ el, ...r }) => r), over };
+      });
+      fs.writeFileSync(path.join(SHOTS, `phoneview-${vp.width}x${vp.height}-${name}.json`), JSON.stringify({ items, overlaps: over }, null, 1));
+      log(`${name}: ${items.length} elements on screen${over.length ? ', OVERLAPPING: ' + over.join(' | ') : ', no overlaps'}`);
+      check(!over.length, `${name}: nothing overlaps`);
+      return items;
+    };
+    await ev(p, () => window.__eldom.dev.released());
+    await waitPhase(p, 'open', 20000); await wait(1800);
+    await shot('01-entrance'); await scan('entrance');
+    await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin'); await wait(1800);
+    await shot('02-cabin'); await scan('cabin');
+    await ev(p, () => window.__eldom.dev.bookAll());
+    await ev(p, () => sessionStorage.removeItem('eldom.mini'));
+    for (const [prov, n] of [['youtube', -2], ['spotify', -3]]) {
+      await ev(p, (pv) => window.__eldom.dev.platform(pv), prov); await wait(900);
+      await ev(p, (f) => window.__eldom.dev.arrive(f), n); await waitFloor(p, n);
+      if (prov === 'youtube' && coarse && portrait) { // the one-time hints, sampled while the world settles: never two at once, the ring goes by itself
+        const seen = { ghost: 0, hint: 0, both: 0, ghostAt: 0, hintText: '' };
+        for (let i = 0; i < 40; i++) {
+          const v = await ev(p, () => { const vis = (s) => { const e = document.querySelector(s); return !!e && !e.hidden && e.checkVisibility({ opacityProperty: true, visibilityProperty: true }); }; return { g: vis('#joy-ghost'), h: vis('#cap-hint'), t: document.querySelector('#cap-hint').textContent }; });
+          if (v.g) { seen.ghost++; seen.ghostAt = i; }
+          if (v.h && !seen.hint) await shot('03b-world-youtube-hint');
+          if (v.h) { seen.hint++; seen.hintText = v.t; }
+          if (v.g && v.h) seen.both++;
+          if (i === 6) { await shot('03-world-youtube-early'); await scan('world-early'); }
+          await wait(300);
+        }
+        check(seen.both === 0, `one-time hints: never two on screen at once (ring ${seen.ghost} samples, line ${seen.hint})`);
+        check(seen.ghost > 0 && seen.ghostAt < 26, `the walking ring fades on its own (last seen at sample ${seen.ghostAt} of 40, ~${Math.round(seen.ghostAt * 0.3)} s)`);
+        check(seen.hint > 0 && /Acostá el teléfono/.test(seen.hintText), `and then one brief line about lying the phone down ("${seen.hintText}")`);
+      } else await wait(5200);
+      const s = await state(p);
+      const items = await scan(`world-${prov}`);
+      await shot(`03-world-${prov}`);
+      check(await ev(p, () => !document.querySelector('#rot-invite')), `${prov}: no "Acostá el teléfono" dialog`);
+      if (portrait && coarse) {
+        check(s.portal && s.portal.mini, `${prov}: the player opens minimized on a phone held upright (${JSON.stringify({ mini: s.portal && s.portal.mini })})`);
+        const fr = items.find((x) => /iframe/.test(x.id));
+        check(!!fr && (prov === 'youtube' ? fr.w >= 199 && fr.h >= 199 && fr.h <= 201 : fr.h >= 79 && fr.h <= 81), `${prov}: at its smallest official size, never under (${fr && fr.w}×${fr && fr.h})`);
+        const acts = items.filter((x) => /cap-back|cap-invite/.test(x.id));
+        check(acts.length === 2 && acts.every((x) => x.bh >= 44), `${prov}: the way back and the invitation are at least 44 px tall (${acts.map((x) => x.id + ' ' + x.bh).join(', ')})`);
+        check(await ev(p, () => document.querySelector('#cap-invite').getAttribute('aria-label') === 'Invitar a alguien a este mundo' && document.querySelector('#cap-invite').getBoundingClientRect().width >= 44), `${prov}: the invitation keeps its name and a 44 px target`);
+        const row = await ev(p, () => { const r = document.querySelector('#floor-actions').getBoundingClientRect(), s = document.querySelector('#sound').getBoundingClientRect(); return { right: r.right, sound: s.left }; });
+        check(row.right <= row.sound + 0.5, `${prov}: the actions row stops before the sound toggle (${Math.round(row.right)} ≤ ${Math.round(row.sound)})`);
+      }
+      await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 30000); await wait(600);
+    }
+    // the visitor's own choice holds: expanded stays expanded in the next world
+    if (portrait && coarse) {
+      await ev(p, (f) => window.__eldom.dev.arrive(f), -2); await waitFloor(p, -2); await wait(2400);
+      await p.locator('.portal-mini').click(); await wait(800);
+      check(!(await state(p)).portal.mini, 'AMPLIAR expands it');
+      await ev(p, (f) => window.__eldom.dev.arrive(f), -3); await waitFloor(p, -3); await wait(2400);
+      check(!(await state(p)).portal.mini, 'and the visitor\'s choice holds in the next world');
+      await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 30000); await wait(600);
+      await ev(p, () => sessionStorage.removeItem('eldom.mini'));
+    }
+    await ev(p, () => window.__eldom.dev.exterior()); await waitPhase(p, 'open', 20000); await wait(1500);
+    await ev(p, () => window.__eldom.ui.openBook(0)); await wait(1800);
+    await shot('04-book'); await scan('book');
+    // the longest page of the book: its text must read in full on this screen
+    const n = (await state(p)).book.leaves.length;
+    await ev(p, () => window.__eldom.ui.bookTurn(-99)); await wait(200);
+    let best = 0, bestLen = 0;
+    for (let i = 0; i < n; i++) {
+      const len = await ev(p, () => document.querySelector('#bk-page').innerText.length);
+      if (len > bestLen) { best = i; bestLen = len; }
+      await ev(p, () => window.__eldom.ui.bookTurn(1)); await wait(120);
+    }
+    await ev(p, (k) => { window.__eldom.ui.bookTurn(-99); window.__eldom.ui.bookTurn(k); }, best); await wait(900);
+    await shot('04b-book-text');
+    const pg = await ev(p, () => { const e = document.querySelector('#bk-page'), r = e.getBoundingClientRect(), c = document.querySelector('#bk-close').getBoundingClientRect(), f = parseFloat(getComputedStyle([...e.querySelectorAll('p')].sort((x, y) => y.textContent.length - x.textContent.length)[0] || e).fontSize); return { text: e.innerText.length, font: f, scroll: e.scrollHeight - e.clientHeight, top: r.top, bottom: r.bottom, left: r.left, right: r.right, closeBottom: c.bottom, vh: innerHeight, vw: innerWidth }; });
+    check(pg.left >= 0 && pg.right <= pg.vw && pg.bottom <= pg.vh + 1 && pg.top >= pg.closeBottom - 1 && pg.font >= 14 && pg.text > 200, `the longest page reads on this screen: ${pg.font}px text, clear of CERRAR, scrollable ${Math.round(pg.scroll)} px (${Math.round(pg.top)}–${Math.round(pg.bottom)} of ${pg.vh}, CERRAR ends ${Math.round(pg.closeBottom)}, ${pg.text} chars)`);
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' phoneview check(s) failed: ' + fails.join(' | '));
+  },
   // A phone lying down (run with --viewport landscape): cabin selector → floors, the slim corner player, walking with
-  // the joystick; and upright (--viewport mobile): the invitation to lie it down.
+  // the joystick; and upright (--viewport mobile): no dialog in the way, one brief line about lying it down.
   async landscape(p, shot, log) {
     const fails = [];
     const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
@@ -1566,14 +1776,19 @@ const SCENARIOS = {
     const hot = (label) => `.hot[aria-label^="${label}"]`;
     if (!(await ev(p, () => matchMedia('(pointer: coarse)').matches))) { log('not a touch screen: nothing to check here (run with --viewport landscape or mobile)'); return; }
     await ev(p, () => window.__eldom.dev.released());
-    if (vw.width < vw.height) { // upright: the invitation
+    const lineUp = () => ev(p, () => { const e = document.querySelector('#cap-hint'); return !e.hidden && /Acostá el teléfono/.test(e.textContent); });
+    if (vw.width < vw.height) { // upright: no dialog, one brief line once the walking ring has gone
       await ev(p, () => window.__eldom.dev.arrive(2)); await waitFloor(p, 2); await wait(2400);
-      check(await p.locator('#rot-invite').isVisible(), 'upright phone in a world: invitation to lie it down');
-      await shot('01-invite');
-      await p.locator('#rot-keep').click(); await wait(300);
-      check(!(await p.locator('#rot-invite').isVisible()), '"Seguir así" closes it');
-      await ev(p, () => window.__eldom.dev.arrive(3)); await waitFloor(p, 3); await wait(2000);
-      check(!(await p.locator('#rot-invite').isVisible()), 'and it does not come back in the next world');
+      check((await p.locator('#rot-invite').count()) === 0 && (await ev(p, () => ![...document.querySelectorAll('[role=dialog]')].some((e) => e.checkVisibility()))), 'upright phone in a world: no dialog in the way');
+      check(!(await lineUp()) && (await state(p)).roam.ghost, 'the walking ring comes first, with no line yet');
+      await shot('01-world-upright');
+      await p.waitForFunction(() => { const e = document.querySelector('#cap-hint'); return !e.hidden && /Acostá el teléfono/.test(e.textContent); }, null, { timeout: 12000 }).catch(() => {});
+      check((await lineUp()) && !(await state(p)).roam.ghost, 'then one brief line about lying the phone down, never with the ring');
+      await shot('02-line');
+      await p.waitForFunction(() => document.querySelector('#cap-hint').hidden, null, { timeout: 8000 }).catch(() => {});
+      check(!(await lineUp()), 'the line goes by itself');
+      await ev(p, () => window.__eldom.dev.arrive(3)); await waitFloor(p, 3); await wait(8500);
+      check(!(await lineUp()), 'and it does not come back in the next world');
     } else {
       await ev(p, () => { sessionStorage.removeItem('eldom.platform'); });
       await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin'); await wait(1200);
@@ -1594,7 +1809,7 @@ const SCENARIOS = {
       const fr = await p.locator('.portal iframe').boundingBox();
       check(s.portal.dock === 'compact' && fr && fr.height >= 199 && fr.width >= 199, `in the world the player sits in the corner, slim (${fr && Math.round(fr.width)}×${fr && Math.round(fr.height)}, YouTube minimum 200)`);
       check(fr && fr.x + fr.width <= vw.width && fr.y + fr.height <= vw.height, 'and fully on screen');
-      check(!(await p.locator('#rot-invite').isVisible()), 'no invitation when the phone already lies down');
+      check(!(await lineUp()) && (await p.locator('#rot-invite').count()) === 0, 'no line about lying it down when the phone already lies down');
       await shot('03-world');
       // walk with the left thumb
       const cdp = await p.context().newCDPSession(p);
@@ -1702,7 +1917,7 @@ const SCENARIOS = {
     await p.route('https://open.spotify.com/embed/**', (r) => {
       hits++;
       const dur = hits === 1 ? 30000 : 215000;
-      r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><body style="background:#111"><script>parent.postMessage({type:"ready"},"*");setTimeout(()=>parent.postMessage({type:"playback_update",payload:{isPaused:false,isBuffering:false,duration:' + dur + ',position:1000,playingURI:"spotify:track:stub"}},"*"),500);</script></body>' });
+      r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><body style="background:#111"><script>parent.postMessage({type:"ready"},"*");setTimeout(()=>parent.postMessage({type:"playback_update",payload:{isPaused:false,isBuffering:false,duration:' + dur + ',position:1000,playingURI:"spotify:track:stub"}},"*"),2500);</script></body>' });
     });
     await p.context().route(/^https:\/\/accounts\.spotify\.com\//, (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>login</title>' }));
     // the visitor goes to the other tab (the page hides, the window blurs) or only to another window (the window blurs): and back
@@ -1740,6 +1955,7 @@ const SCENARIOS = {
     check(!!open && open.href === canon && open.target === '_blank' && /noopener/.test(open.rel), `${OPEN} is the official song URL (${open && open.href})`);
     if (coarse) {
       check(!sign, 'phone: no sign-in link');
+      if (vw.width < 640 && vw.height > vw.width) check((await portal()).mini && (await line()).length > 0, 'phone held upright: it opens minimized and the line is still there');
       check(!!open && /sess/.test(open.cls), 'phone: ABRIR EN SPOTIFY is the primary action');
     } else {
       check(!!sign && sign.href === login(canon) && sign.target === '_blank' && /noopener/.test(sign.rel), `computer: sign-in goes to Spotify's own login and comes back to the song (${sign && sign.href})`);
@@ -1795,8 +2011,8 @@ const SCENARIOS = {
       await away(); await wait(300); await back(); await wait(900);
       check(hits === 3 && (await iframeCount(p)) === 0, `a destroyed player is never reloaded (loads ${hits})`);
     } else {
-      // 4. phone: minimized, the action is the one thing to tap and stays inside the screen, clear of the bar
-      await p.locator('.portal-mini').click(); await wait(700);
+      // 4. phone: minimized (a phone held upright opens it so), the action is the one thing to tap and stays inside the screen, clear of the bar
+      if (!(await portal()).mini) { await p.locator('.portal-mini').click(); await wait(700); }
       ls = await links();
       const act = ls.find((l) => l.text.startsWith(CONT) || l.text.startsWith(OPEN));
       const frameBox = await p.locator('.portal iframe').boundingBox(), rowBox = await p.locator('.portal-links').boundingBox(), pb = await p.locator('.portal').boundingBox();
@@ -1812,7 +2028,10 @@ const SCENARIOS = {
     await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin');
     await ev(p, (n) => window.__eldom.dev.arrive(n), t.floor); await waitFloor(p, t.floor);
     await p.waitForSelector('.portal-session', { timeout: 15000 });
-    await ev(p, () => document.dispatchEvent(new SecurityPolicyViolationEvent('securitypolicyviolation', { effectiveDirective: 'frame-src', blockedURI: 'https://open.spotify.com/embed' })));
+    await ev(p, () => {
+      document.dispatchEvent(new SecurityPolicyViolationEvent('securitypolicyviolation', { effectiveDirective: 'frame-src', blockedURI: 'https://open.spotify.com/embed' }));
+      if (window.__csp) window.__csp.pop(); // staged here: the published-site CSP watch only counts real violations
+    });
     s0 = await until((x) => x.mode === 'link', 5000);
     check(s0.mode === 'link' && (await line()) === '' && !(await links()).some((l) => l.text.startsWith(SIGN)), 'link mode: no line, no sign-in link (its own official link is the action)');
     await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 25000);

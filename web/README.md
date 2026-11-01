@@ -24,6 +24,11 @@ las pruebas.
   - `artifact/index.html`: la versión para claude.ai (ahí los reproductores son enlaces).
 - `tools/check.cjs` — pruebas de punta a punta en el navegador (escenarios `smoke`, `cabin`, `mini`, `trials`,
   `book`, `basements`, `level`, `roam`, `integrations`, …). `--dist` las corre sobre `dist/` con sus encabezados; `--url` sobre el sitio publicado.
+- Celulares: `renderTier()` (`src/20-r3d-core.js`) elige el nivel `lite` (sin suavizado, 30 cuadros por segundo, espejo
+  del agua a un cuarto y 40 % de las partículas) cuando el puntero es táctil, el ahorro de datos está activo o el equipo
+  declara 4 GB o menos de memoria o 4 núcleos o menos. El botón DEV muestra el nivel y `window.__eldom.state().tier` lo
+  expone. En un celular en vertical el reproductor de los mundos se abre minimizado (si la persona lo amplía, se respeta
+  en el resto de la visita).
 - `tools/preflight.cjs` — verifica los ids de YouTube y Spotify y, con `--site`, el sitio publicado.
 - `tools/leads/` — la planilla de Google donde caen los registros: el programa (`Code.gs`), sus pruebas y cómo
   armarla ([LEEME.md](tools/leads/LEEME.md)).

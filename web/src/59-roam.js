@@ -24,6 +24,7 @@ const Roam = {
   reset() {
     this.vx = this.vz = 0; this.stepT = 0; this.moved = 0; this.docked = false;
     this.joy.x = this.joy.y = 0;
+    Joy.ghostSince = 0; Joy.ghostDone = false; // the ring shows again in the new scene
   },
 
   /** Drag to look (mouse or a finger). Returns false when looking is not free here (the cabin keeps its own). */
@@ -41,7 +42,7 @@ const Roam = {
   /** One frame. Returns true while the scene is free (the old look/walk offsets then stay at rest). */
   tick(dt, keys) {
     const sc = this.scene(), c = world.cam;
-    this.rotateInvite();
+    this.rotateHint();
     if (!sc) { this.vx = this.vz = 0; return false; }
     this.dockIfNeeded();
     let mx = this.joy.x, mz = this.joy.y, turn = 0;
@@ -88,14 +89,14 @@ const Roam = {
     const want = this.moved > 0.8 || H < 520;
     if (want && !this.docked) { this.docked = true; port.setDock('compact'); }
   },
-  /** On a phone held upright in a world: once per visit, an invitation to lie it down. */
-  rotateInvite() {
-    const el = $('#rot-invite'), sc = this.scene();
-    const portrait = window.innerWidth < window.innerHeight;
-    const want = Joy.coarse && portrait && (sc === 'floor' || sc === 'gallery') && !store.session.get('eldom.rot');
-    if (!portrait && !el.hidden) store.session.set('eldom.rot', '1'); // they did it
-    if (el.hidden === !want) return;
-    el.hidden = !want;
+  /** On a phone held upright in a world: once per visit, one brief line about lying it down. Never a dialog, and only once
+   *  the walking ring has gone: one hint on screen at a time. */
+  rotateHint() {
+    if (!Joy.coarse || !Joy.ghostDone || Joy.id !== null || App.overlay || store.session.get('eldom.rot')) return;
+    const sc = this.scene();
+    if ((sc !== 'floor' && sc !== 'gallery') || window.innerWidth >= window.innerHeight) return;
+    store.session.set('eldom.rot', '1');
+    hint(COPY.rotate, 4200);
   },
   /** Keeps the visitor inside the scene and outside the solid things in it. */
   collide(sc, x, z) {
@@ -135,6 +136,8 @@ function pushOutBox(x, z, bx, bz, hw, hd, ry, r) {
 // ═══════════════════════════════════════════════════════════════════════════════════════════
 const Joy = {
   id: null, ox: 0, oy: 0, R: 52,
+  ghostSince: 0, ghostDone: false, // the resting ring lasts a few seconds in each scene
+  GHOST_MS: 5000,
   coarse: matchMedia('(pointer: coarse)').matches,
   /** A touch in the lower-left part of the screen becomes the joystick. */
   claim(e) {
@@ -163,13 +166,20 @@ const Joy = {
     const el = $('#joy'); el.classList.remove('on'); el.hidden = true;
     $('#joy-knob').style.transform = '';
   },
-  /** The resting hint: a faint ring where the left thumb goes, only on touch screens in a free scene. */
+  /** The resting hint: a faint ring where the left thumb goes, only on touch screens in a free scene. It fades on its own
+   *  after a few seconds (or at the first touch), and is not shown again in that scene. */
   sync() {
     const g = $('#joy-ghost');
-    const show = this.coarse && !!Roam.scene() && this.id === null && Roam.moved < 6;
+    if (this.id !== null || Roam.moved >= 6) this.ghostDone = true;
+    const free = this.coarse && !!Roam.scene() && !this.ghostDone;
+    if (free && !this.ghostSince) this.ghostSince = performance.now();
+    const age = free ? performance.now() - this.ghostSince : 0;
+    if (free && age > this.GHOST_MS) this.ghostDone = true;
+    const show = free && !this.ghostDone;
+    g.classList.toggle('fade', show && age > this.GHOST_MS - 900);
     if (show) { // above the docked player in portrait, in the corner when the phone lies down
       const port = PlayerPortal.current, H = window.innerHeight, portrait = window.innerWidth < window.innerHeight;
-      const top = portrait && port ? port.el.getBoundingClientRect().top - 132 : H - 132;
+      const top = portrait && port ? port.el.getBoundingClientRect().top - 132 : H - 132 - (portrait && Roam.scene() === 'lobby' ? 64 : 0); // (at the entrance, clear of the ENTRAR bar)
       g.style.top = Math.round(Math.max(H * 0.32, top)) + 'px';
     }
     if (g.hidden !== !show) g.hidden = !show;
