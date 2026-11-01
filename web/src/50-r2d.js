@@ -22,7 +22,8 @@ function createRenderer2D() {
   };
   let panelSpr = null, panelKey = '';
   function panelSprite(px) {
-    const st = { platform: world.platform, visited: world.visited, floor: world.floor, hover: world.hover };
+    const st = { platform: world.platform, visited: world.visited, floor: world.floor, hover: world.hover, down: panelDown(), open: Progress.basementsOpen(),
+      solved: Progress.debug().solved };
     const key = JSON.stringify(st) + Math.round(px);
     if (key !== panelKey) { panelKey = key; panelSpr = sprite(px, (px * PanelLayout.H) / PanelLayout.W, (c, w, hh) => Tex.panel(c, w, hh, PAL2D, st)); }
     return panelSpr;
@@ -194,7 +195,7 @@ function createRenderer2D() {
     // door (landscape only)
     if (a >= 1) {
       const dw = Math.min(W * 0.38, H * 0.56), dx = W * 0.12, dy = H * 0.06, dh = H * 1.1;
-      g.fillStyle = w.doors > 0.01 ? (w.env === 0 ? PAPER : `rgba(${hex3(tracks[w.env - 1].visualAccent).map((v) => Math.round(v * 60)).join(',')},1)`) : '#101014';
+      g.fillStyle = w.doors > 0.01 ? (w.env === 0 ? PAPER : `rgba(${hex3((trackOf(w.env) || PB_ROW).visualAccent).map((v) => Math.round(v * 60)).join(',')},1)`) : '#101014';
       g.fillRect(dx, dy, dw, dh);
       g.save(); g.beginPath(); g.rect(dx, dy, dw, dh); g.clip();
       const s = (dw / 2) * w.doors * 0.98;
@@ -221,6 +222,7 @@ function createRenderer2D() {
       g.beginPath(); if (square) g.rect(x - rr, y - rr, rr * 2, rr * 2); else g.arc(x, y, rr, 0, TAU); g.fill(); g.restore();
       g.strokeStyle = IV(0.55); g.lineWidth = 1.5; g.beginPath(); if (square) g.rect(x - rr, y - rr, rr * 2, rr * 2); else g.arc(x, y, rr + 2, 0, TAU); g.stroke();
     };
+    for (const k in rects) if (k.startsWith('floor-')) rects[k] = null; // the other section's rows are not there
     for (const tr of panelRows()) {
       const y = L.rowY(tr.floor);
       button('floor-' + tr.floor, L.btnX, y, 0.026, false, hex3(tr.visualAccent));
@@ -235,14 +237,16 @@ function createRenderer2D() {
       const [x0, y0] = P(b.x - 0.1, b.y - 0.126);
       rects['sel-' + p] = { x: x0, y: y0, w: 0.2 * S, h: 0.2 * S };
     }
-    const N = panelTop(), na = Math.PI - (clamp(w.needle, 0, N) * Math.PI) / N, [nx, ny] = P(L.dial.x, L.dial.y);
+    if (Progress.basementsOpen()) { const [x0, y0] = P(L.W / 2 - 0.23, L.section.y - L.section.h / 2); rects['panel-section'] = { x: x0, y: y0, w: 0.46 * S, h: L.section.h * S }; }
+    else rects['panel-section'] = null;
+    const [LO, HI] = panelRange(), na = Math.PI - ((clamp(w.needle, LO, HI) - LO) * Math.PI) / (HI - LO), [nx, ny] = P(L.dial.x, L.dial.y);
     g.strokeStyle = IV(0.95); g.lineWidth = 2; g.beginPath(); g.moveTo(nx, ny); g.lineTo(nx + Math.cos(na) * (L.dial.r - 0.022) * S, ny - Math.sin(na) * (L.dial.r - 0.022) * S); g.stroke();
     for (const dir of [1, -1]) { const [ax, ay] = P(dir > 0 ? 0.075 : L.W - 0.075, 0.17); g.fillStyle = w.arrow === dir ? IV(0.95) : IV(0.12); g.beginPath(); g.moveTo(ax - 0.016 * S, ay + dir * 0.011 * S); g.lineTo(ax + 0.016 * S, ay + dir * 0.011 * S); g.lineTo(ax, ay - dir * 0.016 * S); g.fill(); }
     g.restore();
   }
 
   function drawFloor(dt, t) {
-    const w = world, tr = tracks[w.env - 1] || tracks[0];
+    const w = world, tr = trackOf(w.env) || tracks[0];
     const acc = hex3(tr.visualAccent).map((v) => Math.round(v * 255)).join(',');
     const r = (PlayerPortal.current && PlayerPortal.current.rect()) || PlayerPortal.expectedRect('floor', w.platform || 'youtube', alignFor(tr));
     const base = Math.min(H * 0.97, r.y + r.h + H * 0.05);
@@ -256,7 +260,7 @@ function createRenderer2D() {
     for (const d of dots) { const y = (((d.y - t * 0.012 * d.s * (1 + live)) % 1) + 1) % 1; g.fillStyle = `rgba(${acc},${0.25 + 0.3 * Math.sin(t * d.s + d.p)})`; g.beginPath(); g.arc(d.x * W + Math.sin(t * 0.3 + d.p) * 12, y * base, 1 + d.s, 0, TAU); g.fill(); }
     const phone = W < 640, ty = phone ? H * 0.2 : Math.max(H * 0.1, r.y - H * 0.105);
     const size = Math.min(H * (phone ? 0.05 : 0.07), (W * 0.9) / (tr.title.length * 0.5));
-    textGlow(`PISO ${tr.floor}${tr.durationSeconds ? ' · ' + fmtDuration(tr.durationSeconds) : ''}`, cx, ty - size * 0.95, FONT_CAPS(size * 0.3), IV(0.7), size * 0.1);
+    textGlow(`${floorName(tr.floor).toUpperCase()}${tr.durationSeconds ? ' · ' + fmtDuration(tr.durationSeconds) : ''}`, cx, ty - size * 0.95, FONT_CAPS(size * 0.3), IV(0.7), size * 0.1);
     textGlow(tr.title, cx, ty, FONT_DISPLAY(size, 'italic', 400), IV(0.95));
     rects.elevator = null;
     if (w.book.sheet) { // the loose page of this world

@@ -29,10 +29,14 @@ const PanelLayout = {
   dial: { x: 0.29, y: 0.205, r: 0.12 },
   ask: { y: 0.292 },
   sel: { youtube: { x: 0.17, y: 0.428 }, spotify: { x: 0.41, y: 0.428 }, size: 0.105, labelY: 0.34 }, // the name, then the button with its logo
-  rowsTop: 0.605, rowsBottom: 1.228,
+  rowsTop: 0.64, rowsBottom: 1.228,
+  /** "PISOS" engraved over the rows; once the basements open, the switch between the two sections. */
+  section: { y: 0.586, h: 0.078, up: 0.17, down: 0.41 },
   btnX: 0.07, numX: 0.13, titleX: 0.164, markX: 0.497,
-  /** y of the row for floor n: PB (n = 0, the entrance) at the bottom, the gallery on top, as in a real cab. */
-  rowY(n) { return this.rowsBottom - n * this.rowStep(); },
+  /** Place of floor n counted from the bottom row. Pisos: PB at the bottom, the gallery on top, as in a real cab.
+   *  Subsuelos: −9 at the bottom, PB on top. */
+  slot(n, down) { return n < 0 ? n + basementCount() : n === 0 && down ? basementCount() : n; },
+  rowY(n, down = panelDown()) { return this.rowsBottom - this.slot(n, down) * this.rowStep(); },
   rowStep() { return Math.min(0.075, (this.rowsBottom - this.rowsTop) / Math.max(1, panelTop())); },
 };
 
@@ -61,12 +65,12 @@ Object.assign(Tex, {
     const d = L.dial;
     stroke('g', 0.75, 0.005); ctx.beginPath(); ctx.arc(d.x * S, d.y * S, d.r * S, Math.PI, TAU); ctx.stroke();
     stroke('g', 0.5, 0.003); ctx.beginPath(); ctx.moveTo((d.x - d.r) * S, d.y * S); ctx.lineTo((d.x + d.r) * S, d.y * S); ctx.stroke();
-    const N = tracks.length, TOP = panelTop();
-    for (let n = 0; n <= TOP; n++) {
-      const a = Math.PI - (n * Math.PI) / TOP;
-      const c = Math.cos(a), s = -Math.sin(a);
+    const TOP = panelTop(), [LO, HI] = st.down ? [-basementCount(), 0] : [0, TOP];
+    for (let n = LO; n <= HI; n++) {
+      const a = Math.PI - ((n - LO) * Math.PI) / (HI - LO);
+      const c = Math.cos(a), s = -Math.sin(a), end = n === LO || n === HI;
       stroke('g', 0.7, 0.003); ctx.beginPath(); ctx.moveTo((d.x + c * (d.r - 0.014)) * S, (d.y + s * (d.r - 0.014)) * S); ctx.lineTo((d.x + c * d.r) * S, (d.y + s * d.r) * S); ctx.stroke();
-      text(n === 0 ? 'PB' : String(n), d.x + c * (d.r - 0.034), d.y + s * (d.r - 0.034) - (n === 0 || n === TOP ? 0.013 : 0), n === 0 || n > 9 ? 0.0155 : 0.02, FONT_CAPS, 'g', 0.85, 0, 'center');
+      text(floorMark(n), d.x + c * (d.r - 0.034), d.y + s * (d.r - 0.034) - (end ? 0.013 : 0), n === 0 || n > 9 || n < 0 ? 0.0155 : 0.02, FONT_CAPS, 'g', 0.85, 0, 'center');
     }
     // question + selector labels
     text('¿POR DÓNDE QUERÉS VIAJAR?', L.W / 2, L.ask.y, 0.0245, FONT_CAPS, st.platform ? 'r' : 'g', st.platform ? 0.95 : 0.9, 0.0032, 'center');
@@ -77,16 +81,25 @@ Object.assign(Tex, {
       text(p === 'youtube' ? COPY.youtube : COPY.spotify, b.x, L.sel.labelY, 0.0195, FONT_CAPS, 'g', on || hov ? 1 : 0.6, 0.004, 'center');
     }
     stroke('r', 0.8, 0.003); ctx.beginPath(); ctx.moveTo(0.05 * S, 0.531 * S); ctx.lineTo((L.W - 0.05) * S, 0.531 * S); ctx.stroke();
-    text('PISOS', L.W / 2, 0.553, 0.0145, FONT_CAPS, 'g', 0.5, 0.007, 'center');
-    // rows (generated from the track list)
+    if (!st.open) text('PISOS', L.W / 2, L.section.y - 0.012, 0.0145, FONT_CAPS, 'g', 0.5, 0.007, 'center');
+    else { // the switch: the section shown is lit, the other one waits
+      const hov = st.hover === 'panel-section';
+      text('▲ PISOS', L.section.up, L.section.y, 0.019, FONT_CAPS, 'g', st.down ? (hov ? 0.85 : 0.5) : 1, 0.005, 'center');
+      text('SUBSUELOS ▼', L.section.down, L.section.y, 0.019, FONT_CAPS, 'g', st.down ? 1 : (hov ? 0.85 : 0.5), 0.005, 'center');
+      stroke('g', 0.85, 0.003); const ux = st.down ? L.section.down : L.section.up;
+      ctx.beginPath(); ctx.moveTo((ux - 0.085) * S, (L.section.y + 0.02) * S); ctx.lineTo((ux + 0.085) * S, (L.section.y + 0.02) * S); ctx.stroke();
+    }
+    // rows (generated from the track list): the section shown
     const step = L.rowStep();
     const maxW = L.markX - 0.03 - L.titleX;
-    for (const tr of tracks) {
-      const y = L.rowY(tr.floor);
+    const rowsNow = tracks.filter((t) => (st.down ? t.floor < 0 : t.floor > 0));
+    const lowest = st.down ? -basementCount() : 1;
+    for (const tr of rowsNow) {
+      const y = L.rowY(tr.floor, st.down);
       const enabled = !!st.platform, visited = st.visited.includes(tr.floor), here = st.floor === tr.floor, hov = st.hover === 'floor-' + tr.floor;
       const ch = hov || here || enabled ? 'g' : 'r';
       const k = hov || here ? 1 : enabled ? (visited ? 0.82 : 0.68) : 0.62;
-      text(String(tr.floor), L.numX, y + 0.002, 0.036, FONT_CAPS, ch, k, 0, 'center');
+      text(floorMark(tr.floor), L.numX, y + 0.002, tr.floor < 0 ? 0.029 : 0.036, FONT_CAPS, ch, k, 0, 'center');
       const title = tr.title.toUpperCase();
       let size = Math.min(0.0235, step * 0.37);
       ctx.font = FONT_CAPS(size * S);
@@ -109,20 +122,28 @@ Object.assign(Tex, {
         ctx.strokeStyle = col('g', 0.95); ctx.lineWidth = Math.max(1.2, 0.0022 * S);
         for (let q = 1; q <= 3; q++) { ctx.beginPath(); ctx.ellipse(L.markX * S, y * S, q * 0.0052 * S, q * 0.0068 * S, 0.3, q === 1 ? 0 : -2.4, q === 1 ? TAU : 2.0); ctx.stroke(); }
       }
-      if (tr.floor < TOP) { stroke('r', 0.3, 0.0018); ctx.beginPath(); ctx.moveTo(L.titleX * S, (y - step / 2) * S); ctx.lineTo((L.W - 0.04) * S, (y - step / 2) * S); ctx.stroke(); }
+      if (st.down ? tr.floor > lowest : tr.floor < TOP) { stroke('r', 0.3, 0.0018); ctx.beginPath(); ctx.moveTo(L.titleX * S, (y - step / 2) * S); ctx.lineTo((L.W - 0.04) * S, (y - step / 2) * S); ctx.stroke(); }
+      if (st.solved && st.solved.includes(tr.id)) { // a chapter found here: a small open book beside the number
+        stroke('g', 0.9, 0.0022); const bx = L.markX + 0.033, by = y;
+        ctx.beginPath(); ctx.moveTo((bx - 0.012) * S, (by - 0.006) * S); ctx.quadraticCurveTo((bx - 0.006) * S, (by - 0.009) * S, bx * S, (by - 0.005) * S);
+        ctx.quadraticCurveTo((bx + 0.006) * S, (by - 0.009) * S, (bx + 0.012) * S, (by - 0.006) * S); ctx.lineTo((bx + 0.012) * S, (by + 0.007) * S);
+        ctx.quadraticCurveTo((bx + 0.006) * S, (by + 0.004) * S, bx * S, (by + 0.008) * S); ctx.quadraticCurveTo((bx - 0.006) * S, (by + 0.004) * S, (bx - 0.012) * S, (by + 0.007) * S);
+        ctx.closePath(); ctx.moveTo(bx * S, (by - 0.005) * S); ctx.lineTo(bx * S, (by + 0.008) * S); ctx.stroke();
+      }
     }
-    if (GALLERY.enabled) { // the gallery: the floor above the songs (needs no platform either)
+    if (GALLERY.enabled && !st.down) { // the gallery: the floor above the songs (needs no platform either)
       const y = L.rowY(GALLERY_FLOOR), here = st.floor === GALLERY_FLOOR, hov = st.hover === 'floor-' + GALLERY_FLOOR;
       const ch = 'g', k = hov || here ? 1 : 0.68;
       text(String(GALLERY_FLOOR), L.numX, y + 0.002, GALLERY_FLOOR > 9 ? 0.028 : 0.036, FONT_CAPS, ch, k, 0, 'center');
       text(GALLERY.label, L.titleX, y + 0.001, Math.min(0.0235, step * 0.37), FONT_CAPS, ch, k, 0.0016);
     }
     { // PB: back to the entrance (needs no platform)
-      const y = L.rowY(0), here = st.floor === 0, hov = st.hover === 'floor-0';
+      const y = L.rowY(0, st.down), here = st.floor === 0, hov = st.hover === 'floor-0';
       const ch = 'g', k = hov || here ? 1 : 0.68;
       text('PB', L.numX, y + 0.002, 0.024, FONT_CAPS, ch, k, 0, 'center');
       text(COPY.lobby, L.titleX, y + 0.001, Math.min(0.0235, step * 0.37), FONT_CAPS, ch, k, 0.0016);
-      stroke('r', 0.3, 0.0018); ctx.beginPath(); ctx.moveTo(L.titleX * S, (y - step / 2) * S); ctx.lineTo((L.W - 0.04) * S, (y - step / 2) * S); ctx.stroke();
+      const ly = st.down ? y + step / 2 : y - step / 2;
+      stroke('r', 0.3, 0.0018); ctx.beginPath(); ctx.moveTo(L.titleX * S, ly * S); ctx.lineTo((L.W - 0.04) * S, ly * S); ctx.stroke();
     }
     text('MONOS DEL AMBIENTE · EL LADO OSCURO DEL MONO', L.W / 2, 1.277, 0.0105, FONT_CAPS, 'r', 0.7, 0.0022, 'center');
   },
@@ -161,7 +182,8 @@ function buildCabin3D(ctx) {
   disposables.push(texPanel);
   let panelKey = '';
   function redrawPanel(force) {
-    const st = { platform: world.platform, visited: world.visited, floor: world.floor, hover: world.hover };
+    const st = { platform: world.platform, visited: world.visited, floor: world.floor, hover: world.hover, down: panelDown(), open: Progress.basementsOpen(),
+      solved: Progress.debug().solved };
     const key = JSON.stringify(st);
     if (key === panelKey && !force) return;
     panelKey = key;
@@ -181,18 +203,34 @@ function buildCabin3D(ctx) {
   const capGeo = keep(new THREE.CylinderGeometry(0.0255, 0.0255, 0.02, 28).rotateX(Math.PI / 2));
   const bezelGeo = keep(new THREE.TorusGeometry(0.03, 0.0048, 10, 32));
   const ringGeo = planeGeo(0.13, 0.13);
-  for (const tr of panelRows()) { // PB, the songs, the gallery
-    const y = L.rowY(tr.floor);
-    const p = onPlate(L.btnX, y, 0.006);
+  const rowParts = {}; // floor -> the meshes of its button, moved or hidden when the panel changes section
+  for (const tr of panelAllRows()) { // PB, the record, the gallery, the basements
+    const p = onPlate(L.btnX, L.rowY(tr.floor, false), 0.006);
     const mat = ink({ interior: true, base: '#201c15', engrave: 0.38, freq: 8, axis: 1, rim: 0.9 });
     const mesh = add(capGeo, mat, p.x, p.y, p.z, interior);
-    add(bezelGeo, mBezel, p.x, p.y, ZF - 0.002, interior);
+    const bezel = add(bezelGeo, mBezel, p.x, p.y, ZF - 0.002, interior);
     const ringU = { uTint: { value: V3(...hex3(tr.visualAccent)) }, uAlpha: { value: 0 }, uStripes: { value: 0 } };
     const ring = add(ringGeo, glowMat(HALO_FRAG, ringU), p.x, p.y, ZF - 0.02, interior);
     ring.rotation.y = Math.PI;
     controls['floor-' + tr.floor] = { mesh, mat, base: p.z, accent: hex3(tr.visualAccent), ringU, sink: 0.007 };
-    anchors['floor-' + tr.floor] = { pos: lifted(onPlate(0.2695, y)), w: 0.509, h: Math.max(0.05, L.rowStep() - 0.002) };
+    rowParts[tr.floor] = [mesh, bezel, ring];
   }
+  const OFF = V3(0, -100, 0); // where the anchors of the hidden section wait
+  let sectionKey = '';
+  /** Puts the buttons of the section shown in their rows and hides the others (their hotspots go with them). */
+  function placeRows() {
+    const down = panelDown(), key = String(down) + Progress.basementsOpen();
+    if (key === sectionKey) return;
+    sectionKey = key;
+    const shown = new Set(panelRows().map((r) => r.floor));
+    for (const [f, parts] of Object.entries(rowParts)) {
+      const n = Number(f), on = shown.has(n), y = L.rowY(n, down), p = onPlate(L.btnX, y, 0.006);
+      for (const m of parts) { m.visible = on; m.position.y = p.y; }
+      anchors['floor-' + n] = { pos: on ? lifted(onPlate(0.2695, y)) : OFF.clone(), w: 0.509, h: Math.max(0.05, L.rowStep() - 0.002) };
+    }
+    anchors['panel-section'] = { pos: Progress.basementsOpen() ? lifted(onPlate(L.W / 2, L.section.y)) : OFF.clone(), w: 0.46, h: L.section.h };
+  }
+  placeRows();
   const selGeo = boxGeo(L.sel.size, L.sel.size, 0.024);
   for (const p of ['youtube', 'spotify']) {
     const b = L.sel[p];
@@ -341,6 +379,7 @@ function buildCabin3D(ctx) {
   }
 
   ctx.updaters.push((dt, t) => {
+    placeRows();
     redrawPanel(false);
     for (const id in controls) {
       const c = controls[id];
@@ -364,8 +403,8 @@ function buildCabin3D(ctx) {
       c.mat.uniforms.uEmissive.value.set(c.accent[0], c.accent[1], c.accent[2]).multiplyScalar(glow * 0.85);
       c.ringU.uAlpha.value = glow * 0.5;
     }
-    const N = panelTop();
-    miniNeedle.rotation.z = Math.PI - (clamp(world.needle, 0, N) * Math.PI) / N; // the plate faces −Z: the Y flip below mirrors it back
+    const [LO, HI] = panelRange();
+    miniNeedle.rotation.z = Math.PI - ((clamp(world.needle, LO, HI) - LO) * Math.PI) / (HI - LO); // the plate faces −Z: the Y flip below mirrors it back
     miniNeedle.rotation.y = Math.PI;
     for (const a of arrows) { const on = world.arrow === a.dir ? 1 : 0; a.m.color.setRGB(0.1 + on * 0.85, 0.09 + on * 0.8, 0.07 + on * 0.62); }
     updateHand(dt, t);
@@ -373,7 +412,11 @@ function buildCabin3D(ctx) {
 
   return {
     /** World position where the index fingertip must land to press control `id`. */
-    target(id) { const a = id.startsWith('sel-') ? L.sel[id.slice(4)] : { x: L.btnX, y: L.rowY(Number(id.slice(6))) }; return lifted(onPlate(a.x, a.y, id.startsWith('sel-') ? 0.021 : 0.017)); },
+    target(id) {
+      if (id === 'panel-section') return lifted(onPlate(panelDown() ? L.section.up : L.section.down, L.section.y, 0.004));
+      const a = id.startsWith('sel-') ? L.sel[id.slice(4)] : { x: L.btnX, y: L.rowY(Number(id.slice(6))) };
+      return lifted(onPlate(a.x, a.y, id.startsWith('sel-') ? 0.021 : 0.017));
+    },
     redrawPanel,
   };
 }

@@ -4,7 +4,7 @@
 /** Where the official player sits on desktop for each kind (phones always dock it at the bottom). */
 const FLOOR_ALIGN = { halo: 'center', flock: 'left', chat: 'center', thread: 'center', mate: 'left', pin: 'left', glass: 'right', letters: 'center', staff: 'center' };
 /** The level's world puts its player on the right on wide screens: the wall and the stones stand on the left. */
-const alignFor = (tr) => (LEVEL.enabled && tr.floor === LEVEL.floor ? 'right' : FLOOR_ALIGN[tr.visual.kind] || 'center');
+const alignFor = (tr) => (LEVEL.enabled && tr.id === LEVEL.trackId ? 'right' : FLOOR_ALIGN[tr.visual.kind] || 'center');
 const fmtDuration = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
 const PARTICLE_VERT = /* glsl */`
@@ -92,7 +92,7 @@ function buildFloors3D(ctx) {
     const accent = hex3(track.visualAccent);
     const accV = V3(...accent);
     const F = { // helpers bound to this floor
-      A, accent, accV, group, track,
+      A, accent, accV, group, track, V3,
       basic: (color, opacity = 1, extra = {}) => { const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(color[0], color[1], color[2]), opacity, ...RAISE, ...extra }); disposables.push(m); return m; },
       lineMat: (color, opacity = 1) => { const m = new THREE.LineBasicMaterial({ color: new THREE.Color(color[0], color[1], color[2]), opacity, ...RAISE }); disposables.push(m); return m; },
       line(points, mat, closed = false) { const g = keep(new THREE.BufferGeometry().setFromPoints(points)); const l = closed ? new THREE.LineLoop(g, mat) : new THREE.Line(g, mat); group.add(l); return l; },
@@ -137,7 +137,7 @@ function buildFloors3D(ctx) {
     const title = F.text(track.title, 1800, 230, (px) => FONT_DISPLAY(px, 'italic', 400), 0.01, titleH, A.at(tSx, tSy, 0.4));
     const maxW = A.size(0.92) * A.aspect;
     if (titleH * (1800 / 230) > maxW) title.mesh.scale.setScalar(maxW / (1800 / 230));
-    const infoStr = `PISO ${track.floor}${track.durationSeconds ? ' · ' + fmtDuration(track.durationSeconds) : ''}`;
+    const infoStr = `${floorName(track.floor).toUpperCase()}${track.durationSeconds ? ' · ' + fmtDuration(track.durationSeconds) : ''}`;
     F.text(infoStr, 1024, 96, FONT_CAPS, 0.34, A.size(A.phone ? 0.025 : 0.024), A.at(tSx, tSy - (A.phone ? 0.062 : tFrac / 2 + 0.03), 0.4), 0.8);
     if (track.shortText) F.text(track.shortText, 1600, 110, (px) => FONT_DISPLAY(px, 'italic', 400), 0.01, A.size(0.03), A.at(tSx, tSy + (A.phone ? 0.05 : 0.066), 0.4), 0.75);
 
@@ -157,6 +157,7 @@ function buildFloors3D(ctx) {
   }
 
   function destroy() {
+    delete ctx.anchors['tr-element']; // the record's worlds put their element's hotspot here
     if (!cur) return;
     scene.remove(cur.group);
     for (let i = cur.marks.d; i < disposables.length; i++) disposables[i].dispose && disposables[i].dispose();

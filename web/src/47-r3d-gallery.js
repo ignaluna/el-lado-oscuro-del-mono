@@ -3,16 +3,25 @@
 //   Open before the release too. Every image, name and text comes from GALLERY in the config; nothing is invented:
 //   an entry without `src` hangs as an empty frame.
 // ═══════════════════════════════════════════════════════════════════════════════════════════
-/** The gallery is the floor right above the last song (10 for a nine-song record). */
-const GALLERY_FLOOR = tracks.length + 1;
-/** Rows of the cabin panel, bottom to top: PB (the entrance), one per song, then the gallery. */
-const panelRows = () => [
-  { floor: 0, visualAccent: '#f2ead6' },
-  ...tracks,
-  ...(GALLERY.enabled ? [{ floor: GALLERY_FLOOR, visualAccent: '#f2ead6' }] : []),
-];
-const panelTop = () => tracks.length + (GALLERY.enabled ? 1 : 0);
-Object.assign(world, { gallery: { at: -1 } }); // at: -1 = walking the corridor, i = standing in front of piece i
+/** The gallery is the floor right above the last song of the record (10 for nine songs); the basements never move it. */
+const GALLERY_FLOOR = tracks.filter((t) => t.floor > 0).length + 1;
+/**
+ * The cabin panel shows one section at a time. "Pisos", bottom to top: PB (the entrance), the record, the gallery.
+ * "Subsuelos" (once open), top to bottom: PB, −1 … −9. Both sections share the row spacing, so PB only changes place.
+ */
+const PB_ROW = { floor: 0, visualAccent: '#f2ead6' };
+const panelUpRows = () => [PB_ROW, ...tracks.filter((t) => t.floor > 0), ...(GALLERY.enabled ? [{ floor: GALLERY_FLOOR, visualAccent: '#f2ead6' }] : [])];
+const panelDownRows = () => [PB_ROW, ...tracks.filter((t) => t.floor < 0)];
+/** True while the panel shows the basements (only possible once they are open). */
+const panelDown = () => !!world.panelDown && Progress.basementsOpen();
+const panelRows = () => (panelDown() ? panelDownRows() : panelUpRows());
+/** Every button the cabin has, both sections (PB once). */
+const panelAllRows = () => [...panelUpRows(), ...tracks.filter((t) => t.floor < 0)];
+const panelTop = () => tracks.filter((t) => t.floor > 0).length + (GALLERY.enabled ? 1 : 0);
+const basementCount = () => tracks.filter((t) => t.floor < 0).length;
+/** Floors the dial and the readout cover now. */
+const panelRange = () => (panelDown() ? [-basementCount(), 0] : [0, panelTop()]);
+Object.assign(world, { gallery: { at: -1 }, panelDown: false }); // at: -1 = walking the corridor, i = standing in front of piece i
 
 const GalleryArt = {
   images: [],
