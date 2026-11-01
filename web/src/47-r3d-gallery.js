@@ -132,8 +132,18 @@ function buildGallery3D(ctx) {
         if (lines.length) {
           const list = canvasTex(1200, 560, (c, w, hh) => {
             c.fillStyle = '#000'; c.fillRect(0, 0, w, hh); c.fillStyle = '#fff'; c.font = FONT_MONO(30); c.textBaseline = 'middle'; c.textAlign = 'center';
-            const cols = lines.length > 6 ? 2 : 1, per = Math.ceil(lines.length / cols);
-            lines.forEach((ln, j) => c.fillText(String(ln).slice(0, 34), (w * (Math.floor(j / per) + 0.5)) / cols, 60 + (j % per) * 78));
+            const cols = lines.length > 6 ? 2 : 1, per = Math.ceil(lines.length / cols), colW = w / cols - 60;
+            // a long line wraps within its column (a name keeps one row, a sentence takes a few)
+            const wrap = (s) => {
+              const out = []; let cur = '';
+              for (const word of String(s).split(/\s+/)) { const t = cur ? cur + ' ' + word : word; if (cur && c.measureText(t).width > colW) { out.push(cur); cur = word; } else cur = t; }
+              if (cur) out.push(cur);
+              return out;
+            };
+            for (let col = 0; col < cols; col++) {
+              let y = 60;
+              for (const ln of lines.slice(col * per, col * per + per)) { for (const part of wrap(ln)) { c.fillText(part, (w * (col + 0.5)) / cols, y); y += 42; } y += 26; }
+            }
           });
           add(planeGeo(2.2, 2.2 * (560 / 1200)), glowMat(TEXT_FRAG, { uTex: { value: list }, uAlpha: { value: 0.85 }, uReveal: { value: 1 }, uTint: { value: V3(0.93, 0.9, 0.84) } }), holder, 0.02).position.y = -0.2;
         }
