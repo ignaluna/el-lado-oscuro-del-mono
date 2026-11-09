@@ -174,6 +174,8 @@ const waitFloor = (p, n, timeout = 40000) =>
     { timeout },
   );
 const state = (p) => ev(p, () => window.__eldom.state());
+// GALLERY.enabled in 00-base.html: the gallery scenarios (and the gallery steps of the others) only run while the floor is open
+const galleryOn = (p) => ev(p, () => window.__eldom.config().gallery.enabled);
 // Official players only: a host may add frames of its own (Netlify's badge on free sites is an empty iframe).
 const PLAYER_FRAMES = 'iframe[src*="youtube.com"], iframe[src*="youtube-nocookie.com"], iframe[src*="open.spotify.com"]';
 const iframeCount = (p) => ev(p, (sel) => document.querySelectorAll(sel).length, PLAYER_FRAMES);
@@ -181,6 +183,100 @@ const iframeCount = (p) => ev(p, (sel) => document.querySelectorAll(sel).length,
 async function clickSubmit(p) {
   const sel = (await p.$('#lead-submit')) ? '#lead-submit' : '#lead-form button[type=submit]';
   await p.click(sel);
+}
+
+
+/**
+ * Plays floor 1's room with real clicks (hotspots, the plate's buttons, Escape): code from the visor, the clock from the cup,
+ * the mirror. `thorough` adds the wrong tries, the hint ladder and the interrupted look. Returns the room's state at the end.
+ */
+async function playRoom(p, { check, shot, thorough = false }) {
+  const rmState = async () => (await state(p)).room;
+  const until = async (pred, ms = 15000) => { const t0 = Date.now(); let s; for (;;) { s = await rmState(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(150); } };
+  const act = (name) => p.locator(`#rm-acts [data-act="${name}"]`).first();
+  const hot = (label) => p.locator(`.hot[aria-label^="${label}"]`).first();
+  /** A tap on a hotspot; on a phone the figure may be around the corner: turn (E), like a visitor. */
+  const tapHot = async (label) => {
+    for (let i = 0; i < 9 && !(await hot(label).isVisible()); i++) { const key = i < 3 ? 'e' : 'q'; await p.keyboard.down(key); await wait(i < 3 ? 220 : 150); await p.keyboard.up(key); await wait(300); }
+    await hot(label).click({ timeout: 8000 });
+  };
+  const toWide = async () => { while ((await rmState()).view !== 'wide') { await p.keyboard.press('Escape'); await wait(1300); } };
+  const code = [1, 0, 1, 1, 0, 0, 1, 0];
+  let s = await rmState();
+  check(s.here && s.view === 'wide' && s.stage === 0, `the room: standing in it, stage ${s.stage}`);
+
+  // 1. the screen asks for a code
+  await tapHot('La pantalla de la máquina'); s = await until((x) => x.view === 'screen' && x.panel); await wait(900);
+  check(s.view === 'screen' && /ASTERISCO/.test(s.title) && s.acts.filter((a) => /^spoke-/.test(a.act)).length === 8 && s.acts.some((a) => a.act === 'probar'), `the screen: eight spokes and PROBAR ("${s.title}")`);
+  if (thorough) {
+    await shot('room-02-screen');
+    await act('probar').click(); await wait(300); s = await rmState();
+    check(s.tries === 1 && /El algoritmo ya está escrito/.test(s.status) && s.stage === 0, `a wrong code: gentle feedback, the lock stays ("${s.status}")`);
+    await act('spoke-3').click(); await act('spoke-4').click(); await act('probar').click(); await wait(300); s = await rmState();
+    check(s.tries === 2 && s.spokes === '00000000' && s.visual.spokes === '00000000', 'a wrong code puts that lock\'s spokes out again (nothing else is lost)');
+    // the hint ladder: three tiers, the last one gives the code
+    await p.locator('#rm-hint').click(); await wait(200); s = await rmState(); const h1 = s.status;
+    check(h1.length > 20 && s.more, `hint 1 of this stage: "${h1}"`);
+    await p.locator('#rm-more').click(); await wait(200); const h2 = (await rmState()).status;
+    await p.locator('#rm-more').click(); await wait(200); s = await rmState();
+    check(h2 !== h1 && s.status.includes(code.join(' ')) && !s.more && s.hints === 3, `hint 3 gives the whole answer ("${s.status}") and there is no fourth`);
+  }
+  await toWide();
+
+  // 2. look through the visor: the dots line up
+  await tapHot('El que mira'); s = await until((x) => x.view === 'visor'); await wait(900);
+  check(s.view === 'visor' && s.acts.some((a) => a.act === 'mirar-visor'), 'the visor: "MIRAR POR SU VISOR" is offered');
+  await act('mirar-visor').click(); s = await until((x) => x.view === 'through'); await wait(2400); s = await rmState();
+  check(s.view === 'through' && s.status.includes(code.join(' ')) && s.align !== null && s.align < 0.02, `through the visor: "${s.status}" — the code dots sit within ${(s.align * 100).toFixed(2)}% of the ring (real perspective)`);
+  if (thorough) await shot('room-03-visor');
+  await p.keyboard.press('Escape'); s = await until((x) => x.view === 'visor'); await wait(1300); s = await rmState();
+  check(s.view === 'visor' && s.visual.through < 0.05, 'Escape leaves the visor: the dots scatter again');
+  await toWide();
+
+  // 3. the cup, turned over, says 11:11
+  await tapHot('Una taza de café'); s = await until((x) => x.view === 'cup'); await wait(900);
+  await act('taza').click(); await wait(1300); s = await rmState();
+  check(s.cupTurned && /11:11/.test(s.status) && s.visual.cup > 0.95, `the cup, turned over: "${s.status}"`);
+  if (thorough) await shot('room-04-cup');
+  await toWide();
+
+  // 4. the code: spokes lit where there is a 1, then PROBAR
+  await tapHot('La pantalla de la máquina'); s = await until((x) => x.view === 'screen' && x.panel); await wait(900);
+  for (let i = 0; i < 8; i++) if (code[i]) await act('spoke-' + i).click();
+  s = await rmState();
+  check(s.spokes === code.join('') && s.visual.spokes === code.join(''), `the spokes are set to ${s.spokes}`);
+  if (thorough) await shot('room-05-code');
+  await act('probar').click(); s = await until((x) => x.stage === 1 && !x.busy); await wait(500); s = await rmState();
+  check(s.stage === 1 && s.visual.mode === 'clock' && s.acts.some((a) => a.act === 'wheel-0'), `the code opens the screen: a stopped clock (${s.clock})`);
+
+  // 5. the clock: a wrong hour first, then 11:11
+  if (thorough) {
+    await act('hora').click(); await wait(300); s = await rmState();
+    check(s.stage === 1 && s.tries >= 3 && /Esa no es la hora/.test(s.status) && s.clock === '0347', `a wrong hour: gentle feedback, the clock goes back ("${s.status}")`);
+  }
+  const limits = [10, 10, 6, 10];
+  for (let i = 0; i < 4; i++) { s = await rmState(); const n = (1 - Number(s.clock[i]) + limits[i]) % limits[i]; for (let k = 0; k < n; k++) await act('wheel-' + i).click(); }
+  s = await rmState();
+  check(s.clock === '1111' && s.visual.clock === '1111', 'the wheels read 11:11');
+  if (thorough) await shot('room-06-clock');
+  await act('hora').click(); await wait(600); s = await rmState();
+  check(s.busy || s.visual.shut > 0, 'PONER EN HORA at 11:11: the machine starts to stop');
+  s = await until((x) => x.stage === 2 && !x.busy, 20000); await wait(600); s = await rmState();
+  check(s.stage === 2 && s.visual.shut > 0.98 && s.visual.mode === 'dark' && s.visual.mono > 0.98, 'the machine stopped: data, sparks and hands still, the screen dark, the mono in the glass');
+  if (thorough) await shot('room-07-mirror');
+
+  // 6. the mirror: a slow look (one tap starts it, any other tap interrupts it)
+  check(s.acts.some((a) => a.act === 'mirar'), 'MIRARLO DE NUEVO is offered');
+  if (thorough) {
+    await act('mirar').click(); await wait(900); s = await rmState();
+    check(s.acts.find((a) => a.act === 'mirar').pressed === 'true', 'one tap starts the count (no holding the finger down)');
+    await p.locator('#rm-back').click(); await wait(1500); s = await rmState();
+    check(!s.done && s.view === 'wide', 'any other tap interrupts it: nothing is solved');
+    await tapHot('La pantalla de la máquina'); await until((x) => x.view === 'screen' && x.panel); await wait(900);
+  }
+  await act('mirar').click();
+  await p.waitForFunction(() => window.__eldom.state().room.done, null, { timeout: 15000 });
+  return rmState();
 }
 
 const SCENARIOS = {
@@ -486,8 +582,21 @@ const SCENARIOS = {
       check(s0.portal && s0.portal.pending && !(await iframeCount(p)), `${t.floor} «${t.title}»: no player of another record — the audio waits for the release`);
       let d = await tr();
       check(d.here && d.element === t.element, `${t.floor}: its element (${d.element}) stands in the world`);
-      // the element itself is the way in (floor 1, a tap on it in the world); the button under the floor's name too
-      await p.locator(t.floor === 1 ? '.hot[aria-label^="Acercarte"]' : '#tr-open').first().click(); await p.waitForFunction(() => window.__eldom.state().overlay === 'trial', null, { timeout: 8000 }); await wait(500);
+      if (t.floor === 1) { // a room: the cover, walkable; solved with its hotspots and the plate's buttons, then the book
+        const rd = await ev(p, () => window.__eldom.state().room);
+        check(rd.here && rd.set && rd.set.segments > 1000, '1: the cover is drawn in the world (a walkable room, ' + (rd.set && rd.set.segments) + ' chalk lines)');
+        check(rd.clue && cfg.bookText[t.chapter].paras.some((x) => rd.clue.split('\n').some((line) => (typeof x === 'string' ? x : x.t).includes(line.slice(0, 40)))), '1: its clue is a fragment of chapter 1');
+        await p.locator('#rm-hint').click(); await wait(250);
+        const hs = (await state(p)).room;
+        check(hs.status.length > 10 && !(await state(p)).progress.solved.includes(t.id), `1: a hint ("${hs.status}")`);
+        await shot('1-room');
+        await p.locator('#rm-close').click(); await wait(200);
+        const end = await playRoom(p, { check, shot });
+        check(end.done && end.stage === 3, `1: solved from what is on screen — "${end.status}"`);
+        await wait(900); await shot('1-room-solved');
+      } else {
+      // the element itself is the way in (a tap on it in the world); the button under the floor's name too
+      await p.locator('#tr-open').first().click(); await p.waitForFunction(() => window.__eldom.state().overlay === 'trial', null, { timeout: 8000 }); await wait(500);
       await shot(`${t.floor}-${t.id}`);
       d = await tr();
       check(d.clue && cfg.bookText[t.chapter].paras.some((x) => d.clue.split('\n').some((line) => (typeof x === 'string' ? x : x.t).includes(line.replace(/^… ?/, '').slice(0, 40)))), `${t.floor}: its clue is a fragment of chapter ${t.chapter.slice(4)}`);
@@ -505,6 +614,7 @@ const SCENARIOS = {
       d = await tr();
       check(d.finishing, `${t.floor}: solved from what is on screen (${d.walkthrough.length} steps) — "${d.status}"`);
       await wait(900); await shot(`${t.floor}-${t.id}-solved`);
+      }
       await p.waitForFunction(() => window.__eldom.state().overlay === 'book', null, { timeout: 12000 });
       await wait(500);
       const b = (await state(p)).book;
@@ -650,6 +760,7 @@ const SCENARIOS = {
   },  // The gallery with the band's photos: every photo loads from where the build publishes it, and each piece and the
   // closing plate read what the band wrote (GALLERY in 00-base.html).
   async galleryphotos(p, shot, log) {
+    if (!(await galleryOn(p))) return log('skipped: the gallery floor is disabled (GALLERY.enabled; see galleryoff)');
     const fails = [];
     const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
     const cfg = await ev(p, () => window.__eldom.config().gallery);
@@ -668,6 +779,7 @@ const SCENARIOS = {
   },
 
   async gallery(p, shot, log) {
+    if (!(await galleryOn(p))) return log('skipped: the gallery floor is disabled (GALLERY.enabled; see galleryoff)');
     const st = async () => { const s = await state(p); return 'phase=' + s.phase + ' floor=' + s.floor + ' gallery=' + JSON.stringify(s.gallery) + ' hash=' + s.hash; };
     // before the release, from the entrance
     await shot('gallery-plate');
@@ -716,6 +828,53 @@ const SCENARIOS = {
     await wait(800);
     log('back in the cabin: ' + (await st()));
   },
+  // The gallery floor while GALLERY.enabled is false: no route leads to it (plaque, panel row, #galeria at boot and on
+  // hashchange, the dev jump) and the cabin panel closes at the last song without a gap. Skipped once the floor is open again.
+  async galleryoff(p, shot, log) {
+    if (await galleryOn(p)) return log('skipped: the gallery floor is enabled (see gallery, galleryphotos)');
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    const hotLabels = () => ev(p, () => [...document.querySelectorAll('.hot')].map((b) => b.getAttribute('aria-label')));
+    const noGallery = async (where) => {
+      const labels = await hotLabels();
+      check(!labels.some((l) => /galer|^Piso 10/i.test(l)), where + ': no hotspot for the plaque, the panel row or the pieces (' + labels.length + ' hotspots)');
+    };
+    await noGallery('at the entrance');
+    // the routes that used to open it do nothing
+    await ev(p, () => window.__eldom.ui.openGallery());
+    await ev(p, () => window.__eldom.dev.gallery());
+    await wait(1500);
+    let s = await state(p);
+    check(s.phase === 'prelaunch' && s.gallery.at < 0, 'openGallery and the dev jump stay at the entrance (phase=' + s.phase + ')');
+    await ev(p, () => { location.hash = '#galeria'; });
+    await wait(1500);
+    s = await state(p);
+    check(s.phase === 'prelaunch', '#galeria on hashchange does not open it (phase=' + s.phase + ')');
+    // #galeria at boot, before and after the release
+    await p.goto(p.url().split('#')[0] + '#galeria');
+    await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 });
+    await ev(p, () => window.__eldom.ready); await wait(1800);
+    s = await state(p);
+    check(s.phase === 'prelaunch', '#galeria at boot (before the release) leaves the entrance as usual (phase=' + s.phase + ')');
+    await ev(p, () => window.__eldom.dev.released());
+    await waitPhase(p, 'open', 20000); await wait(1200);
+    await noGallery('at the open entrance');
+    await shot('01-open');
+    // the cabin panel: PB and the nine songs, closing at the last one
+    await ev(p, () => window.__eldom.dev.interior());
+    await waitPhase(p, 'cabin'); await wait(1500);
+    s = await state(p);
+    const tracksN = await ev(p, () => window.__eldom.config().tracks.filter((t) => t.floor > 0).length);
+    check(JSON.stringify(s.panelFloors) === JSON.stringify([0, ...Array.from({ length: tracksN }, (_, i) => i + 1)]) && s.panelTop === tracksN,
+      'the panel lists PB and floors 1…' + tracksN + ' only (' + JSON.stringify(s.panelFloors) + ', top ' + s.panelTop + ')');
+    await noGallery('in the cabin');
+    await shot('02-cabin-panel');
+    await ev(p, () => window.__eldom.ui.pressGallery());
+    await wait(1500);
+    check((await state(p)).phase === 'cabin', 'pressGallery from the cabin does nothing');
+    log(fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed');
+    if (fails.length) throw new Error(fails.length + ' galleryoff check(s) failed: ' + fails.join(' | '));
+  },
   // A visitor's whole trip in one pass, with real taps on the real controls wherever one exists.
   async tour(p, shot, log) {
     const tap = async (sel) => { await p.locator(sel).first().click({ timeout: 8000 }); };
@@ -746,13 +905,15 @@ const SCENARIOS = {
     await tap('#invite-close'); await wait(300);
     await tap('#cap-back'); await wait(1500); await shot('15-returning');
     await waitPhase(p, 'cabin', 25000); await wait(900); await shot('16-cabin-visited');
-    await tap(hot('Piso 10')); await waitPhase(p, 'gallery', 40000); await wait(1500); await shot('17-gallery');
-    await wait(1800);
-    if ((await state(p)).gallery.at >= 0) { await shot('17b-gallery-first-piece'); await tap('#gal-next'); } else await tap(hot('Obra 2'));
-    await wait(1900); await shot('18-piece');
-    await tap('#gal-back'); await wait(1300);
-    if ((await state(p)).phase === 'gallery') await tap('#gal-back');
-    await waitPhase(p, 'cabin', 30000); await wait(800);
+    if (await galleryOn(p)) {
+      await tap(hot('Piso 10')); await waitPhase(p, 'gallery', 40000); await wait(1500); await shot('17-gallery');
+      await wait(1800);
+      if ((await state(p)).gallery.at >= 0) { await shot('17b-gallery-first-piece'); await tap('#gal-next'); } else await tap(hot('Obra 2'));
+      await wait(1900); await shot('18-piece');
+      await tap('#gal-back'); await wait(1300);
+      if ((await state(p)).phase === 'gallery') await tap('#gal-back');
+      await waitPhase(p, 'cabin', 30000); await wait(800);
+    }
     await tap(hot('PB')); await waitPhase(p, 'open', 45000); await wait(1200); await shot('19-entrance-again');
     await tap(hot('Un libro')); await wait(2300); await shot('20-book-crouch');
     await p.waitForFunction(() => window.__eldom.state().overlay === 'book', null, { timeout: 15000 }); await wait(600); await shot('21-book');
@@ -1044,6 +1205,69 @@ const SCENARIOS = {
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' level check(s) failed: ' + fails.join(' | '));
   },
+  // Floor 1's room: the cover drawn in the world and the four-step challenge in it, with real clicks; solving gives the page and
+  // chapter 1 once; the room survives a reload; replaying gives nothing twice; reset works.
+  async room(p, shot, log) {
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    const rmState = async () => (await state(p)).room;
+    const cfg = await ev(p, () => window.__eldom.config());
+    await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.clearBook(); window.__eldom.dev.roomReset(); });
+    await ev(p, () => window.__eldom.dev.released());
+    await ev(p, () => window.__eldom.dev.arrive(1)); await waitFloor(p, 1); await wait(2600);
+    let s = await rmState();
+    check(s.here && s.set && s.set.segments > 1000 && s.set.codeDots === 83, `the cover is built in the world: ${s.set && s.set.segments} chalk lines, the code in ${s.set && s.set.codeDots} dots`);
+    check(((await state(p)).portal || {}).dock === 'compact' || p.viewportSize().width < 640, 'the official player waits in the corner (the room is the floor)');
+    check(s.clue && cfg.bookText['cap-1'].paras.some((x) => s.clue.split('\n').some((line) => (typeof x === 'string' ? x : x.t).includes(line.slice(0, 40)))), 'the clue is the book\'s own words');
+    const labels = await ev(p, () => [...document.querySelectorAll('.hot')].filter((b) => !b.hidden).map((b) => b.getAttribute('aria-label')));
+    check(labels.some((l) => /^La pantalla de la máquina/.test(l)) && labels.some((l) => /^Una taza de café/.test(l)), `the hotspots on screen: ${labels.join(' | ')}`);
+    await shot('room-01-arrive');
+    // the whole puzzle
+    const end = await playRoom(p, { check, shot, thorough: true });
+    check(end.done && end.stage === 3 && end.visual.shut > 0.98, `the last look solves the floor: "${end.status}"`);
+    await p.waitForFunction(() => window.__eldom.state().overlay === 'book', null, { timeout: 12000 }); await wait(500);
+    let st = await state(p);
+    const b = st.book;
+    check(b.leafIds[b.at] === 'cap-1' && b.text.includes(cfg.bookText['cap-1'].heading.trim()) && b.count === '1 / 9', `the book opens on «${cfg.bookText['cap-1'].heading.trim()}» (${b.count})`);
+    await shot('room-08-book');
+    await p.locator('#bk-close').click(); await wait(900);
+    st = await state(p);
+    check(st.progress.count === 1 && st.progress.solved.includes('en-una'), 'progress 1/9: only this floor');
+    check(st.room.saved && st.room.saved.done && st.room.saved.stage === 3, `the room's own state is saved (${JSON.stringify(st.room.saved)})`);
+    // a reload keeps it solved
+    await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
+    await ev(p, () => window.__eldom.dev.released()); await ev(p, () => window.__eldom.dev.arrive(1)); await waitFloor(p, 1); await wait(2600);
+    s = await rmState();
+    check(s.done && s.visual.shut > 0.98 && s.visual.mono > 0.98 && (await state(p)).progress.count === 1, 'after a reload: the room is solved and the machine stays stopped');
+    check(await ev(p, () => [...document.querySelectorAll('.hot')].some((x) => !x.hidden && /el mono te mira/.test(x.getAttribute('aria-label')))), 'its screen says so');
+    await shot('room-09-solved-room');
+    // replay: the solved room gives nothing twice
+    await p.locator('.hot[aria-label^="La pantalla de la máquina"]').first().click(); await wait(1600);
+    s = await rmState();
+    check(s.view === 'screen' && s.acts.some((a) => a.act === 'leer') && s.acts.some((a) => a.act === 'otra-vez') && /ya está en tu libro/.test(s.status), `a solved room offers the chapter and a new game ("${s.status}")`);
+    await p.locator('#rm-acts [data-act="otra-vez"]').click(); await wait(250);
+    check(/REINICIAR/.test(await p.locator('#rm-acts [data-act="otra-vez"]').innerText()), 'reset asks first (two taps)');
+    await p.locator('#rm-acts [data-act="otra-vez"]').click(); await wait(1800);
+    s = await rmState();
+    check(!s.done && s.stage === 0 && s.visual.shut === 0 && s.visual.mode === 'code' && (await state(p)).progress.count === 1, 'reset: the room starts again (asterisk, the machine running), the book keeps its chapter');
+    const pagesBefore = (await state(p)).book.pages.length;
+    const again = await playRoom(p, { check, shot });
+    await wait(3600);
+    st = await state(p);
+    check(again.done && st.overlay !== 'book' && st.progress.count === 1 && st.book.pages.length === pagesBefore && /ya estaba/.test((await rmState()).status), `playing it again gives nothing twice: "${(await rmState()).status}" (still ${st.progress.count}/9, book ${st.book.pages.length} chapters)`);
+    await ev(p, () => window.__eldom.dev.roomReset()); await wait(600);
+    s = await rmState();
+    check(!s.done && s.stage === 0 && s.saved.stage === 0, 'dev.roomReset starts the room again');
+    // the lock's state survives a reload midway
+    await ev(p, () => window.__eldom.ui.roomTap('rm-screen')); await wait(1500);
+    await p.locator('#rm-acts [data-act="spoke-0"]').click(); await p.locator('#rm-acts [data-act="spoke-2"]').click();
+    await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
+    await ev(p, () => window.__eldom.dev.released()); await ev(p, () => window.__eldom.dev.arrive(1)); await waitFloor(p, 1); await wait(2400);
+    s = await rmState();
+    check(s.spokes === '10100000' && s.visual.spokes === '10100000', 'a reload keeps the spokes that were set');
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' room check(s) failed: ' + fails.join(' | '));
+  },
   // DEV "Probar reproductores": the same check a phone can run by hand.
   async selftest(p, shot, log) {
     const rows = await p.evaluate(() => window.__eldom.dev.playerTest());
@@ -1071,6 +1295,7 @@ const SCENARIOS = {
     const playSpotify = async () => p.frameLocator('iframe[src*="open.spotify.com/embed"]').locator('button[data-testid="play-pause-button"]').first().click({ timeout: 10000 });
     const clock = (s) => (s.provider === 'youtube' ? s.diag.currentTime || 0 : (s.diag.position || 0) / 1000);
 
+    const phoneUp = (await ev(p, () => matchMedia('(pointer: coarse)').matches)) && vw.width < 640 && vw.height > vw.width; // a phone held upright: worlds open the player minimized
     await ev(p, () => window.__eldom.dev.released());
     await ev(p, () => sessionStorage.removeItem('eldom.mini'));
     // the panel
@@ -1083,10 +1308,16 @@ const SCENARIOS = {
 
     for (const prov of (opt('providers', 'youtube,spotify')).split(',')) {
       await ev(p, (pv) => window.__eldom.dev.platform(pv), prov); await wait(900);
+      await ev(p, () => sessionStorage.removeItem('eldom.mini'));
       await ev(p, () => window.__eldom.dev.arrive(-2)); await waitFloor(p, -2); await wait(2600);
       let s = await st();
-      const b0 = await box();
-      check(s.portal && !s.portal.mini && !!b0, `${prov}: arrives full size (${sz(b0)}, ${s.portal && s.portal.mode})`);
+      let b0 = await box();
+      if (phoneUp) { // nothing chosen yet: minimized, at the smallest official size; AMPLIAR then gives the full size the rest of the checks start from
+        check(s.portal && s.portal.mini && !!b0 && (prov === 'youtube' ? b0.width >= 199.5 && b0.height >= 199.5 && b0.height <= 201 : b0.height >= 79 && b0.height <= 81), `${prov}: opens minimized on a phone held upright, never under the smallest official size (${sz(b0)})`);
+        await p.locator('.portal-mini').click(); await wait(800);
+        s = await st(); b0 = await box();
+      }
+      check(s.portal && !s.portal.mini && !!b0, `${prov}: full size (${sz(b0)}, ${s.portal && s.portal.mode})`);
       if (prov === 'youtube') check(b0 && b0.width >= 199.5 && b0.height >= 199.5, `${prov}: full size is never under YouTube's 200 px minimum (${sz(b0)})`);
       const embed = s.portal.mode === 'embed';
       let playing = false;
@@ -1371,24 +1602,26 @@ const SCENARIOS = {
     const quiet = await portal();
     check(quiet && !quiet.playing, `SONIDO: NO keeps the song still until the visitor plays it (playing ${quiet && quiet.playing})`);
     await p.locator('#sound').click(); // back to SONIDO: SÍ
-    // the gallery plaque, seen from a world
-    // walk up to the elevator, in front of the plaque (left of the doors): on wide screens the player moves to its corner
-    await ev(p, () => window.__eldom.dev.roamTo(-1.2, 4.4, 0)); await ev(p, () => window.__eldom.dev.roamPush(0, 0.6, 1100)); await wait(1200); // ~1 m at walking pace
-    const plaque = p.locator('.hot[aria-label^="Piso 10: visitar la galería"]');
-    const pb = await plaque.boundingBox(), port = await p.locator('.portal').boundingBox();
-    // where a visitor would tap: the part of the plaque the player does not cover (on a phone held upright the player
-    // takes the bottom of the screen)
-    const clear = pb && (!port || pb.y + pb.height <= port.y || pb.y >= port.y + port.height || pb.x + pb.width <= port.x || pb.x >= port.x + port.width)
-      ? { x: pb.width / 2, y: pb.height / 2 } : pb && port && port.y > pb.y + 8 ? { x: pb.width / 2, y: Math.max(4, (port.y - pb.y) / 2) } : null;
-    check(!!(await plaque.isVisible()) && !!clear, `from a world, the "10 GALERÍA" plaque beside the elevator can be tapped (plaque ${pb && Math.round(pb.y)}–${pb && Math.round(pb.y + pb.height)}, player from ${port && Math.round(port.y)})`);
-    await shot('02-plaque');
-    await plaque.click({ position: clear || undefined });
-    await waitPhase(p, 'gallery', 60000); await wait(1500);
-    check((await state(p)).phase === 'gallery' && /ASCENSOR/.test(await p.locator('#gal-back').innerText()), `it rides up to the gallery ("${await p.locator('#gal-back').innerText()}")`);
-    await shot('03-gallery');
-    await p.locator('#gal-back').click();
-    await waitPhase(p, 'cabin', 30000);
-    check((await state(p)).phase === 'cabin', 'and the gallery hands the visitor back to the elevator');
+    // the gallery plaque, seen from a world (only while the floor is open; with it hidden, see galleryoff)
+    if (await galleryOn(p)) {
+      // walk up to the elevator, in front of the plaque (left of the doors): on wide screens the player moves to its corner
+      await ev(p, () => window.__eldom.dev.roamTo(-1.2, 4.4, 0)); await ev(p, () => window.__eldom.dev.roamPush(0, 0.6, 1100)); await wait(1200); // ~1 m at walking pace
+      const plaque = p.locator('.hot[aria-label^="Piso 10: visitar la galería"]');
+      const pb = await plaque.boundingBox(), port = await p.locator('.portal').boundingBox();
+      // where a visitor would tap: the part of the plaque the player does not cover (on a phone held upright the player
+      // takes the bottom of the screen)
+      const clear = pb && (!port || pb.y + pb.height <= port.y || pb.y >= port.y + port.height || pb.x + pb.width <= port.x || pb.x >= port.x + port.width)
+        ? { x: pb.width / 2, y: pb.height / 2 } : pb && port && port.y > pb.y + 8 ? { x: pb.width / 2, y: Math.max(4, (port.y - pb.y) / 2) } : null;
+      check(!!(await plaque.isVisible()) && !!clear, `from a world, the "10 GALERÍA" plaque beside the elevator can be tapped (plaque ${pb && Math.round(pb.y)}–${pb && Math.round(pb.y + pb.height)}, player from ${port && Math.round(port.y)})`);
+      await shot('02-plaque');
+      await plaque.click({ position: clear || undefined });
+      await waitPhase(p, 'gallery', 60000); await wait(1500);
+      check((await state(p)).phase === 'gallery' && /ASCENSOR/.test(await p.locator('#gal-back').innerText()), `it rides up to the gallery ("${await p.locator('#gal-back').innerText()}")`);
+      await shot('03-gallery');
+      await p.locator('#gal-back').click();
+      await waitPhase(p, 'cabin', 30000);
+      check((await state(p)).phase === 'cabin', 'and the gallery hands the visitor back to the elevator');
+    }
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' autoplay check(s) failed: ' + fails.join(' | '));
   },
@@ -1486,6 +1719,16 @@ const SCENARIOS = {
     const inside2 = await ev(p, ([x, z, w]) => { const c = Math.cos(w.ry), sn = Math.sin(w.ry), lx = (x - w.x) * c - (z - w.z) * sn, lz = (x - w.x) * sn + (z - w.z) * c; return Math.abs(lx) < w.hw && Math.abs(lz) < w.hd; }, [s.cam.x, s.cam.z, wall]);
     check(!inside2 && Math.hypot(s.cam.x - wall.x, s.cam.z - wall.z) < 0.7, `from behind, the wall stops the visitor (${Math.hypot(s.cam.x - wall.x, s.cam.z - wall.z).toFixed(2)} m from its centre)`);
     await shot('05-behind-the-wall');
+    // floor 1 is a room (the cover, drawn in the world): its desk stops the visitor like the wall of the level
+    await ev(p, () => window.__eldom.dev.arrive(1)); await waitFloor(p, 1); await wait(2200);
+    const rs = await ev(p, () => window.__eldom.state().roam.solids), desk = rs.find((x) => x.kind === 'box');
+    check(!!desk && rs.some((x) => x.kind === 'circle'), `floor 1: the room has a desk and two sleepers that are solid (${rs.map((x) => x.kind).join(', ')})`);
+    await ev(p, ([x, z, y]) => window.__eldom.dev.roamTo(x, z, y), [desk.x + Math.sin(desk.ry) * 3.2, desk.z + Math.cos(desk.ry) * 3.2, desk.ry]);
+    await ev(p, () => window.__eldom.dev.roamPush(0, 1, 3600));
+    s = await st();
+    const inDesk = await ev(p, ([x, z, w]) => { const c = Math.cos(w.ry), sn = Math.sin(w.ry), lx = (x - w.x) * c - (z - w.z) * sn, lz = (x - w.x) * sn + (z - w.z) * c; return Math.abs(lx) < w.hw && Math.abs(lz) < w.hd; }, [s.cam.x, s.cam.z, desk]);
+    check(!inDesk && Math.hypot(s.cam.x - desk.x, s.cam.z - desk.z) > 0.6, `floor 1: walking straight at the desk stops the visitor outside it (${Math.hypot(s.cam.x - desk.x, s.cam.z - desk.z).toFixed(2)} m from its centre)`);
+    await shot('06-at-the-desk');
     // the edge of the world: a long walk away stops at the rim
     await ev(p, () => window.__eldom.dev.roamTo(0, 6, Math.PI));
     await ev(p, () => window.__eldom.dev.roamPush(0, 1, 9000));
@@ -1501,8 +1744,221 @@ const SCENARIOS = {
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' roam check(s) failed: ' + fails.join(' | '));
   },
+  // The rendering tier: "lite" for a phone-class device (coarse pointer, data saver, 4 GB or less, 4 cores or fewer), the full
+  // one for the rest. Each case opens a page with the device signals faked before the page starts. Frame times here come from
+  // a software renderer (SwiftShader) and say nothing about a phone: only the counts and settings are checked.
+  async tier(p, shot, log) {
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    const coarse = await ev(p, () => matchMedia('(pointer: coarse)').matches);
+    log('real signals: ' + JSON.stringify(await ev(p, () => ({ cores: navigator.hardwareConcurrency, memory: navigator.deviceMemory, saveData: navigator.connection ? navigator.connection.saveData : undefined, coarse: matchMedia('(pointer: coarse)').matches }))));
+    const open = async (signals) => {
+      const q = await p.context().newPage();
+      q.on('pageerror', (e) => fails.push('pageerror: ' + e.message.split('\n')[0]));
+      await q.addInitScript((sg) => {
+        const def = (o, k, v) => Object.defineProperty(o, k, { configurable: true, get: () => v });
+        def(navigator, 'hardwareConcurrency', sg.cores); def(navigator, 'deviceMemory', sg.memory); def(navigator, 'connection', sg.saveData === undefined ? undefined : { saveData: sg.saveData });
+      }, signals);
+      await q.goto(p.url().split('#')[0]);
+      await q.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 });
+      await q.evaluate(() => window.__eldom.ready);
+      await wait(1500);
+      return q;
+    };
+    const cases = [
+      ['plenty of everything', { cores: 8, memory: 8, saveData: false }, false],
+      ['no signal at all (APIs absent)', { cores: undefined, memory: undefined, saveData: undefined }, false],
+      ['4 cores', { cores: 4, memory: 8, saveData: false }, true],
+      ['5 cores, 8 GB', { cores: 5, memory: 8, saveData: false }, false],
+      ['4 GB of memory', { cores: 8, memory: 4, saveData: false }, true],
+      ['2 GB of memory', { cores: 8, memory: 2, saveData: false }, true],
+      ['data saver on', { cores: 8, memory: 8, saveData: true }, true],
+    ];
+    const measure = async (q) => { // renders per second and the distance a 1.5 s push walks, at a world
+      await q.evaluate(() => window.__eldom.dev.released());
+      await q.evaluate(() => window.__eldom.dev.arrive(2));
+      await q.waitForFunction(() => window.__eldom.state().phase === 'floor' && window.__eldom.state().floor === 2, null, { timeout: 40000 });
+      await wait(2500);
+      await q.evaluate(() => window.__eldom.dev.roamTo(0, 6, 0)); await wait(500);
+      const r0 = (await q.evaluate(() => window.__eldom.state())).tier.renders, z0 = (await q.evaluate(() => window.__eldom.state())).cam.z, t0 = Date.now();
+      await q.evaluate(() => window.__eldom.dev.roamPush(0, 1, 1500));
+      await wait(1500);
+      const s1 = await q.evaluate(() => window.__eldom.state());
+      return { fps: (s1.tier.renders - r0) / ((Date.now() - t0) / 1000), walked: Math.abs(s1.cam.z - z0) };
+    };
+    let fullRun = null, liteRun = null;
+    const roomSets = {};
+    for (const [name, sg, wantLite] of cases) {
+      if (coarse && !wantLite) continue; // a touch screen is lite whatever else it reports (its own case below)
+      const q = await open(sg);
+      const t = (await q.evaluate(() => window.__eldom.state())).tier;
+      check(t && (t.tier === 'lite') === wantLite, `${name}: ${wantLite ? 'lite' : 'full'} tier (${t && t.tier})`);
+      check(wantLite ? t.samples === 0 && t.particles === 0.4 && t.mirror === '1/4' && t.dpr <= 1 : t.samples === 4 && t.particles === 1 && t.mirror === '1/2', `${name}: ${wantLite ? 'no MSAA, 40% particles, mirror at 1/4, dpr ≤ 1' : 'MSAA 4, all particles, mirror at 1/2'} (${JSON.stringify({ s: t.samples, p: t.particles, m: t.mirror, dpr: t.dpr })})`);
+      if (name === 'plenty of everything' || name === '4 cores') { // floor 1's room: the lite tier draws fewer folds, glitter and particles
+        await q.evaluate(() => { window.__eldom.dev.released(); window.__eldom.dev.arrive(1); });
+        await q.waitForFunction(() => window.__eldom.state().phase === 'floor' && window.__eldom.state().floor === 1, null, { timeout: 40000 }); await wait(1800);
+        const rset = (await q.evaluate(() => window.__eldom.state())).room.set;
+        check(rset && rset.lite === wantLite && rset.codeDots === 83, `${name}: floor 1's room is built for the ${wantLite ? 'lite' : 'full'} tier (${rset && rset.segments} segments, ${rset && rset.codeDots} code dots)`);
+        roomSets[name] = rset;
+        await shot('room-' + (wantLite ? 'lite' : 'full'));
+      }
+      if (name === 'plenty of everything') fullRun = await measure(q);
+      if (name === '4 cores') liteRun = await measure(q);
+      if (name === '4 cores' || name === 'plenty of everything') { // the adaptive ladder, fed synthetic frame times
+        const ad = (ms, sec) => q.evaluate(([a, b]) => window.__eldom.dev.adaptTest(a, b), [ms, sec]);
+        let a = await ad(60, 2.1);
+        check(a.dpr === 0.75 && a.mirror === '1/4', `${name}: slow frames lower the resolution first (dpr ${a.dpr}, mirror ${a.mirror})`);
+        a = await ad(60, 2.1);
+        check(wantLite ? a.mirror === 'off' : a.mirror === '1/4' && a.dpr === 0.75, `${name}: and then ${wantLite ? 'the lite tier drops the mirror pass altogether' : 'the full tier changes nothing more'} (mirror ${a.mirror})`);
+        if (wantLite) {
+          await q.evaluate(() => { window.__eldom.dev.arrive(-1); });
+          await q.waitForFunction(() => window.__eldom.state().phase === 'floor' && window.__eldom.state().floor === -1, null, { timeout: 40000 }); await wait(1500);
+          const lv = (await q.evaluate(() => window.__eldom.state())).tier;
+          check(lv.mirror === '1/4', `the level's world keeps its mirror (the clue lives in the reflection): ${lv.mirror}`);
+          await q.evaluate(() => window.__eldom.ui.returnToElevator()); await q.waitForFunction(() => window.__eldom.state().phase === 'cabin', null, { timeout: 40000 });
+        }
+        a = await ad(wantLite ? 33.4 : 8, 6.1);
+        check(a.mirror !== 'off', `${name}: frames that recover bring the mirror back first (mirror ${a.mirror}, dpr ${a.dpr})`);
+        a = await ad(wantLite ? 33.4 : 8, 12.1);
+        check(a.dpr === 1 && a.mirror === (wantLite ? '1/4' : '1/2'), `${name}: then the resolution (dpr ${a.dpr}, mirror ${a.mirror})`);
+      }
+      await q.close();
+    }
+    if (roomSets['plenty of everything'] && roomSets['4 cores']) check(roomSets['4 cores'].segments < roomSets['plenty of everything'].segments, `the room draws fewer lines on the lite tier (${roomSets['4 cores'].segments} < ${roomSets['plenty of everything'].segments})`);
+    if (coarse) { // the phone profile itself: lite although every other signal is generous
+      const q = await open({ cores: 8, memory: 8, saveData: false });
+      const t = (await q.evaluate(() => window.__eldom.state())).tier;
+      check(t.tier === 'lite' && t.samples === 0 && t.mirror === '1/4', `touch screen with plenty of everything: still lite (${t.tier})`);
+      liteRun = await measure(q);
+      await q.close();
+    }
+    if (liteRun) {
+      check(liteRun.fps <= 33, `lite draws at most 30 frames a second (${liteRun.fps.toFixed(1)} /s, emulated)`);
+      check(liteRun.walked > 1.2, `and motion stays time-based: a 1.5 s push walks ${liteRun.walked.toFixed(2)} m`);
+      if (fullRun) { log(`full tier here: ${fullRun.fps.toFixed(1)} frames/s, ${fullRun.walked.toFixed(2)} m (emulated, software renderer)`); check(Math.abs(liteRun.walked - fullRun.walked) / fullRun.walked < 0.25, `the same push walks about the same distance on both tiers (${liteRun.walked.toFixed(2)} vs ${fullRun.walked.toFixed(2)} m)`); }
+    }
+    // the 2D fallback has no tier
+    await ev(p, () => window.__eldom.dev.force2D()); await wait(2000);
+    const s2 = await state(p);
+    check(s2.renderer === '2d' && s2.tier === null, '2D fallback: no tier, nothing changes');
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' tier check(s) failed: ' + fails.join(' | '));
+  },
+  // What a phone shows at once (run with --viewport small|mobile): the entrance, the cabin, a basement world with its player
+  // and the book, each with the list of controls on screen and any two that overlap, plus the rules of a world on a phone
+  // held upright: no dialog in the way, the player minimized, one hint at a time, the actions row short and tappable.
+  // Screenshots land in shots/ (phoneview-*.json lists what was on screen). `--baseline` only reports, asserts nothing.
+  async phoneview(p, shot, log) {
+    const fails = [];
+    const base = flag('baseline');
+    const check = (cond, msg) => { if (!base && !cond) fails.push(msg); log((cond ? 'ok    ' : base ? 'info  ' : 'FAIL  ') + msg); };
+    const vp = p.viewportSize();
+    const portrait = vp.width < vp.height;
+    const coarse = await ev(p, () => matchMedia('(pointer: coarse)').matches);
+    const scan = async (name) => {
+      const { items, over } = await ev(p, () => {
+        const rows = [];
+        const sel = 'button, a[href], #joy-ghost, #joy, #cap-hint, #lv-hint, #rot-invite, .portal iframe, .portal-linkbox, #title, #cap-primary';
+        const own = (e) => { // the box of what is written (padding is not what the visitor sees collide); frames and rings are their own box
+          if (e.matches('iframe, #joy-ghost, .portal-linkbox') || !e.textContent.trim()) return e.getBoundingClientRect();
+          const r = document.createRange(); r.selectNodeContents(e); return r.getBoundingClientRect();
+        };
+        for (const e of document.querySelectorAll(sel)) {
+          if (e.closest('#hotspots') || e.closest('#dev') || !e.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+          const b = e.getBoundingClientRect(), r = own(e);
+          if (b.width < 1 || b.height < 1 || b.right <= 0 || b.bottom <= 0 || b.left >= innerWidth || b.top >= innerHeight) continue;
+          const pe = e.style.pointerEvents; e.style.pointerEvents = 'auto'; // (the title lets taps through: ask who is on top anyway)
+          const top = document.elementFromPoint(Math.min(innerWidth - 1, Math.max(0, b.left + b.width / 2)), Math.min(innerHeight - 1, Math.max(0, b.top + b.height / 2)));
+          e.style.pointerEvents = pe;
+          if (top && !(e === top || e.contains(top) || top.contains(e))) continue; // covered by something else (an overlay): not on screen
+          rows.push({ id: e.id || e.className || e.tagName.toLowerCase(), text: (e.getAttribute('aria-label') || e.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 40), x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height), bh: Math.round(b.height), bw: Math.round(b.width), el: e });
+        }
+        const hit = (a, b) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 2 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 2;
+        const over = [];
+        for (let i = 0; i < rows.length; i++) for (let j = i + 1; j < rows.length; j++) {
+          const a = rows[i], b = rows[j];
+          if (a.el.contains(b.el) || b.el.contains(a.el) || !hit(a, b)) continue;
+          over.push(`${a.id}[${a.text}] × ${b.id}[${b.text}]`);
+        }
+        return { items: rows.map(({ el, ...r }) => r), over };
+      });
+      fs.writeFileSync(path.join(SHOTS, `phoneview-${vp.width}x${vp.height}-${name}.json`), JSON.stringify({ items, overlaps: over }, null, 1));
+      log(`${name}: ${items.length} elements on screen${over.length ? ', OVERLAPPING: ' + over.join(' | ') : ', no overlaps'}`);
+      check(!over.length, `${name}: nothing overlaps`);
+      return items;
+    };
+    await ev(p, () => window.__eldom.dev.released());
+    await waitPhase(p, 'open', 20000); await wait(1800);
+    await shot('01-entrance'); await scan('entrance');
+    await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin'); await wait(1800);
+    await shot('02-cabin'); await scan('cabin');
+    await ev(p, () => window.__eldom.dev.bookAll());
+    await ev(p, () => sessionStorage.removeItem('eldom.mini'));
+    for (const [prov, n] of [['youtube', -2], ['spotify', -3]]) {
+      await ev(p, (pv) => window.__eldom.dev.platform(pv), prov); await wait(900);
+      await ev(p, (f) => window.__eldom.dev.arrive(f), n); await waitFloor(p, n);
+      if (prov === 'youtube' && coarse && portrait) { // the one-time hints, sampled while the world settles: never two at once, the ring goes by itself
+        const seen = { ghost: 0, hint: 0, both: 0, ghostAt: 0, hintText: '' };
+        for (let i = 0; i < 40; i++) {
+          const v = await ev(p, () => { const vis = (s) => { const e = document.querySelector(s); return !!e && !e.hidden && e.checkVisibility({ opacityProperty: true, visibilityProperty: true }); }; return { g: vis('#joy-ghost'), h: vis('#cap-hint'), t: document.querySelector('#cap-hint').textContent }; });
+          if (v.g) { seen.ghost++; seen.ghostAt = i; }
+          if (v.h && !seen.hint) await shot('03b-world-youtube-hint');
+          if (v.h) { seen.hint++; seen.hintText = v.t; }
+          if (v.g && v.h) seen.both++;
+          if (i === 6) { await shot('03-world-youtube-early'); await scan('world-early'); }
+          await wait(300);
+        }
+        check(seen.both === 0, `one-time hints: never two on screen at once (ring ${seen.ghost} samples, line ${seen.hint})`);
+        check(seen.ghost > 0 && seen.ghostAt < 26, `the walking ring fades on its own (last seen at sample ${seen.ghostAt} of 40, ~${Math.round(seen.ghostAt * 0.3)} s)`);
+        check(seen.hint > 0 && /Acostá el teléfono/.test(seen.hintText), `and then one brief line about lying the phone down ("${seen.hintText}")`);
+      } else await wait(5200);
+      const s = await state(p);
+      const items = await scan(`world-${prov}`);
+      await shot(`03-world-${prov}`);
+      check(await ev(p, () => !document.querySelector('#rot-invite')), `${prov}: no "Acostá el teléfono" dialog`);
+      if (portrait && coarse) {
+        check(s.portal && s.portal.mini, `${prov}: the player opens minimized on a phone held upright (${JSON.stringify({ mini: s.portal && s.portal.mini })})`);
+        const fr = items.find((x) => /iframe/.test(x.id));
+        check(!!fr && (prov === 'youtube' ? fr.w >= 199 && fr.h >= 199 && fr.h <= 201 : fr.h >= 79 && fr.h <= 81), `${prov}: at its smallest official size, never under (${fr && fr.w}×${fr && fr.h})`);
+        const acts = items.filter((x) => /cap-back|cap-invite/.test(x.id));
+        check(acts.length === 2 && acts.every((x) => x.bh >= 44), `${prov}: the way back and the invitation are at least 44 px tall (${acts.map((x) => x.id + ' ' + x.bh).join(', ')})`);
+        check(await ev(p, () => document.querySelector('#cap-invite').getAttribute('aria-label') === 'Invitar a alguien a este mundo' && document.querySelector('#cap-invite').getBoundingClientRect().width >= 44), `${prov}: the invitation keeps its name and a 44 px target`);
+        const row = await ev(p, () => { const r = document.querySelector('#floor-actions').getBoundingClientRect(), s = document.querySelector('#sound').getBoundingClientRect(); return { right: r.right, sound: s.left }; });
+        check(row.right <= row.sound + 0.5, `${prov}: the actions row stops before the sound toggle (${Math.round(row.right)} ≤ ${Math.round(row.sound)})`);
+      }
+      await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 30000); await wait(600);
+    }
+    // the visitor's own choice holds: expanded stays expanded in the next world
+    if (portrait && coarse) {
+      await ev(p, (f) => window.__eldom.dev.arrive(f), -2); await waitFloor(p, -2); await wait(2400);
+      await p.locator('.portal-mini').click(); await wait(800);
+      check(!(await state(p)).portal.mini, 'AMPLIAR expands it');
+      await ev(p, (f) => window.__eldom.dev.arrive(f), -3); await waitFloor(p, -3); await wait(2400);
+      check(!(await state(p)).portal.mini, 'and the visitor\'s choice holds in the next world');
+      await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 30000); await wait(600);
+      await ev(p, () => sessionStorage.removeItem('eldom.mini'));
+    }
+    await ev(p, () => window.__eldom.dev.exterior()); await waitPhase(p, 'open', 20000); await wait(1500);
+    await ev(p, () => window.__eldom.ui.openBook(0)); await wait(1800);
+    await shot('04-book'); await scan('book');
+    // the longest page of the book: its text must read in full on this screen
+    const n = (await state(p)).book.leaves.length;
+    await ev(p, () => window.__eldom.ui.bookTurn(-99)); await wait(200);
+    let best = 0, bestLen = 0;
+    for (let i = 0; i < n; i++) {
+      const len = await ev(p, () => document.querySelector('#bk-page').innerText.length);
+      if (len > bestLen) { best = i; bestLen = len; }
+      await ev(p, () => window.__eldom.ui.bookTurn(1)); await wait(120);
+    }
+    await ev(p, (k) => { window.__eldom.ui.bookTurn(-99); window.__eldom.ui.bookTurn(k); }, best); await wait(900);
+    await shot('04b-book-text');
+    const pg = await ev(p, () => { const e = document.querySelector('#bk-page'), r = e.getBoundingClientRect(), c = document.querySelector('#bk-close').getBoundingClientRect(), f = parseFloat(getComputedStyle([...e.querySelectorAll('p')].sort((x, y) => y.textContent.length - x.textContent.length)[0] || e).fontSize); return { text: e.innerText.length, font: f, scroll: e.scrollHeight - e.clientHeight, top: r.top, bottom: r.bottom, left: r.left, right: r.right, closeBottom: c.bottom, vh: innerHeight, vw: innerWidth }; });
+    check(pg.left >= 0 && pg.right <= pg.vw && pg.bottom <= pg.vh + 1 && pg.top >= pg.closeBottom - 1 && pg.font >= 14 && pg.text > 200, `the longest page reads on this screen: ${pg.font}px text, clear of CERRAR, scrollable ${Math.round(pg.scroll)} px (${Math.round(pg.top)}–${Math.round(pg.bottom)} of ${pg.vh}, CERRAR ends ${Math.round(pg.closeBottom)}, ${pg.text} chars)`);
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' phoneview check(s) failed: ' + fails.join(' | '));
+  },
   // A phone lying down (run with --viewport landscape): cabin selector → floors, the slim corner player, walking with
-  // the joystick; and upright (--viewport mobile): the invitation to lie it down.
+  // the joystick; and upright (--viewport mobile): no dialog in the way, one brief line about lying it down.
   async landscape(p, shot, log) {
     const fails = [];
     const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
@@ -1511,14 +1967,19 @@ const SCENARIOS = {
     const hot = (label) => `.hot[aria-label^="${label}"]`;
     if (!(await ev(p, () => matchMedia('(pointer: coarse)').matches))) { log('not a touch screen: nothing to check here (run with --viewport landscape or mobile)'); return; }
     await ev(p, () => window.__eldom.dev.released());
-    if (vw.width < vw.height) { // upright: the invitation
+    const lineUp = () => ev(p, () => { const e = document.querySelector('#cap-hint'); return !e.hidden && /Acostá el teléfono/.test(e.textContent); });
+    if (vw.width < vw.height) { // upright: no dialog, one brief line once the walking ring has gone
       await ev(p, () => window.__eldom.dev.arrive(2)); await waitFloor(p, 2); await wait(2400);
-      check(await p.locator('#rot-invite').isVisible(), 'upright phone in a world: invitation to lie it down');
-      await shot('01-invite');
-      await p.locator('#rot-keep').click(); await wait(300);
-      check(!(await p.locator('#rot-invite').isVisible()), '"Seguir así" closes it');
-      await ev(p, () => window.__eldom.dev.arrive(3)); await waitFloor(p, 3); await wait(2000);
-      check(!(await p.locator('#rot-invite').isVisible()), 'and it does not come back in the next world');
+      check((await p.locator('#rot-invite').count()) === 0 && (await ev(p, () => ![...document.querySelectorAll('[role=dialog]')].some((e) => e.checkVisibility()))), 'upright phone in a world: no dialog in the way');
+      check(!(await lineUp()) && (await state(p)).roam.ghost, 'the walking ring comes first, with no line yet');
+      await shot('01-world-upright');
+      await p.waitForFunction(() => { const e = document.querySelector('#cap-hint'); return !e.hidden && /Acostá el teléfono/.test(e.textContent); }, null, { timeout: 12000 }).catch(() => {});
+      check((await lineUp()) && !(await state(p)).roam.ghost, 'then one brief line about lying the phone down, never with the ring');
+      await shot('02-line');
+      await p.waitForFunction(() => document.querySelector('#cap-hint').hidden, null, { timeout: 8000 }).catch(() => {});
+      check(!(await lineUp()), 'the line goes by itself');
+      await ev(p, () => window.__eldom.dev.arrive(3)); await waitFloor(p, 3); await wait(8500);
+      check(!(await lineUp()), 'and it does not come back in the next world');
     } else {
       await ev(p, () => { sessionStorage.removeItem('eldom.platform'); });
       await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin'); await wait(1200);
@@ -1539,7 +2000,7 @@ const SCENARIOS = {
       const fr = await p.locator('.portal iframe').boundingBox();
       check(s.portal.dock === 'compact' && fr && fr.height >= 199 && fr.width >= 199, `in the world the player sits in the corner, slim (${fr && Math.round(fr.width)}×${fr && Math.round(fr.height)}, YouTube minimum 200)`);
       check(fr && fr.x + fr.width <= vw.width && fr.y + fr.height <= vw.height, 'and fully on screen');
-      check(!(await p.locator('#rot-invite').isVisible()), 'no invitation when the phone already lies down');
+      check(!(await lineUp()) && (await p.locator('#rot-invite').count()) === 0, 'no line about lying it down when the phone already lies down');
       await shot('03-world');
       // walk with the left thumb
       const cdp = await p.context().newCDPSession(p);
@@ -1621,6 +2082,259 @@ const SCENARIOS = {
     await waitPhase(p, 'cabin', 25000);
     log('iframes after return=' + (await iframeCount(p)));
   },
+  // The Spotify sign-in flow, on a stand-in for the embed that speaks Spotify's message protocol (a sample on the first load,
+  // the whole song on the next), so it can count loads: the line about the sample from the first moment, the right action per
+  // device (a computer: Spotify's login; a phone: the song in the app), exact official URLs, one reload per use of the link
+  // when the visitor comes back, none without the click, minimized and "Mientras esperás" included, no line in link mode or
+  // where the audio is still pending.
+  async signin(p, shot, log) {
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    const vw = p.viewportSize();
+    const coarse = await ev(p, () => matchMedia('(pointer: coarse)').matches);
+    const cfg = await ev(p, () => window.__eldom.config());
+    const t = cfg.tracks.find((x) => x.floor < 0 && (x.spotifyTrackUri || x.spotifyAlbumId));
+    const canon = t.spotifyTrackUri ? 'https://open.spotify.com/track/' + t.spotifyTrackUri.split(':').pop() : 'https://open.spotify.com/album/' + t.spotifyAlbumId;
+    const login = (u) => 'https://accounts.spotify.com/login?continue=' + encodeURIComponent(u);
+    const SIGN = 'INICIAR SESIÓN EN SPOTIFY', OPEN = 'ABRIR EN SPOTIFY', CONT = 'CONTINUAR EN SPOTIFY';
+    const portal = async () => (await state(p)).portal;
+    const until = async (pred, ms) => { const t0 = Date.now(); let s; for (;;) { s = await portal(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(150); } };
+    const links = () => ev(p, () => [...document.querySelectorAll('.portal-links a, .portal-links button')].filter((a) => a.getBoundingClientRect().width > 0)
+      .map((a) => ({ text: a.textContent.trim(), href: a.href, cls: a.className, target: a.target, rel: a.rel, h: a.getBoundingClientRect().height })));
+    const line = () => ev(p, () => { const e = document.querySelector('.portal-session'); return e && e.getBoundingClientRect().width > 0 ? e.textContent.trim() : ''; });
+    const note = () => ev(p, () => { const e = document.querySelector('.portal-note'); return e ? e.textContent.trim() : ''; });
+    // the embed: a sample (30 s) the first time, the whole song after a reload
+    let hits = 0;
+    await p.route('https://open.spotify.com/embed/**', (r) => {
+      hits++;
+      const dur = hits === 1 ? 30000 : 215000;
+      r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><body style="background:#111"><script>parent.postMessage({type:"ready"},"*");setTimeout(()=>parent.postMessage({type:"playback_update",payload:{isPaused:false,isBuffering:false,duration:' + dur + ',position:1000,playingURI:"spotify:track:stub"}},"*"),2500);</script></body>' });
+    });
+    await p.context().route(/^https:\/\/accounts\.spotify\.com\//, (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>login</title>' }));
+    // the visitor goes to the other tab (the page hides, the window blurs) or only to another window (the window blurs): and back
+    const away = (focusOnly) => ev(p, (fo) => { if (!fo) { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); } window.dispatchEvent(new Event('blur')); }, !!focusOnly);
+    const back = (focusOnly) => ev(p, (fo) => { if (!fo) { delete document.hidden; document.dispatchEvent(new Event('visibilitychange')); } window.dispatchEvent(new Event('focus')); }, !!focusOnly);
+    const clickSign = async () => {
+      const [pop] = await Promise.all([p.waitForEvent('popup'), p.locator('.portal-links a', { hasText: SIGN }).click()]);
+      await pop.waitForLoadState().catch(() => {});
+      const u = pop.url(); await pop.close(); return u;
+    };
+
+    // 0. "Mientras esperás" (before the release): the album player has the same line and the album URL
+    await ev(p, () => window.__eldom.ui.openListen()); await wait(700);
+    await ev(p, () => window.__eldom.ui.chooseListen('spotify'));
+    await p.waitForSelector('.portal-session', { timeout: 15000 });
+    const album = 'https://open.spotify.com/album/' + cfg.demo.spotifyAlbumId;
+    let ls = await links();
+    check(/^Sin sesión de Spotify/.test(await line()) && ls.some((l) => l.text.startsWith(coarse ? OPEN : SIGN) && l.href === (coarse ? album : login(album))), `"Mientras esperás": the line and the album's own ${coarse ? 'open' : 'login'} URL`);
+    await shot('04-listen');
+    await ev(p, () => window.__eldom.ui.closeListen()); await wait(900);
+    hits = 0;
+
+    await ev(p, () => window.__eldom.dev.released());
+    await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin');
+    await ev(p, () => window.__eldom.dev.platform('spotify')); await wait(1200);
+    await ev(p, (n) => window.__eldom.dev.arrive(n), t.floor); await waitFloor(p, t.floor);
+    await p.waitForSelector('.portal-session', { timeout: 15000 });
+    await ev(p, () => { window.__same = true; const f = document.querySelector('.portal iframe'); if (f) f.dataset.stamp = 'same-frame'; });
+
+    // 1. the line, from the first moment, and the action for this device
+    const l0 = await line();
+    check(/^Sin sesión de Spotify, suena una muestra\.$/.test(l0) && !/tel[eé]fono|celular|m[oó]vil/i.test(l0), `the line is there from the start and never blames a device ("${l0}")`);
+    ls = await links();
+    const sign = ls.find((l) => l.text.startsWith(SIGN)), open = ls.find((l) => l.text.startsWith(OPEN));
+    check(!!open && open.href === canon && open.target === '_blank' && /noopener/.test(open.rel), `${OPEN} is the official song URL (${open && open.href})`);
+    if (coarse) {
+      check(!sign, 'phone: no sign-in link');
+      if (vw.width < 640 && vw.height > vw.width) check((await portal()).mini && (await line()).length > 0, 'phone held upright: it opens minimized and the line is still there');
+      check(!!open && /sess/.test(open.cls), 'phone: ABRIR EN SPOTIFY is the primary action');
+    } else {
+      check(!!sign && sign.href === login(canon) && sign.target === '_blank' && /noopener/.test(sign.rel), `computer: sign-in goes to Spotify's own login and comes back to the song (${sign && sign.href})`);
+    }
+    await wait(900); await shot('01-line');
+
+    // 2. no click, no reload
+    await away(); await wait(300); await back(); await wait(900);
+    await away(true); await wait(300); await back(true); await wait(900);
+    let s0 = await portal();
+    check(hits === 1 && s0.reloads === 0, `leaving and coming back without using the link reloads nothing (loads ${hits}, reloads ${s0.reloads})`);
+
+    // 3. the sample is detected: its message, the action strong
+    s0 = await until((x) => x.preview, 8000);
+    check(s0.preview && /Estás escuchando una muestra/.test(await note()), 'the sample is detected and its own note shows');
+    check((await line()) === '', 'the line gives way to that note');
+    ls = await links();
+    if (coarse) check(ls.some((l) => l.text.startsWith(CONT) && /strong/.test(l.cls) && l.href === canon), 'phone: the same action turns strong ("CONTINUAR EN SPOTIFY")');
+    else check(ls.some((l) => l.text.startsWith(SIGN) && /strong/.test(l.cls)) && ls.some((l) => l.text.startsWith(CONT) && /strong/.test(l.cls)), 'computer: sign-in and "CONTINUAR EN SPOTIFY" are strong');
+    await shot('02-sample');
+
+    if (!coarse) {
+      // 4. the link is used: Spotify's tab opens, and coming back reloads this player once, never the page
+      const popUrl = await clickSign();
+      check(popUrl === login(canon), `the new tab opens Spotify's login (${popUrl.slice(0, 80)})`);
+      await wait(600);
+      check(hits === 1, 'nothing reloads while the visitor is away');
+      await away(); await wait(400); await back(); await wait(1500);
+      s0 = await portal();
+      check(hits === 2 && s0.reloads === 1, `coming back reloads the player once (loads ${hits}, reloads ${s0.reloads})`);
+      check(await ev(p, () => window.__same === true && document.querySelector('.portal iframe').dataset.stamp === 'same-frame'), 'the page and the frame element stay (no page reload)');
+      s0 = await until((x) => x.diag.duration > 100000 && x.playing, 6000);
+      check(!s0.preview && !(await note()) && (await line()).length > 0, `the sample state resets: no note, the line is back (preview ${s0.preview})`);
+      await away(); await wait(300); await back(); await wait(300); await away(true); await wait(300); await back(true); await wait(1000);
+      check(hits === 2 && (await portal()).reloads === 1, `and it never repeats by itself (loads ${hits})`);
+
+      // 5. minimized: the line, the action and AMPLIAR stay, the minimized state survives a reload
+      await p.locator('.portal-mini').click(); await wait(700);
+      ls = await links();
+      check(ls.some((l) => l.text.startsWith(SIGN)) && ls.some((l) => /AMPLIAR/.test(l.text)), 'minimized: the sign-in link and AMPLIAR are still there');
+      const frameBox = await p.locator('.portal iframe').boundingBox(), rowBox = await p.locator('.portal-links').boundingBox();
+      check(frameBox.height >= 79 && frameBox.height <= 81 && rowBox.y + rowBox.height <= frameBox.y + 1, `minimized: Spotify's 80 px bar is uncovered, the controls sit above it (bar ${Math.round(frameBox.width)}×${Math.round(frameBox.height)}, controls end ${Math.round(rowBox.y + rowBox.height)}, bar starts ${Math.round(frameBox.y)})`);
+      await clickSign(); await away(true); await wait(300); await back(true); await wait(1500); // focus only, as when the other tab is a window
+      s0 = await portal();
+      check(hits === 3 && s0.reloads === 2 && s0.mini, `a second use reloads once more and the player stays minimized (loads ${hits}, mini ${s0.mini})`);
+      check(await ev(p, () => document.querySelector('.portal iframe').dataset.stamp === 'same-frame'), 'minimized: still the same frame');
+      await shot('03-mini');
+      await p.locator('.portal-mini').click(); await wait(500);
+
+      // 6. a player that is gone ignores the visitor coming back
+      await clickSign();
+      await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 25000);
+      await away(); await wait(300); await back(); await wait(900);
+      check(hits === 3 && (await iframeCount(p)) === 0, `a destroyed player is never reloaded (loads ${hits})`);
+    } else {
+      // 4. phone: minimized (a phone held upright opens it so), the action is the one thing to tap and stays inside the screen, clear of the bar
+      if (!(await portal()).mini) { await p.locator('.portal-mini').click(); await wait(700); }
+      ls = await links();
+      const act = ls.find((l) => l.text.startsWith(CONT) || l.text.startsWith(OPEN));
+      const frameBox = await p.locator('.portal iframe').boundingBox(), rowBox = await p.locator('.portal-links').boundingBox(), pb = await p.locator('.portal').boundingBox();
+      check(!!act && act.h >= 43.5 && ls.some((l) => /AMPLIAR/.test(l.text) && l.h >= 43.5), `minimized: the action and AMPLIAR are at least 44 px tall (${act && Math.round(act.h)} px)`);
+      check(frameBox.height >= 79 && frameBox.height <= 81 && rowBox.y + rowBox.height <= frameBox.y + 1, `minimized: Spotify's bar is uncovered (controls end ${Math.round(rowBox.y + rowBox.height)}, bar starts ${Math.round(frameBox.y)}, ${Math.round(frameBox.height)} px tall)`);
+      check(pb.x >= 0 && pb.x + pb.width <= vw.width && pb.y >= 0 && pb.y + pb.height <= vw.height, `minimized: the whole player is on screen (${Math.round(pb.x)},${Math.round(pb.y)} ${Math.round(pb.width)}×${Math.round(pb.height)} in ${vw.width}×${vw.height})`);
+      await shot('03-mini');
+      await p.locator('.portal-mini').click(); await wait(500);
+      await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 25000);
+    }
+
+    // 8. no line where it would be redundant: the link-box fallback, or audio that is not out yet
+    await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin');
+    await ev(p, (n) => window.__eldom.dev.arrive(n), t.floor); await waitFloor(p, t.floor);
+    await p.waitForSelector('.portal-session', { timeout: 15000 });
+    await ev(p, () => {
+      document.dispatchEvent(new SecurityPolicyViolationEvent('securitypolicyviolation', { effectiveDirective: 'frame-src', blockedURI: 'https://open.spotify.com/embed' }));
+      if (window.__csp) window.__csp.pop(); // staged here: the published-site CSP watch only counts real violations
+    });
+    s0 = await until((x) => x.mode === 'link', 5000);
+    check(s0.mode === 'link' && (await line()) === '' && !(await links()).some((l) => l.text.startsWith(SIGN)), 'link mode: no line, no sign-in link (its own official link is the action)');
+    await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 25000);
+    const pend = cfg.tracks.find((x) => x.floor > 0 && !x.spotifyTrackUri && !x.spotifyAlbumId) || cfg.tracks.find((x) => x.floor > 0);
+    await ev(p, (n) => window.__eldom.dev.arrive(n), pend.floor); await waitFloor(p, pend.floor); await wait(1500);
+    s0 = await portal();
+    check(s0.pending && (await line()) === '' && !(await links()).some((l) => l.text.startsWith(SIGN)), `audio pending (floor ${pend.floor}): no line, no sign-in link`);
+    await shot('05-pending');
+    await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 25000);
+    await p.unroute('https://open.spotify.com/embed/**');
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' signin check(s) failed: ' + fails.join(' | '));
+  },
+  // The Spotify notice at selection (once per visit, never a modal) and the way out of a sample: "MEJOR POR YOUTUBE", sign-in,
+  // "YA TENGO SESIÓN", Escape, keyboard focus, shown once; then a sample (stand-in embed) offers "SEGUIR EN YOUTUBE", which
+  // reopens the same song on YouTube at the second the visitor had reached.
+  async spnotice(p, shot, log) {
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    const cfg = await ev(p, () => window.__eldom.config());
+    const t = cfg.tracks.find((x) => x.floor < 0 && x.youtubeVideoId && (x.spotifyTrackUri || x.spotifyAlbumId));
+    const album = 'https://open.spotify.com/album/' + cfg.demo.spotifyAlbumId;
+    const login = (u) => 'https://accounts.spotify.com/login?continue=' + encodeURIComponent(u);
+    const open = () => ev(p, () => { const e = document.querySelector('#spn'); return !!e && !e.hidden && e.getBoundingClientRect().width > 0; });
+    const until = async (pred, ms = 8000) => { const t0 = Date.now(); for (;;) { if (await pred()) return true; if (Date.now() - t0 > ms) return false; await wait(120); } };
+    const forget = () => ev(p, () => sessionStorage.removeItem('eldom.spnotice'));
+    const platform = () => ev(p, () => ({ world: window.__eldom.state().platform, stored: sessionStorage.getItem('eldom.platform') }));
+    const choose = async (pf) => { await ev(p, (x) => window.__eldom.dev.platform(x), pf); await waitPhase(p, 'cabin'); await wait(300); };
+    await p.route('https://open.spotify.com/embed/**', (r) => r.fulfill({ status: 200, contentType: 'text/html',
+      body: '<!doctype html><body style="background:#111"><script>parent.postMessage({type:"ready"},"*");setTimeout(()=>parent.postMessage({type:"playback_update",payload:{isPaused:false,isBuffering:false,duration:30000,position:7400,playingURI:"spotify:track:stub"}},"*"),1500);</script></body>' }));
+    await p.context().route(/^https:\/\/accounts\.spotify\.com\//, (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>login</title>' }));
+
+    await ev(p, () => window.__eldom.dev.released());
+    await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin');
+    check(!(await open()), 'nothing shows before Spotify is chosen');
+    await choose('youtube');
+    check(!(await open()), 'choosing YouTube shows no notice');
+
+    // 1. the first time, by keyboard (focus goes in and comes back on Escape)
+    await p.locator('button.hot[aria-label^="Viajar por Spotify"]').focus();
+    await p.keyboard.press('Enter');
+    check(await until(open), 'choosing Spotify shows the notice');
+    const a = await ev(p, () => {
+      const e = document.querySelector('#spn'), r = e.getBoundingClientRect(), t = document.getElementById(e.getAttribute('aria-labelledby')), b = document.getElementById(e.getAttribute('aria-describedby'));
+      const btn = [...e.querySelectorAll('a,button')].map((x) => ({ text: x.textContent.trim(), h: x.getBoundingClientRect().height, w: x.getBoundingClientRect().width }));
+      return { role: e.getAttribute('role'), title: t && t.textContent, body: b && b.textContent, btn, x: r.x, y: r.y, r: r.right, b: r.bottom, vw: innerWidth, vh: innerHeight, flag: sessionStorage.getItem('eldom.spnotice'),
+        focus: document.activeElement && document.activeElement.id, a: e.querySelector('#spn-signin').getAttribute('href'), target: e.querySelector('#spn-signin').target, rel: e.querySelector('#spn-signin').rel };
+    });
+    check(a.role === 'region' && !!a.title && /30 segundos/.test(a.body) && !/tel[eé]fono|celular|m[oó]vil/i.test(a.body), `a labelled region that says it is a 30 s sample without a session ("${a.body}")`);
+    check(a.btn.map((b) => b.text).join('|') === 'INICIAR SESIÓN EN SPOTIFY ↗|YA TENGO SESIÓN|MEJOR POR YOUTUBE' && a.btn.every((b) => b.h > 20 && b.w > 20), 'three buttons: sign in, ya tengo sesión, mejor por YouTube');
+    check(a.x >= 0 && a.y >= 0 && a.r <= a.vw && a.b <= a.vh, `it fits on screen (${Math.round(a.x)},${Math.round(a.y)} to ${Math.round(a.r)},${Math.round(a.b)} in ${a.vw}×${a.vh})`);
+    check(a.a === login(album) && a.target === '_blank' && /noopener/.test(a.rel), `sign-in is Spotify's own login in a new tab (${a.a.slice(0, 60)}…)`);
+    check(a.flag === '1' && a.focus === 'spn-signin', `remembered for the visit; the keyboard lands on the first button (focus ${a.focus})`);
+    check((await state(p)).phase === 'cabin', 'the ride is not blocked: still in the cabin, no overlay');
+    await wait(700); await shot('01-notice');
+    await p.keyboard.press('Escape');
+    check(!(await open()) && (await ev(p, () => (document.activeElement.getAttribute('aria-label') || '').startsWith('Viajar por Spotify'))), 'Escape closes it and the focus returns to the button that opened it');
+    check((await platform()).world === 'spotify', 'and Spotify stays chosen');
+
+    // 2. once per visit
+    await choose('youtube'); await choose('spotify');
+    check(!(await open()), 'choosing Spotify again in the same visit shows nothing');
+
+    // 3. sign in: a new tab with Spotify's login, the notice leaves
+    await forget(); await choose('spotify');
+    check(await until(open), 'a new visit shows it again (flag cleared)');
+    const [pop] = await Promise.all([p.waitForEvent('popup'), p.locator('#spn-signin').click()]);
+    await pop.waitForLoadState().catch(() => {});
+    const pu = pop.url(); await pop.close();
+    check(pu === login(album) && !(await open()), `INICIAR SESIÓN opens Spotify's login in a new tab and the notice leaves (${pu.slice(0, 50)}…)`);
+
+    // 4. ya tengo sesión
+    await forget(); await choose('spotify'); await until(open);
+    await p.locator('#spn-have').click();
+    check(!(await open()) && (await platform()).world === 'spotify', 'YA TENGO SESIÓN closes it and keeps Spotify');
+
+    // 5. mejor por YouTube
+    await forget(); await choose('spotify'); await until(open);
+    await p.locator('#spn-yt').click();
+    check(!(await open()), 'MEJOR POR YOUTUBE closes it');
+    await waitPhase(p, 'cabin'); await wait(500);
+    const pf = await platform();
+    check(pf.world === 'youtube' && pf.stored === 'youtube', `and the platform is YouTube (world ${pf.world}, stored ${pf.stored})`);
+    await choose('spotify');
+    check(!(await open()), 'the flag held: Spotify again shows nothing');
+
+    // 6. the notice leaves with the cabin (a floor press), without waiting for an answer
+    await forget(); await choose('spotify'); await until(open);
+    await ev(p, (n) => window.__eldom.dev.arrive(n), t.floor); await waitFloor(p, t.floor);
+    check(!(await open()), 'arriving on a floor leaves no notice behind');
+
+    // 7. a sample on this floor: the way on is YouTube, at the second reached
+    await p.waitForSelector('.portal iframe', { timeout: 15000 });
+    check(await until(async () => (await state(p)).portal.preview, 10000), 'the (stand-in) Spotify embed reports a 30 s sample');
+    const yt = p.locator('.portal-links button.portal-yt');
+    check((await yt.count()) === 1 && (await yt.textContent()) === 'SEGUIR EN YOUTUBE', 'a sample offers SEGUIR EN YOUTUBE');
+    check((await ev(p, () => [...document.querySelectorAll('.portal-links a')].some((a) => /CONTINUAR EN SPOTIFY/.test(a.textContent)))), 'and CONTINUAR EN SPOTIFY stays');
+    await shot('02-sample');
+    await yt.click();
+    await p.waitForSelector('.portal iframe[src*="youtube.com/embed"]', { timeout: 15000 });
+    const src = await ev(p, () => document.querySelector('.portal iframe').src);
+    const want = (t.youtubeStartSeconds || 0) + 7;
+    check(src.includes(`/embed/${t.youtubeVideoId}`) && new URL(src).searchParams.get('start') === String(want), `YouTube opens the same song at the same second (start=${new URL(src).searchParams.get('start')}, expected ${want})`);
+    const s1 = await state(p);
+    check(s1.platform === 'youtube' && s1.portal.provider === 'youtube' && s1.floor === t.floor, 'the platform is YouTube and the visitor stays on the floor');
+    check((await ev(p, () => sessionStorage.getItem('eldom.platform'))) === 'youtube', 'the choice is remembered for the visit');
+    await shot('03-youtube');
+    await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 25000);
+    await p.unroute('https://open.spotify.com/embed/**');
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' spnotice check(s) failed: ' + fails.join(' | '));
+  },
   async csp(p, shot, log) {
     await ev(p, () => window.__eldom.ui.openListen());
     await wait(900);
@@ -1647,6 +2361,7 @@ const SCENARIOS = {
     await waitFloor(p, 1);
     await wait(3000);
     await shot('2d-floor-1');
+    if (!(await p.locator('#tr-open').isVisible()) || (await state(p)).room.id) throw new Error('2D fallback: floor 1 lost its plate (no room without the 3D world)');
   },
 };
 

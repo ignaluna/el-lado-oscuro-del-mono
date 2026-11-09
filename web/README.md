@@ -2,7 +2,8 @@
 
 Página estática de **El Lado Oscuro del Mono**: el vacío con agua, el ascensor como en la portada, la cuenta regresiva
 con el registro, los nueve pisos del disco con sus desafíos y su libro, Pequeño Primate en los subsuelos con los
-reproductores oficiales de YouTube y Spotify y su nivel de exploración, y la galería. El recorrido, piso por piso, está
+reproductores oficiales de YouTube y Spotify y su nivel de exploración. La galería (piso 10) está escondida con
+`GALLERY.enabled = false` hasta que esté lista para abrirse. El recorrido, piso por piso, está
 en [RECORRIDO.md](RECORRIDO.md). No necesita servidor: es un solo `index.html` con todo adentro (Three.js se carga de un
 CDN).
 
@@ -15,7 +16,7 @@ las pruebas.
   `ALBUMS`, `COVER_ELEMENTS`, `BOOK`, `GALLERY`, `LEVEL`, `RELEASE_AT`, `LEAD_ENDPOINT`, `PRIVACY_URL`. Los textos del
   libro están en `05-book-text.js` (se generan con `tools/book-text.cjs`, no se editan a mano) y cada desafío en
   `58-trial-<piso>-<id>.js`.
-- `assets/` — las fotos de la galería (`galeria/`) y, cuando existan, las tapas de Luján (`portadas/`).
+- `assets/` — las fotos de la galería (`galeria/`; se publican aunque la galería esté escondida) y, cuando existan, las tapas de Luján (`portadas/`).
 - `tools/build.cjs` — junta `src/` y escribe:
   - `dist/`: la web para publicar (`index.html`, `portada.jpg` para la vista previa al compartir, `favicon.svg` y
     `_headers` con los encabezados que necesitan los reproductores). Hay que subir los cuatro juntos: `_headers`
@@ -23,6 +24,11 @@ las pruebas.
   - `artifact/index.html`: la versión para claude.ai (ahí los reproductores son enlaces).
 - `tools/check.cjs` — pruebas de punta a punta en el navegador (escenarios `smoke`, `cabin`, `mini`, `trials`,
   `book`, `basements`, `level`, `roam`, `integrations`, …). `--dist` las corre sobre `dist/` con sus encabezados; `--url` sobre el sitio publicado.
+- Celulares: `renderTier()` (`src/20-r3d-core.js`) elige el nivel `lite` (sin suavizado, 30 cuadros por segundo, espejo
+  del agua a un cuarto y 40 % de las partículas) cuando el puntero es táctil, el ahorro de datos está activo o el equipo
+  declara 4 GB o menos de memoria o 4 núcleos o menos. El botón DEV muestra el nivel y `window.__eldom.state().tier` lo
+  expone. En un celular en vertical el reproductor de los mundos se abre minimizado (si la persona lo amplía, se respeta
+  en el resto de la visita).
 - `tools/preflight.cjs` — verifica los ids de YouTube y Spotify y, con `--site`, el sitio publicado.
 - `tools/leads/` — la planilla de Google donde caen los registros: el programa (`Code.gs`), sus pruebas y cómo
   armarla ([LEEME.md](tools/leads/LEEME.md)).

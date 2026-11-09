@@ -67,7 +67,7 @@ const Trial = {
   },
   /** The floor's caption button: what to do here, or that it is done. */
   sync() {
-    const btn = $('#tr-open'), d = this.def(), on = this.here() && !App.overlay && !Level.inspecting();
+    const btn = $('#tr-open'), d = this.def(), on = this.here() && !App.overlay && !Level.inspecting() && !Room.id; // (a room has its own way in)
     btn.hidden = !on;
     if (!on || !d) return;
     const done = Progress.solved(this.id);

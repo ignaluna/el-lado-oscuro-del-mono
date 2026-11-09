@@ -73,19 +73,31 @@ async function loadThree() {
   throw err;
 }
 
+/**
+ * The rendering tier, decided once: "lite" for a phone-class device (coarse pointer, data saver, little memory or few
+ * cores) and the full one for everything else. A missing API is no signal either way.
+ */
+function renderTier() {
+  const nv = navigator, num = (v) => (typeof v === 'number' && v > 0 ? v : null);
+  const mem = num(nv.deviceMemory), cores = num(nv.hardwareConcurrency);
+  return matchMedia('(pointer: coarse)').matches || !!(nv.connection && nv.connection.saveData) || (mem !== null && mem <= 4) || (cores !== null && cores <= 4);
+}
+
 function createRenderer3D(THREE) {
   THREE.ColorManagement.enabled = false;
   const stage = $('#stage');
   const canvas = h('canvas', {});
   stage.append(canvas);
-  const coarse = matchMedia('(pointer: coarse)').matches;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', alpha: false, stencil: false });
+  const lite = renderTier();
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: lite ? 'default' : 'high-performance', alpha: false, stencil: false });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   renderer.setClearColor(0x000000, 1); // scene black = bare paper (the post pass adds the paper tone)
   const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  const dprCap = coarse ? 1.25 : 1.5;
+  const dprCap = lite ? 1 : 1.5;
   let dpr = Math.min(window.devicePixelRatio || 1, dprCap);
-  let mirrorDiv = 2;
+  const mirrorBest = lite ? 4 : 2; // the water's mirror: half the size of the picture, a quarter on the lite tier
+  let mirrorDiv = mirrorBest, mirrorOff = false, renders = 0;
+  const PSCALE = lite ? 0.4 : 1; // particles: a lite device draws about 40% of them
   let W = 1, H = 1;
 
   const scene = new THREE.Scene();
@@ -379,7 +391,7 @@ function createRenderer3D(THREE) {
 
   // ═════════════ water + mirror ═════════════
   const mirrorRT = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: true });
-  const sceneRT = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: true, samples: coarse ? 2 : 4 });
+  const sceneRT = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: true, samples: lite ? 0 : 4 });
   const waterU = {
     ...LU,
     uTexMat: { value: new THREE.Matrix4() }, uReflect: { value: mirrorRT.texture },
@@ -604,7 +616,7 @@ const aspectM = portrait ? 2048 / 300 : 2048 / 150;
   // ═════════════ motes (only near light) ═════════════
   const motesU = { uTime: LU.uTime, uScale: { value: 10 }, uSpill: { value: 0 }, uCount: { value: 1 } };
   {
-    const n = 56, r = mulberry32(41);
+    const n = Math.round(56 * PSCALE), r = mulberry32(41);
     const pos = new Float32Array(n * 3), seed = new Float32Array(n * 4);
     for (let i = 0; i < n; i++) {
       const inSpill = i % 2;
@@ -639,7 +651,7 @@ const aspectM = portrait ? 2048 / 300 : 2048 / 150;
   const ctx = {
     THREE, scene, camera, renderer, el, interior, LU, LU_IN, V3, vecHex, ink, glowMat, canvasTex, keep, boxGeo, planeGeo, add,
     shell, faceUV, flatUV, anchors, ripple, makeText, glowText, disposables, geos, aimProbe, screenToZ, updaters: [], waterU, postU, wall, wallU, worldH, pointAt,
-    get W() { return W; }, get H() { return H; }, get dpr() { return dpr; },
+    get W() { return W; }, get H() { return H; }, get dpr() { return dpr; }, lite, pscale: PSCALE,
   };
   const cabin = buildCabin3D(ctx);
   interior.traverse((o) => { o.renderOrder = 2; }); // drawn after the depth mask (see the exterior block)
@@ -653,6 +665,7 @@ const aspectM = portrait ? 2048 / 300 : 2048 / 150;
     return pointAt(r && r.width ? r.left + r.width / 2 : W - 30, r && r.width ? r.top + r.height / 2 : 70, dist);
   };
   const levelObj = buildLevel3D(ctx);
+  const roomObj = buildRoom3D(ctx);
 
   // ═════════════ frame ═════════════
   const tmp = { a: V3(), b: V3(), c: V3(), r: V3(), u: V3() };
@@ -763,15 +776,18 @@ const aspectM = portrait ? 2048 / 300 : 2048 / 150;
     return ndc.multiplyScalar(dist / Math.max(0.2, ndc.dot(tmp.c))).add(camera.position).clone();
   }
 
-  let frameAcc = 0, frameN = 0, slowFor = 0, fastFor = 0;
+  let frameAcc = 0, frameN = 0, slowFor = 0, fastFor = 0, mirrorNeeded = false;
   function adapt(dt) {
     frameAcc += dt; frameN++;
     if (frameAcc < 2) return;
     const avg = (frameAcc / frameN) * 1000;
     frameAcc = 0; frameN = 0;
-    if (avg > 26) { slowFor++; fastFor = 0; } else if (avg < 12) { fastFor++; slowFor = 0; } else { slowFor = 0; fastFor = 0; }
+    // the lite tier draws at most 30 frames a second (the loop skips the rest): its frame is 33 ms by design
+    if (avg > (lite ? 40 : 26)) { slowFor++; fastFor = 0; } else if (avg < (lite ? 36 : 12)) { fastFor++; slowFor = 0; } else { slowFor = 0; fastFor = 0; }
     if (slowFor >= 1 && dpr > 0.75) { dpr = Math.max(0.75, dpr - 0.25); mirrorDiv = 4; resize(); slowFor = 0; }
-    else if (fastFor >= 3 && dpr < Math.min(window.devicePixelRatio || 1, dprCap)) { dpr = Math.min(dpr + 0.25, Math.min(window.devicePixelRatio || 1, dprCap)); if (dpr >= 1) mirrorDiv = 2; resize(); fastFor = 0; }
+    else if (slowFor >= 1 && lite && !mirrorOff) { mirrorOff = true; slowFor = 0; } // the lowest level: no reflection pass at all
+    else if (fastFor >= 3 && mirrorOff) { mirrorOff = false; fastFor = 0; } // first thing back when the frames recover
+    else if (fastFor >= 3 && dpr < Math.min(window.devicePixelRatio || 1, dprCap)) { dpr = Math.min(dpr + 0.25, Math.min(window.devicePixelRatio || 1, dprCap)); if (dpr >= 1) mirrorDiv = mirrorBest; resize(); fastFor = 0; }
     api.avgMs = avg;
   }
 
@@ -791,6 +807,11 @@ const aspectM = portrait ? 2048 / 300 : 2048 / 150;
   const api = {
     kind: '3d', canvas, avgMs: 0,
     get dpr() { return dpr; },
+    lite,
+    /** What the tier is doing now (shown by the DEV chip, read by the checks). */
+    perf: () => ({ tier: lite ? 'lite' : 'full', dpr, mirror: mirrorOff && !mirrorNeeded ? 'off' : '1/' + mirrorDiv, samples: lite ? 0 : 4, particles: PSCALE, renders, avgMs: api.avgMs }),
+    /** For the checks: feeds the adaptive step frames of `ms` milliseconds for `seconds` of frame time. */
+    adaptTest(ms, seconds) { frameAcc = 0; frameN = 0; for (let t = 0; t < seconds; t += ms / 1000) adapt(ms / 1000); return api.perf(); },
     resize,
     ripple,
     render(dt, t) {
@@ -798,7 +819,11 @@ const aspectM = portrait ? 2048 / 300 : 2048 / 150;
       updateScene(dt, t);
       const seesWater = !(world.inside && world.doors < 0.004);
       water.visible = seesWater;
-      if (seesWater) renderMirror();
+      // the level's clue lives only in the reflection: its world keeps the (quarter size) mirror at every level
+      const mirror = !mirrorOff || mirrorNeeded;
+      waterU.uMirror.value = mirror ? 1 : 0;
+      if (seesWater && mirror) renderMirror();
+      renders++;
       renderer.setRenderTarget(sceneRT);
       renderer.clear();
       renderer.render(scene, camera);
@@ -819,10 +844,14 @@ const aspectM = portrait ? 2048 / 300 : 2048 / 150;
       if (x < -hw || x > W + hw || y < -hh || y > H + hh) return null;
       return { x: x - hw, y: y - hh, w: hw * 2, h: hh * 2 };
     },
-    setFloor(track) { floors.set(track); levelObj.set(!!track && Level.hosts(track)); },
+    setFloor(track) { floors.set(track); levelObj.set(!!track && Level.hosts(track)); roomObj.set(track && Room.hosts(track) ? track : null); mirrorNeeded = !!track && Level.hosts(track); },
     levelPose(view, a) { return levelObj.pose(view, a); },
     levelInfo() { return levelObj.info(); },
     levelSolids() { return levelObj.solids(); },
+    roomPose(view, a, free) { return roomObj.pose(view, a, free); },
+    roomInfo() { return roomObj.info(); },
+    roomSolids() { return roomObj.solids(); },
+    roomAlignError() { return roomObj.alignError(); },
     bookTarget() { return bookObj.target(); },
     setGallery(on) { galleryObj.set(on); },
     galleryRefit() { galleryObj.refit(); },
@@ -833,6 +862,7 @@ const aspectM = portrait ? 2048 / 300 : 2048 / 150;
     dispose() {
       floors.set(null);
       levelObj.set(false);
+      roomObj.set(null);
       galleryObj.set(false);
       for (const g of geos) g.dispose();
       for (const d of disposables) d.dispose && d.dispose();

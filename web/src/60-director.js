@@ -38,6 +38,7 @@ const Hot = (() => {
       map.set(id, { el: b, on: false });
     },
     label(id, text) { const it = map.get(id); if (it) it.el.setAttribute('aria-label', text); },
+    focus(id) { const it = map.get(id); if (it && !it.el.hidden) it.el.focus({ preventScroll: true }); },
     enable(pred) { for (const [id, it] of map) { it.on = pred(id); if (!it.on && world.hover === id) world.hover = null; } },
     update() {
       for (const [id, it] of map) {
@@ -66,11 +67,13 @@ function syncUI() {
   { // the level: "alejarse" while looking closely; the hint while unsolved; reset once done
     const lv = Level.here(), close = lv && Level.view !== 'wide';
     $('#lv-back').hidden = !(close && !ov);
-    $('#cap-back').hidden = !!close; $('#cap-invite').hidden = !!close;
+    const rmClose = Room.inspecting();
+    $('#cap-back').hidden = !!(close || rmClose); $('#cap-invite').hidden = !!(close || rmClose);
     $('#lv-hint').hidden = !(lv && !Level.s.done && !ov);
     $('#lv-reset').hidden = !(lv && Level.s.done && !ov && !close);
     if (!lv) { $('#lv-tip').hidden = true; }
   }
+  Room.sync();
   const inGallery = p === 'gallery', atPiece = inGallery && world.gallery.at >= 0;
   $('#gal-actions').hidden = !inGallery;
   $('#gal-cap').hidden = !atPiece || !!ov;
@@ -97,6 +100,7 @@ function syncUI() {
     if (id === 'gallery') return (p === 'prelaunch' || p === 'open' || (p === 'floor' && !Level.inspecting())) && !ov && GALLERY.enabled; // the plaque hangs beside the elevator in every world
     if (id.startsWith('piece-')) return p === 'gallery' && !ov && world.gallery.at < 0;
     if (id.startsWith('lv-')) return p === 'floor' && !ov && Level.hotOn(id);
+    if (id.startsWith('rm-')) return p === 'floor' && !ov && Room.hotOn(id);
     if (id.startsWith('tr-')) return p === 'floor' && !ov && Trial.hotOn(id);
     if (id === 'panel-section') return p === 'cabin' && !ov && Progress.basementsOpen();
     if (id.startsWith('floor-')) return p === 'cabin' && !ov && panelRows().some((r) => 'floor-' + r.floor === id);
@@ -104,22 +108,26 @@ function syncUI() {
   });
   if (GALLERY.enabled) Hot.label('floor-' + GALLERY_FLOOR, `${floorName(GALLERY_FLOOR)}: ${GALLERY.label}${world.floor === GALLERY_FLOOR ? ', estás acá' : ''}`);
   for (const id of LEVEL_HOTS) Hot.label(id, Level.label(id));
+  for (const id of ROOM_HOTS) Hot.label(id, Room.label(id));
   Hot.label('floor-0', `PB: volver a la entrada${world.floor === 0 ? ', estás acá' : ''}`);
   for (const tr of tracks) Hot.label('floor-' + tr.floor, `${floorName(tr.floor)}: ${tr.title}${Progress.solved(tr.id) ? ', capítulo encontrado' : ''}${world.visited.includes(tr.floor) ? ', visitado' : ''}${world.floor === tr.floor ? ', estás acá' : ''}`);
   Hot.label('panel-section', panelDown() ? COPY.panelUp : COPY.panelDown);
-  Hot.label('tr-element', Trial.label());
+  Hot.label('tr-element', Room.id ? '' : Trial.label()); // (a room has its own hotspots)
   for (const pf of ['youtube', 'spotify']) Hot.label('sel-' + pf, `Viajar por ${pf === 'youtube' ? 'YouTube' : 'Spotify'}${world.platform === pf ? ' (elegido)' : ''}`);
   $('#dev').classList.toggle('shy', !!ov && !Dev.isOpen());
   Dev.refresh();
 }
-function setPhase(p) { world.phase = p; syncUI(); }
+function setPhase(p) { world.phase = p; if (p !== 'cabin') SpNotice.close(); syncUI(); }
+const ROOM_HOTS = ['rm-screen', 'rm-visor', 'rm-cup'];
 const LEVEL_HOTS = ['lv-wall', 'lv-stones', 'lv-painting', 'lv-hatch', 'lv-box', 'lv-dial-0', 'lv-dial-1', 'lv-dial-2', 'lv-latch', 'lv-object'];
 let hintTimer = 0;
-function hint(text) {
-  const el = $('#cap-hint');
+function hint(text, ms = 2600) {
+  const el = $('#cap-hint'), caps = $('#captions'), port = PlayerPortal.current;
+  // on a phone the player waits at the bottom: the line sits just above it
+  caps.style.bottom = port && window.innerWidth < 640 ? `${Math.round(window.innerHeight - port.el.getBoundingClientRect().top + 8)}px` : '';
   el.textContent = text; el.hidden = false; live(text);
   clearTimeout(hintTimer);
-  hintTimer = setTimeout(() => { el.hidden = true; }, 2600);
+  hintTimer = setTimeout(() => { el.hidden = true; caps.style.bottom = ''; }, ms);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -133,11 +141,53 @@ function closePortal() {
 }
 function openPortal(opts, accent) {
   closePortal();
-  const portal = new PlayerPortal({ ...opts, onChange: (info) => { world.playing = info.playing; Dev.refresh(); } });
+  // onYoutube: a Spotify sample offers the same song on YouTube, from the second the visitor reached (see PlayerPortal)
+  const portal = new PlayerPortal({ ...opts, onChange: (info) => { world.playing = info.playing; Dev.refresh(); }, onYoutube: (sec) => continueOnYoutube(opts, accent, sec) });
   world.glow.accent = accent;
   Seq.run('glow', (c) => c.to(world.glow, { amount: 1 }, 1.2, Ease.outCubic));
   return portal;
 }
+/** The visitor leaves a Spotify sample for the same song on YouTube: the platform changes for the visit (as if its button was
+ *  chosen) and the player opens again, at the same second. Starting it is the visitor's own click. */
+function continueOnYoutube(opts, accent, sec) {
+  setPlatform('youtube');
+  openPortal({ ...opts, provider: 'youtube', start: sec, autoplay: true }, accent);
+  live(COPY.spToYoutubeLive);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+// SPOTIFY NOTICE  (once per visit, when Spotify is chosen: without a session it is a sample)
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+const SpNotice = {
+  KEY: 'eldom.spnotice',
+  isOpen: false,
+  /** Shown the first time Spotify is chosen in a visit. Not a modal: the ride goes on and it leaves with the cabin. */
+  maybeShow(from) {
+    if (this.isOpen || store.session.get(this.KEY) === '1') return;
+    store.session.set(this.KEY, '1');
+    const el = $('#spn');
+    $('#spn-signin').href = PlayerPortal.signInFor(`https://open.spotify.com/album/${DEMO_ALBUM.spotifyAlbumId}`);
+    this.isOpen = true;
+    this.from = from && from !== document.body ? from : null; // the button the visitor used (its row hides while the hand presses)
+    el.hidden = false;
+    requestAnimationFrame(() => el.classList.add('on'));
+    if (this.from) $('#spn-signin').focus({ preventScroll: true }); // a keyboard visitor lands on it; a pointer visitor keeps the cabin
+    live(`${$('#spn-title').textContent}. ${$('#spn-body').textContent}`);
+  },
+  close() {
+    if (!this.isOpen) return;
+    this.isOpen = false;
+    const el = $('#spn'), inside = el.contains(document.activeElement);
+    el.hidden = true; el.classList.remove('on');
+    if (inside && this.from && document.contains(this.from)) this.from.focus({ preventScroll: true });
+    this.from = null;
+  },
+  wire() {
+    $('#spn-signin').addEventListener('click', () => { const port = PlayerPortal.current; if (port && port.provider === 'spotify') port.armSignIn(); this.close(); });
+    $('#spn-have').addEventListener('click', () => this.close());
+    $('#spn-yt').addEventListener('click', () => { this.close(); choosePlatform('youtube'); });
+  },
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════
 // PRELAUNCH OVERLAYS  (passenger register, listening while waiting)
@@ -339,6 +389,7 @@ function resetWorld() {
   world.gallery.at = -1;
   if (Level.s) Level.leave();
   Trial.leave();
+  Room.leave();
   setPlace(0);
   Roam.reset();
 }
@@ -409,6 +460,7 @@ function arriveOnFloor(n) {
   Roam.reset();
   Level.arrive(n);
   Trial.arrive(n);
+  Room.arrive(n);
 }
 const prismPulse = (k = 1) => { if (!world.reduced) Seq.run('prism', async (c) => { await c.to(world, { prism: k }, 0.06); await c.to(world, { prism: 0 }, 0.18); }); };
 
@@ -515,6 +567,7 @@ async function handPress(c, id, onContact, latch) {
 }
 
 function choosePlatform(p) {
+  const from = document.activeElement;
   if (world.phase !== 'cabin') { setPlatform(p); syncUI(); return; }
   setPhase('pressing');
   Seq.run('main', async (c) => {
@@ -529,6 +582,7 @@ function choosePlatform(p) {
     }, () => true);
     if (window.innerHeight < 520 && window.innerWidth > window.innerHeight) { world.cabView = 'rows'; await toPose(c, poseFromShot(Shots.panel(aspectNow())), rm(0.9), Ease.inOutCubic); }
     setPhase('cabin');
+    if (p === 'spotify') SpNotice.maybeShow(from);
   });
 }
 
@@ -695,6 +749,7 @@ function returnToElevator(then) {
   if (App.overlay === 'invite') Invite.close();
   if (Level.s) Level.leave();
   Trial.leave();
+  Room.leave();
   world.cabView = null;
   Links.clearWorldHash();
   closePortal();
@@ -808,10 +863,13 @@ const Input = (() => {
     window.addEventListener('blur', () => keys.clear());
   }
   function escape() {
+    if (SpNotice.isOpen) { SpNotice.close(); return; }
     if (!$('#privacy').hidden) { $('#privacy').hidden = true; $('#privacy-link').focus(); return; }
     if (App.overlay === 'level') { Level.keep(); return; }
     if (!App.overlay && !$('#lv-tip').hidden) { Level.closeTip(); return; }
     if (!App.overlay && Level.inspecting()) { Level.go('wide'); return; }
+    if (!App.overlay && Room.inspecting()) { Room.backStep(); return; }
+    if (!App.overlay && Room.tipOn) { Room.closeTip(); return; }
     if (App.overlay === 'book') Book.close();
     else if (App.overlay === 'trial') Trial.close();
     else if (App.overlay === 'reveal') Reveal.stay();
@@ -892,8 +950,10 @@ const Dev = (() => {
       if (App.overlay === 'book') Book.render();
       syncUI();
     },
-    progressReset() { Progress.reset(); world.panelDown = false; Trial.leave(); syncUI(); },
-    trialSolve() { Trial.solveNow(); },
+    progressReset() { Progress.reset(); world.panelDown = false; Trial.leave(); Room.onProgressReset(); syncUI(); },
+    trialSolve() { if (Room.here()) Room.solveNow(); else Trial.solveNow(); },
+    roomSolve() { Room.solveNow(); },
+    roomReset() { Room.reset(true); },
     bookBuy(ebookUrl, physicalUrl) { BOOK.buy.ebookUrl = ebookUrl || ''; BOOK.buy.physicalUrl = physicalUrl || ''; if (App.overlay === 'book') Book.render(); },
     force2D() { switchTo2D(); },
     /** Opens every floor's official player on this device and waits for it to answer (no playback). */
@@ -993,7 +1053,7 @@ const Dev = (() => {
       fps = Math.round(frames / acc); acc = 0; frames = 0;
       const rem = Clock.remaining(), p = Clock.parts(rem);
       const port = PlayerPortal.current;
-      readout.textContent = `fase ${world.phase} · piso ${world.floor} · ${R.kind} · dpr ${R.dpr.toFixed(2)} · ${fps} fps\n` +
+      readout.textContent = `fase ${world.phase} · piso ${world.floor} · ${R.kind}${R.lite ? ' lite · espejo ' + R.perf().mirror : ''} · dpr ${R.dpr.toFixed(2)} · ${fps} fps\n` +
         `falta ${rem > 0 ? `${p.d}d ${p.h}h ${p.m}m ${p.s}s` : 'publicado'} · embeds ${Embeds.effective()}${Embeds.blocked ? ' (bloqueados)' : ''}\n` +
         `reproductor ${port ? `${port.provider}/${port.mode}${port.playing ? ' ▶' : ''}${port.preview ? ' muestra' : ''}` : '—'}`;
     },
@@ -1018,6 +1078,7 @@ function switchTo2D() {
 function frame(now) {
   if (!App.running) return;
   App.raf = requestAnimationFrame(frame);
+  if (R.lite && now - App.lastNow < 31) return; // the lite tier draws at most 30 frames a second: the time carries over to the next one
   const dt = Math.min(0.1, Math.max(0, (now - App.lastNow) / 1000));
   App.lastNow = now;
   App.time += dt;
@@ -1053,15 +1114,21 @@ function initUI() {
   $('#cap-secondary').addEventListener('click', () => Listen.ask());
   $('#cap-enter').addEventListener('click', () => enterCabin());
   $('#cap-back').addEventListener('click', () => returnToElevator());
+  SpNotice.wire();
   $('#cap-invite').addEventListener('click', () => { const tr = trackOf(world.floor); if (tr) Invite.open(tr); });
   $('#cap-invite-all').addEventListener('click', () => Invite.open(null));
   Hot.add('book', 'Un libro apoyado en los escalones', () => Book.pickUp());
   Hot.add('tr-element', '', () => Trial.open());
   for (const id of LEVEL_HOTS) Hot.add(id, id, () => Level.tap(id));
+  for (const id of ROOM_HOTS) Hot.add(id, id, () => Room.tap(id));
   $('#lv-back').addEventListener('click', () => Level.go('wide'));
   Trial.init();
+  $('#rm-back').addEventListener('click', () => Room.backStep());
+  $('#rm-hint').addEventListener('click', () => Room.hint());
+  $('#rm-more').addEventListener('click', () => Room.hint());
+  $('#rm-close').addEventListener('click', () => Room.closeTip());
+  $('#rm-reset').addEventListener('click', () => Room.reset());
   $('#reveal-stay').addEventListener('click', () => Reveal.stay());
-  $('#rot-keep').addEventListener('click', () => { store.session.set('eldom.rot', '1'); $('#rot-invite').hidden = true; });
   $('#cab-view').addEventListener('click', () => {
     if (world.phase !== 'cabin' || Seq.busy('main')) return;
     world.cabView = (world.cabView || (world.platform ? 'rows' : 'top')) === 'rows' ? 'top' : 'rows';
@@ -1113,7 +1180,7 @@ function initUI() {
   snd.addEventListener('click', () => { Sound.unlock(); Sound.toggle(); paint(); });
   paint();
   let rz = 0;
-  window.addEventListener('resize', () => { cancelAnimationFrame(rz); rz = requestAnimationFrame(() => { R.resize(); reframe(); if (App.overlay === 'invite') Invite.place(); if (App.overlay === 'book') Book.place(); if (!$('#lv-tip').hidden) Level.place($('#lv-tip')); if (App.overlay === 'level') Level.place($('#lv-card')); }); });
+  window.addEventListener('resize', () => { cancelAnimationFrame(rz); rz = requestAnimationFrame(() => { R.resize(); reframe(); if (App.overlay === 'invite') Invite.place(); if (App.overlay === 'book') Book.place(); if (!$('#lv-tip').hidden) Level.place($('#lv-tip')); Room.place(); if (App.overlay === 'level') Level.place($('#lv-card')); }); });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { stopLoop(); Sound.suspend(); if (PlayerPortal.current) PlayerPortal.current.pageHidden(); }
     else { Sound.resume(); startLoop(); }
@@ -1129,7 +1196,7 @@ function reframe() {
   if (p === 'prelaunch' || p === 'open') setPose(poseFromShot(App.overlay === 'form' ? Shots.form(a) : App.overlay === 'listen' ? Shots.listen(a) : Shots.spawn(a)));
   else if (p === 'cabin') { setPose(poseFromShot(Shots.panel(a))); syncUI(); }
   else if (p === 'floor') { if (PlayerPortal.current && window.innerWidth >= 640 && (Roam.docked || window.innerHeight < 520)) { Roam.docked = true; PlayerPortal.current.setDock('compact'); }
-    if (Level.inspecting()) Level.reframe(); else if (Roam.moved > 0.1) world.cam.fov = poseFromShot(Shots.floor(a)).fov; else setPose(poseFromShot(Shots.floor(a))); }
+    if (Level.inspecting()) Level.reframe(); else if (Room.inspecting()) Room.reframe(); else if (Roam.moved > 0.1) world.cam.fov = poseFromShot(Shots.floor(a)).fov; else setPose(poseFromShot(Shots.floor(a))); }
   else if (p === 'gallery') Gallery.reframe();
 }
 
@@ -1196,25 +1263,26 @@ async function boot() {
   let readyRes;
   window.__eldom = {
     ready: new Promise((res) => { readyRes = res; }),
-    config: () => ({ release: RELEASE_AT, demo: DEMO_ALBUM, gallery: { pieces: GALLERY.pieces.map(({ id, src, title, caption, thanks }) => ({ id, src, title, caption, thanks })), thanks: GALLERY.thanks.lines }, tracks: tracks.map((t) => ({ album: t.album, floor: t.floor, id: t.id, title: t.title, chapter: t.chapter || null, element: t.element || null, youtubeVideoId: t.youtubeVideoId, youtubeStartSeconds: t.youtubeStartSeconds, spotifyTrackUri: t.spotifyTrackUri, spotifyAlbumId: t.spotifyAlbumId, durationSeconds: t.durationSeconds })), level: { floor: Level.floor(), trackId: LEVEL.trackId, symbols: LEVEL.symbols, stones: LEVEL.stones }, catalog: App.catalog || [],
+    config: () => ({ release: RELEASE_AT, demo: DEMO_ALBUM, gallery: { enabled: GALLERY.enabled, pieces: GALLERY.pieces.map(({ id, src, title, caption, thanks }) => ({ id, src, title, caption, thanks })), thanks: GALLERY.thanks.lines }, tracks: tracks.map((t) => ({ album: t.album, floor: t.floor, id: t.id, title: t.title, chapter: t.chapter || null, element: t.element || null, youtubeVideoId: t.youtubeVideoId, youtubeStartSeconds: t.youtubeStartSeconds, spotifyTrackUri: t.spotifyTrackUri, spotifyAlbumId: t.spotifyAlbumId, durationSeconds: t.durationSeconds })), level: { floor: Level.floor(), trackId: LEVEL.trackId, symbols: LEVEL.symbols, stones: LEVEL.stones }, catalog: App.catalog || [],
       book: { opening: BOOK.opening.map((p) => p.id), pages: BOOK.pages.map((p) => ({ id: p.id, foundIn: p.foundIn })), closing: BOOK.closing.id, back: BOOK.back.id }, bookText: BOOK_TEXT }),
     state() {
       const port = PlayerPortal.current;
       return {
-        phase: world.phase, renderer: R ? R.kind : null, platform: world.platform, floor: world.floor, visited: [...world.visited], doors: world.doors,
+        phase: world.phase, renderer: R ? R.kind : null, tier: R && R.perf ? R.perf() : null, platform: world.platform, floor: world.floor, visited: [...world.visited], doors: world.doors,
         embedMode: Embeds.mode, embedsBlocked: Embeds.blocked, portal: port ? port.info() : null, remainingMs: Clock.remaining(),
         formOpen: App.overlay === 'form', overlay: App.overlay, reducedMotion: world.reduced, registered: world.called,
         invite: App.overlay === 'invite' ? { floor: Invite.track ? Invite.track.floor : 0, url: Invite.url, message: Invite.message(), status: $('#invite-status').textContent } : null,
         pendingInvite: Gate.pending() ? Gate.pending().id : null, hash: location.hash,
         gallery: { at: world.gallery.at, from: Gallery.from, count: Gallery.count(), floor: GALLERY_FLOOR, guided: Gallery.guided() },
         level: Level.s ? Level.debug() : null,
+        room: Room.debug(),
         cam: { x: world.cam.x, y: world.cam.y, z: world.cam.z, yaw: world.cam.yaw, pitch: world.cam.pitch, fov: world.cam.fov },
-        roam: { scene: Roam.scene(), moved: Roam.moved, docked: Roam.docked, joy: !$('#joy').hidden, ghost: !$('#joy-ghost').hidden, solids: R && R.levelSolids ? R.levelSolids() : [] },
+        roam: { scene: Roam.scene(), moved: Roam.moved, docked: Roam.docked, joy: !$('#joy').hidden, ghost: !$('#joy-ghost').hidden, solids: R && R.levelSolids ? [...R.levelSolids(), ...(R.roomSolids ? R.roomSolids() : [])] : [] },
         panel: { logos: world.panelLogos || 0 },
         book: { found: Book.state.found, pages: BOOK.pages.filter((p) => Book.has(p.id)).map((p) => p.id), printed: !!Book.state.print, at: Book.state.at, leaves: Book.leaves().map((l) => l.kind),
           leafIds: Book.leaves().map((l) => (l.page ? l.page.id : l.kind)), complete: Book.complete(), count: $('#bk-count').textContent,
           text: App.overlay === 'book' ? $('#bk-page').innerText : null },
-        progress: Progress.debug(), panelDown: panelDown(), trial: Trial.debug(),
+        progress: Progress.debug(), panelDown: panelDown(), panelFloors: panelRows().map((r) => r.floor), panelTop: panelTop(), trial: Trial.debug(),
       };
     },
     waitFor(target, timeoutMs = 20000) {
@@ -1226,11 +1294,12 @@ async function boot() {
       closeListen: () => Listen.close(), enter: () => enterCabin(), returnToElevator: () => returnToElevator(),
       pressLobby: () => pressLobby(), pressGallery: () => pressGallery(), openGallery: () => Gallery.enterFromLobby(), galleryFocus: (i) => Gallery.focus(i), galleryStep: (dlt) => Gallery.step(dlt), galleryBack: () => Gallery.back(), leaveGallery: () => Gallery.leave(), pickBook: () => Book.pickUp(), openBook: (at) => Book.open(at), closeBook: () => Book.close(), bookTurn: (dlt) => Book.turn(dlt),
       levelTap: (id) => Level.tap(id), levelGo: (v) => Level.go(v), levelHint: () => Level.hint(), levelKeep: () => Level.keep(), levelElevator: () => Level.toElevator(), levelReset: (force) => Level.reset(force), levelTake: () => Level.take(),
+      roomTap: (id) => Room.tap(id), roomGo: (v) => Room.go(v), roomHint: () => Room.hint(), roomBack: () => Room.backStep(),
       trialOpen: () => Trial.open(), trialClose: () => Trial.close(), trialHint: () => Trial.hint(), trialAct: (...a) => Trial.act(...a), panelSection: () => togglePanelSection(),
       invite: (n) => Invite.open(n ? trackOf(n) : null), closeInvite: () => Invite.close(), gateChoose: (p) => Gate.choose(p), gateDismiss: () => Gate.dismiss(),
     },
     dev: { prelaunch: A.prelaunch, lastTen: A.lastTen, released: A.released, openDoors: A.openDoors, closeDoors: A.closeDoors, exterior: A.exterior, interior: A.interior, gallery: A.gallery, gallerySample: A.gallerySample,
-      arrive: A.arrive, platform: A.platform, press: A.press, embedMode: A.embedMode, clearLead: A.clearLead, clearBook: A.clearBook, levelFloor: A.levelFloor, levelReset: A.levelReset, levelSolve: A.levelSolve, playerTest: A.playerTest, roamTo: A.roamTo, roamPush: A.roamPush, bookFind: A.bookFind, bookAll: A.bookAll, progressReset: A.progressReset, trialSolve: A.trialSolve, bookBuy: A.bookBuy, force2D: A.force2D, reducedMotion: A.reducedMotion, timeScale: A.timeScale },
+      arrive: A.arrive, platform: A.platform, press: A.press, embedMode: A.embedMode, clearLead: A.clearLead, clearBook: A.clearBook, levelFloor: A.levelFloor, levelReset: A.levelReset, levelSolve: A.levelSolve, playerTest: A.playerTest, adaptTest: (ms, s) => (R && R.adaptTest ? R.adaptTest(ms, s) : null), roamTo: A.roamTo, roamPush: A.roamPush, bookFind: A.bookFind, bookAll: A.bookAll, progressReset: A.progressReset, trialSolve: A.trialSolve, roomSolve: A.roomSolve, roomReset: A.roomReset, bookBuy: A.bookBuy, force2D: A.force2D, reducedMotion: A.reducedMotion, timeScale: A.timeScale },
   };
   boot().then(readyRes, (e) => { console.error(e); readyRes(); });
 }
