@@ -83,7 +83,8 @@ ROOMS['que-carajo'] = {
       f.held = raw.held;
       const okFound = int(raw.found, f.held, Math.min(5, f.held + 1)); // (a thing is found before it is held, one at a time)
       f.found = okFound ? raw.found : f.held;
-      f.forks = okFound && int(raw.forks, f.found, Math.min(5, f.found + 1)) ? raw.forks : f.found; // (a fork is taken before its thing is found; a count that makes no sense drops what follows it)
+      const forkTop = f.found === f.held ? Math.min(5, f.found + 1) : f.found; // (play opens a new fork only when everything found is held: while a thing waits in the water or in the hands, forks equals found)
+      f.forks = okFound && int(raw.forks, f.found, forkTop) ? raw.forks : f.found; // (a count that makes no sense drops what follows it)
     }
     f.seen = raw.seen === true || f.forks > 0;
     f.done = raw.done === true && f.held === 5;

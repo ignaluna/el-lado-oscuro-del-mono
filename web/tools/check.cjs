@@ -565,6 +565,8 @@ async function playCarajo(p, { check, shot, thorough = false }) {
     check(!s.done && s.held === 4 && s.found === 5 && s.phase === 'hold', '"done" without the five things held is refused (one thing is still to be held)');
     s = await plant({ v: 1, seen: true, forks: 4, found: 1, held: 1 });
     check(s.held === 1 && s.found === 1 && s.forks === 1, `a fork taken too far ahead is dropped (forks ${s.forks})`);
+    s = await plant({ v: 1, seen: true, forks: 4, found: 3, held: 2 });
+    check(!s.done && s.held === 2 && s.found === 3 && s.forks === 3 && s.phase === 'hold', `a fork ahead of a thing that is found but not held cannot be (forks 4, found 3, held 2): forks drop to ${s.forks}`);
     s = await plant({ v: 2, seen: true, forks: 2, found: 2, held: 2 });
     check(s.stage === 0 && s.held === 0 && !s.seen, 'a saved state of another version: a fresh room');
     s = await plant('esto no es json{');
