@@ -416,8 +416,21 @@ async function playGrito(p, { check, shot, thorough = false }) {
     check(!s.done && s.noticed === 'calor,tension' && !s.swallowed && s.fixed === 0, `a repeated sign stops the saved order: only the valid prefix is kept ("${s.noticed}")`);
     s = await plant({ v: 1, noticed: ['calor', 'tension', 'palabra'], swallowed: true, breaks: 2, taken: [0, 1, 1, 9, 2], fixed: 4, done: true });
     check(!s.done && s.swallowed && s.need === 5 && s.taken === '0,1,2' && s.fixed === 0 && s.stage === 2, `saved shards: repeats and out-of-range ones are dropped, more teeth mended than shards taken is refused, "done" without every tooth mended is refused (taken ${s.taken}, fixed ${s.fixed})`);
+    for (const breaks of [99, -1, 'x']) { // three valid signs, then a break count that makes no sense: what follows it says nothing and is dropped
+      s = await plant({ v: 1, noticed: ['calor', 'tension', 'palabra'], swallowed: true, breaks, taken: [0, 1, 2], fixed: 3, done: true });
+      check(!s.done && s.noticed === 'calor,tension,palabra' && !s.swallowed && s.taken === '' && s.fixed === 0 && s.breaks === 0 && s.need === 3 && s.stage === 1, `three valid signs and ${JSON.stringify(breaks)} breaks: the signs stay, the swallow, the shards and the repairs that follow are dropped (${JSON.stringify(s.saved)})`);
+    }
     s = await plant('esto no es json{');
     check(!s.done && s.stage === 0 && s.noticed === '', 'an unreadable saved state: a fresh room');
+    // touching the tag again and again: one more ✗ and one more shard each time, up to the eight teeth there are; after that nothing changes
+    s = await plant({ v: 1, noticed: ['calor', 'tension', 'palabra'], swallowed: false, breaks: 4 });
+    check(s.stage === 1 && s.breaks === 4 && s.need === 7, `a tag half out with 4 breaks is kept (${s.need} teeth with an ✗)`);
+    await tapHot('Una firma'); await until((x) => x.view === 'firma' && x.panel); await wait(900);
+    for (let i = 0; i < 4; i++) {
+      await act('tocar').click(); s = await until((x) => !x.busy, 8000); await wait(200);
+      if (i === 0) check(s.breaks === 5 && s.need === 8 && s.visual.v.x.filter((x) => x === 1).length === 8 && s.visual.v.shard.filter((x) => x === 1).length === 8, `the last tooth breaks: ${s.need} with an ✗ and ${s.visual.v.shard.filter((x) => x === 1).length} shards (every spot there is)`);
+    }
+    check(s.breaks === 5 && s.need === 8 && s.tries === 4 && s.saved.breaks === 5 && s.visual.v.x.filter((x) => x === 1).length === 8 && s.visual.v.shard.filter((x) => x === 1).length === 8 && /Ya no queda diente sano/.test(s.status), `touching it three more times changes nothing: still ${s.need} teeth, ${s.visual.v.shard.filter((x) => x === 1).length} shards ("${s.status}")`);
     await ev(p, () => window.__eldom.dev.roomReset()); await wait(600);
     s = await rmState();
   }
@@ -1524,6 +1537,14 @@ const SCENARIOS = {
       const labels = await ev(p, () => [...document.querySelectorAll('.hot')].filter((b) => !b.hidden).map((b) => b.getAttribute('aria-label')));
       check(W.hots.every((re) => labels.some((l) => re.test(l))), `${n}: the hotspots on screen: ${labels.join(' | ')}`);
       await shot(`${pre}-01-arrive`);
+      // a room solved from fresh with the dev hook (the last step's state, then the solve) is saved in a form that survives a reload
+      await ev(p, () => window.__eldom.dev.roomSolve());
+      await p.waitForFunction(() => window.__eldom.state().overlay === 'book', null, { timeout: 12000 }); await p.locator('#bk-close').click(); await wait(1500);
+      check((await rmState()).saved && (await rmState()).saved.done, `${n}: solved from fresh with the dev hook: the saved state says done (${JSON.stringify((await rmState()).saved)})`);
+      await reload(n);
+      s = await rmState();
+      check(s.done && s.stage === 3 && W.solvedRoom(s), `${n}: solved from fresh with the dev hook, a reload keeps the room solved`);
+      await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.clearBook(); window.__eldom.dev.roomReset(); }); await wait(900);
       // the whole puzzle
       const end = await W.play(p, { check, shot, thorough: true });
       check(end.done && end.stage === 3 && W.afterSolve(end), `${n}: the last step solves the floor: "${end.status}"`);

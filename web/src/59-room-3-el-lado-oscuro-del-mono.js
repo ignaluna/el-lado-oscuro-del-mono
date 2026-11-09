@@ -95,8 +95,8 @@ ROOMS['el-lado-oscuro-del-mono'] = {
   },
   /** Every tooth mended but the last, the shard in hand (the dev panel and the checks). */
   almost(s) { s.noticed = this.order.slice(); s.swallowed = true; const need = this.need(s); s.taken = Array.from({ length: need }, (_, i) => i); s.fixed = need - 1; s.stage = 2; return s; },
-  /** The room is solved: every shard taken, every tooth mended. */
-  onSolved(s) { const need = this.need(s); s.taken = Array.from({ length: need }, (_, i) => i); s.fixed = need; world.room.v = this.vOf(s); },
+  /** The room is solved: the signs noticed, the word swallowed, every shard taken, every tooth mended (a state that `normalize` keeps, whatever step it was reached from). */
+  onSolved(s) { const need = this.need(s); s.noticed = this.order.slice(); s.swallowed = true; s.taken = Array.from({ length: need }, (_, i) => i); s.fixed = need; world.room.v = this.vOf(s); },
   debug(s) { return { noticed: s.noticed.join(','), swallowed: s.swallowed, breaks: s.breaks, taken: s.taken.join(','), fixed: s.fixed, need: this.need(s) }; },
   /** What the set shows for a state (its targets). */
   vOf(s) {
