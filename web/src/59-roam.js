@@ -14,8 +14,8 @@ const Roam = {
   /** Which free scene the visitor is in right now, or null (scripted moments, dialogs, close looks, the cabin). */
   scene() {
     const p = world.phase;
-    if (App.overlay || Seq.busy('main') || Seq.busy('cam') || Seq.busy('lv')) return null;
-    if (p === 'floor') return Level.inspecting() ? null : 'floor';
+    if (App.overlay || Seq.busy('main') || Seq.busy('cam') || Seq.busy('lv') || Seq.busy('rm')) return null;
+    if (p === 'floor') return Level.inspecting() || Room.inspecting() ? null : 'floor';
     if (p === 'gallery') return world.gallery.at < 0 ? 'gallery' : null;
     if (p === 'prelaunch' || p === 'open') return 'lobby';
     return null;
@@ -111,6 +111,10 @@ const Roam = {
     }
     if (sc !== 'gallery') [x, z] = pushOutBox(x, z, 0, 0.0 - 0.9, 1.15, 2.15, 0, r); // the elevator, its jambs and steps (z −3.05 … 1.25)
     if (sc === 'floor' && R && R.levelSolids) for (const s of R.levelSolids()) {
+      if (s.kind === 'box') [x, z] = pushOutBox(x, z, s.x, s.z, s.hw, s.hd, s.ry, r);
+      else { const dx = x - s.x, dz = z - s.z, d = Math.hypot(dx, dz), m = s.r + r; if (d < m && d > 1e-6) { x = s.x + (dx / d) * m; z = s.z + (dz / d) * m; } }
+    }
+    if (sc === 'floor' && R && R.roomSolids) for (const s of R.roomSolids()) {
       if (s.kind === 'box') [x, z] = pushOutBox(x, z, s.x, s.z, s.hw, s.hd, s.ry, r);
       else { const dx = x - s.x, dz = z - s.z, d = Math.hypot(dx, dz), m = s.r + r; if (d < m && d > 1e-6) { x = s.x + (dx / d) * m; z = s.z + (dz / d) * m; } }
     }

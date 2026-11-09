@@ -97,6 +97,7 @@ function syncUI() {
     if (id === 'gallery') return (p === 'prelaunch' || p === 'open' || (p === 'floor' && !Level.inspecting())) && !ov && GALLERY.enabled; // the plaque hangs beside the elevator in every world
     if (id.startsWith('piece-')) return p === 'gallery' && !ov && world.gallery.at < 0;
     if (id.startsWith('lv-')) return p === 'floor' && !ov && Level.hotOn(id);
+    if (id.startsWith('rm-')) return p === 'floor' && !ov && Room.hotOn(id);
     if (id.startsWith('tr-')) return p === 'floor' && !ov && Trial.hotOn(id);
     if (id === 'panel-section') return p === 'cabin' && !ov && Progress.basementsOpen();
     if (id.startsWith('floor-')) return p === 'cabin' && !ov && panelRows().some((r) => 'floor-' + r.floor === id);
@@ -104,15 +105,17 @@ function syncUI() {
   });
   if (GALLERY.enabled) Hot.label('floor-' + GALLERY_FLOOR, `${floorName(GALLERY_FLOOR)}: ${GALLERY.label}${world.floor === GALLERY_FLOOR ? ', estás acá' : ''}`);
   for (const id of LEVEL_HOTS) Hot.label(id, Level.label(id));
+  for (const id of ROOM_HOTS) Hot.label(id, Room.label(id));
   Hot.label('floor-0', `PB: volver a la entrada${world.floor === 0 ? ', estás acá' : ''}`);
   for (const tr of tracks) Hot.label('floor-' + tr.floor, `${floorName(tr.floor)}: ${tr.title}${Progress.solved(tr.id) ? ', capítulo encontrado' : ''}${world.visited.includes(tr.floor) ? ', visitado' : ''}${world.floor === tr.floor ? ', estás acá' : ''}`);
   Hot.label('panel-section', panelDown() ? COPY.panelUp : COPY.panelDown);
-  Hot.label('tr-element', Trial.label());
+  Hot.label('tr-element', Room.id ? '' : Trial.label()); // (a room has its own hotspots)
   for (const pf of ['youtube', 'spotify']) Hot.label('sel-' + pf, `Viajar por ${pf === 'youtube' ? 'YouTube' : 'Spotify'}${world.platform === pf ? ' (elegido)' : ''}`);
   $('#dev').classList.toggle('shy', !!ov && !Dev.isOpen());
   Dev.refresh();
 }
 function setPhase(p) { world.phase = p; if (p !== 'cabin') SpNotice.close(); syncUI(); }
+const ROOM_HOTS = ['rm-screen', 'rm-visor', 'rm-cup'];
 const LEVEL_HOTS = ['lv-wall', 'lv-stones', 'lv-painting', 'lv-hatch', 'lv-box', 'lv-dial-0', 'lv-dial-1', 'lv-dial-2', 'lv-latch', 'lv-object'];
 let hintTimer = 0;
 function hint(text, ms = 2600) {
@@ -383,6 +386,7 @@ function resetWorld() {
   world.gallery.at = -1;
   if (Level.s) Level.leave();
   Trial.leave();
+  Room.leave();
   setPlace(0);
   Roam.reset();
 }
@@ -453,6 +457,7 @@ function arriveOnFloor(n) {
   Roam.reset();
   Level.arrive(n);
   Trial.arrive(n);
+  Room.arrive(n);
 }
 const prismPulse = (k = 1) => { if (!world.reduced) Seq.run('prism', async (c) => { await c.to(world, { prism: k }, 0.06); await c.to(world, { prism: 0 }, 0.18); }); };
 
@@ -741,6 +746,7 @@ function returnToElevator(then) {
   if (App.overlay === 'invite') Invite.close();
   if (Level.s) Level.leave();
   Trial.leave();
+  Room.leave();
   world.cabView = null;
   Links.clearWorldHash();
   closePortal();
@@ -1107,6 +1113,7 @@ function initUI() {
   Hot.add('book', 'Un libro apoyado en los escalones', () => Book.pickUp());
   Hot.add('tr-element', '', () => Trial.open());
   for (const id of LEVEL_HOTS) Hot.add(id, id, () => Level.tap(id));
+  for (const id of ROOM_HOTS) Hot.add(id, id, () => Room.tap(id));
   $('#lv-back').addEventListener('click', () => Level.go('wide'));
   Trial.init();
   $('#reveal-stay').addEventListener('click', () => Reveal.stay());
@@ -1256,8 +1263,9 @@ async function boot() {
         pendingInvite: Gate.pending() ? Gate.pending().id : null, hash: location.hash,
         gallery: { at: world.gallery.at, from: Gallery.from, count: Gallery.count(), floor: GALLERY_FLOOR, guided: Gallery.guided() },
         level: Level.s ? Level.debug() : null,
+        room: Room.debug(),
         cam: { x: world.cam.x, y: world.cam.y, z: world.cam.z, yaw: world.cam.yaw, pitch: world.cam.pitch, fov: world.cam.fov },
-        roam: { scene: Roam.scene(), moved: Roam.moved, docked: Roam.docked, joy: !$('#joy').hidden, ghost: !$('#joy-ghost').hidden, solids: R && R.levelSolids ? R.levelSolids() : [] },
+        roam: { scene: Roam.scene(), moved: Roam.moved, docked: Roam.docked, joy: !$('#joy').hidden, ghost: !$('#joy-ghost').hidden, solids: R && R.levelSolids ? [...R.levelSolids(), ...(R.roomSolids ? R.roomSolids() : [])] : [] },
         panel: { logos: world.panelLogos || 0 },
         book: { found: Book.state.found, pages: BOOK.pages.filter((p) => Book.has(p.id)).map((p) => p.id), printed: !!Book.state.print, at: Book.state.at, leaves: Book.leaves().map((l) => l.kind),
           leafIds: Book.leaves().map((l) => (l.page ? l.page.id : l.kind)), complete: Book.complete(), count: $('#bk-count').textContent,

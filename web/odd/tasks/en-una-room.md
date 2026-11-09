@@ -59,8 +59,8 @@ ordinary checks: `node web/tools/check.cjs --syntax` and `--scenario <name> --vi
 
 - [x] S1 Spotify notice at selection + "seguir en YouTube" on sample (route: delegated writer; commit: the work-unit commit "feat(web): explain Spotify samples at selection...";
       trigger: 2+ non-trivial edits in `00-base.html`, `60-director.js`, `check.cjs`)
-- [ ] R1 Room framework + En una drawing world (route: delegated writer; trigger: new 3D set and
-      controller across several files)
+- [x] R1 Room framework + En una drawing world (route: delegated writer; trigger: new 3D set and
+      controller across several files; commit: "feat(web): draw the En una cover as a walkable room")
 - [ ] R2 En una puzzle logic, page/book hand-off, checks (route: same writer as R1)
 - [ ] D1 Docs: `RECORRIDO.md` floor 1 section, this document's evidence
 
@@ -81,3 +81,5 @@ ordinary checks: `node web/tools/check.cjs --syntax` and `--scenario <name> --vi
   - `--scenario signin --viewport both`: all checks passed (desktop, mobile). New scenario `spnotice` `--viewport both`: all checks passed.
   - `--scenario all --viewport both --fast`: exit 0, 843 ok, no failures.
   - `build.cjs --release --site https://example.netlify.app` then `--scenario signin,spnotice --dist --viewport both`: all passed, no CSP violation.
+- R1 done. `49-r3d-room-0.js` is the framework (ribbon lines drawn as quads in the vertex shader, point sprites, `ROOM_SETS[trackId]`, disposed whole on leaving); `49-r3d-room-1-en-una.js` draws the cover as white chalk on black (monitor, tower, two folded brains, antenna with turning rings and sparks, desk, keys that dip, hands with jagged sleeves, cup with steam, cable, sleeper with silver glitter, visor figure with gold glitter, cone of dots, falling binary, "11:11" on the floor). It already knows the states the puzzle will drive (`world.room`). `59-room-0.js` is the controller skeleton (`ROOMS`, hotspots `rm-`, first view); Roam collides with the room's desk and sleepers; the player docks in the corner on arrival (wide). Floor 1's plate still opens from the machine's screen until R2. Lite tier draws fewer folds, glitter and particles. Screenshots: `web/shots/en-una-room-desktop.png`, `web/shots/en-una-room-mobile.png` (not tracked). On a phone the first view shows the machine; the two sleepers are around the corner (drag to look).
+  - `check.cjs --syntax`: OK. `--scenario trials --viewport both`: all checks passed (desktop 304 s, mobile 305 s). `--scenario roam --viewport both`: all checks passed (new: the desk and the sleepers are solid). `--scenario tier --viewport both`: all checks passed (new: the room is built for the lite/full tier, fewer lines on lite). `--scenario level` and `fallback2d` (desktop): ok.

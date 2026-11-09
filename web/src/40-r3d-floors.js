@@ -4,7 +4,7 @@
 /** Where the official player sits on desktop for each kind (phones always dock it at the bottom). */
 const FLOOR_ALIGN = { halo: 'center', flock: 'left', chat: 'center', thread: 'center', mate: 'left', pin: 'left', glass: 'right', letters: 'center', staff: 'center' };
 /** The level's world puts its player on the right on wide screens: the wall and the stones stand on the left. */
-const alignFor = (tr) => (LEVEL.enabled && tr.id === LEVEL.trackId ? 'right' : FLOOR_ALIGN[tr.visual.kind] || 'center');
+const alignFor = (tr) => (LEVEL.enabled && tr.id === LEVEL.trackId ? 'right' : FLOOR_ALIGN[tr.visual.kind] || 'center'); // (a room, like floor 1's, uses the centre: its player waits in the corner)
 const fmtDuration = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
 const PARTICLE_VERT = /* glsl */`

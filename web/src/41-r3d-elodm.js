@@ -32,26 +32,11 @@ function shape(F, o, s, pts, mat, closed = true, z = 0) {
 }
 
 const ELODM_KINDS = {
-  // 1 — En una: screens of automatisms around a column of smoke; the mirror in the middle keeps the mono
-  screens(F, ctx) {
-    const { THREE } = ctx, { pos: o, s } = elementSpot(F, ctx);
-    const screens = [[-0.36, 0.12, 0.28], [0.36, 0.1, 0.28], [0, -0.3, 0.22], [0, 0.16, 0.42]].map(([x, y, w], i) => {
-      const glow = F.mesh(new THREE.PlaneGeometry(w * s, w * s * 0.66), F.basic(i === 3 ? [0.9, 0.86, 0.78] : F.accent, 0.12, { side: THREE.DoubleSide }), o.x + x * s, o.y + y * s, o.z + (i === 3 ? 0.1 : 0) * s);
-      const h2 = w * 0.33;
-      shape(F, { x: o.x + x * s, y: o.y + y * s, z: o.z }, s, [[-w / 2, -h2], [w / 2, -h2], [w / 2, h2], [-w / 2, h2]], F.lineMat(i === 3 ? [0.95, 0.92, 0.84] : F.accent, 0.8));
-      return glow;
-    });
-    const smoke = F.particles(160, { mode: 0, box: [s * 0.16, s * 1.3, s * 0.16], origin: F.V3(o.x, o.y - s * 0.65, o.z + s * 0.2), size: 11, alpha: 0.4, speed: 0.12, tint: [0.8, 0.82, 0.86] });
-    F.light(F.V3(o.x, o.y + s * 0.4, o.z - 1), 0.7, s * 6);
-    return (dt, t) => {
-      const tr = world.trial, off = Math.max(tr.solved, tr.progress);
-      smoke.u.uPhase.value += dt * smoke.speed * 4;
-      screens.forEach((m, i) => {
-        if (i === 3) { m.material.opacity = 0.1 + 0.4 * tr.solved + 0.05 * Math.sin(t * 1.3); return; }
-        const flick = 0.5 + 0.5 * Math.sin(t * (7 + i * 3) + i) * Math.sin(t * 2.3 + i);
-        m.material.opacity = (0.08 + 0.14 * flick) * (1 - off * (tr.step > i ? 1 : 0.4));
-      });
-    };
+  // 1 — En una: the cover, walkable. Its art is a room (49-r3d-room-1-en-una.js) built beside the floor; the floor itself only
+  // keeps the title and the water's tint, and a faint light.
+  screens(F) {
+    F.light(F.V3(F.A.x, 2.2, F.A.z - 1), 0.35, 8);
+    return () => {};
   },
 
   // 2 — ¿Qué te está pasando?: a machine pours into a hole that never fills

@@ -665,6 +665,7 @@ const aspectM = portrait ? 2048 / 300 : 2048 / 150;
     return pointAt(r && r.width ? r.left + r.width / 2 : W - 30, r && r.width ? r.top + r.height / 2 : 70, dist);
   };
   const levelObj = buildLevel3D(ctx);
+  const roomObj = buildRoom3D(ctx);
 
   // ═════════════ frame ═════════════
   const tmp = { a: V3(), b: V3(), c: V3(), r: V3(), u: V3() };
@@ -843,10 +844,14 @@ const aspectM = portrait ? 2048 / 300 : 2048 / 150;
       if (x < -hw || x > W + hw || y < -hh || y > H + hh) return null;
       return { x: x - hw, y: y - hh, w: hw * 2, h: hh * 2 };
     },
-    setFloor(track) { floors.set(track); levelObj.set(!!track && Level.hosts(track)); mirrorNeeded = !!track && Level.hosts(track); },
+    setFloor(track) { floors.set(track); levelObj.set(!!track && Level.hosts(track)); roomObj.set(track && Room.hosts(track) ? track : null); mirrorNeeded = !!track && Level.hosts(track); },
     levelPose(view, a) { return levelObj.pose(view, a); },
     levelInfo() { return levelObj.info(); },
     levelSolids() { return levelObj.solids(); },
+    roomPose(view, a, free) { return roomObj.pose(view, a, free); },
+    roomInfo() { return roomObj.info(); },
+    roomSolids() { return roomObj.solids(); },
+    roomAlignError() { return roomObj.alignError(); },
     bookTarget() { return bookObj.target(); },
     setGallery(on) { galleryObj.set(on); },
     galleryRefit() { galleryObj.refit(); },
@@ -857,6 +862,7 @@ const aspectM = portrait ? 2048 / 300 : 2048 / 150;
     dispose() {
       floors.set(null);
       levelObj.set(false);
+      roomObj.set(null);
       galleryObj.set(false);
       for (const g of geos) g.dispose();
       for (const d of disposables) d.dispose && d.dispose();

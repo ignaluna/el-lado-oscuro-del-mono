@@ -1548,6 +1548,16 @@ const SCENARIOS = {
     const inside2 = await ev(p, ([x, z, w]) => { const c = Math.cos(w.ry), sn = Math.sin(w.ry), lx = (x - w.x) * c - (z - w.z) * sn, lz = (x - w.x) * sn + (z - w.z) * c; return Math.abs(lx) < w.hw && Math.abs(lz) < w.hd; }, [s.cam.x, s.cam.z, wall]);
     check(!inside2 && Math.hypot(s.cam.x - wall.x, s.cam.z - wall.z) < 0.7, `from behind, the wall stops the visitor (${Math.hypot(s.cam.x - wall.x, s.cam.z - wall.z).toFixed(2)} m from its centre)`);
     await shot('05-behind-the-wall');
+    // floor 1 is a room (the cover, drawn in the world): its desk stops the visitor like the wall of the level
+    await ev(p, () => window.__eldom.dev.arrive(1)); await waitFloor(p, 1); await wait(2200);
+    const rs = await ev(p, () => window.__eldom.state().roam.solids), desk = rs.find((x) => x.kind === 'box');
+    check(!!desk && rs.some((x) => x.kind === 'circle'), `floor 1: the room has a desk and two sleepers that are solid (${rs.map((x) => x.kind).join(', ')})`);
+    await ev(p, ([x, z, y]) => window.__eldom.dev.roamTo(x, z, y), [desk.x + Math.sin(desk.ry) * 3.2, desk.z + Math.cos(desk.ry) * 3.2, desk.ry]);
+    await ev(p, () => window.__eldom.dev.roamPush(0, 1, 3600));
+    s = await st();
+    const inDesk = await ev(p, ([x, z, w]) => { const c = Math.cos(w.ry), sn = Math.sin(w.ry), lx = (x - w.x) * c - (z - w.z) * sn, lz = (x - w.x) * sn + (z - w.z) * c; return Math.abs(lx) < w.hw && Math.abs(lz) < w.hd; }, [s.cam.x, s.cam.z, desk]);
+    check(!inDesk && Math.hypot(s.cam.x - desk.x, s.cam.z - desk.z) > 0.6, `floor 1: walking straight at the desk stops the visitor outside it (${Math.hypot(s.cam.x - desk.x, s.cam.z - desk.z).toFixed(2)} m from its centre)`);
+    await shot('06-at-the-desk');
     // the edge of the world: a long walk away stops at the rim
     await ev(p, () => window.__eldom.dev.roamTo(0, 6, Math.PI));
     await ev(p, () => window.__eldom.dev.roamPush(0, 1, 9000));
@@ -1606,12 +1616,21 @@ const SCENARIOS = {
       return { fps: (s1.tier.renders - r0) / ((Date.now() - t0) / 1000), walked: Math.abs(s1.cam.z - z0) };
     };
     let fullRun = null, liteRun = null;
+    const roomSets = {};
     for (const [name, sg, wantLite] of cases) {
       if (coarse && !wantLite) continue; // a touch screen is lite whatever else it reports (its own case below)
       const q = await open(sg);
       const t = (await q.evaluate(() => window.__eldom.state())).tier;
       check(t && (t.tier === 'lite') === wantLite, `${name}: ${wantLite ? 'lite' : 'full'} tier (${t && t.tier})`);
       check(wantLite ? t.samples === 0 && t.particles === 0.4 && t.mirror === '1/4' && t.dpr <= 1 : t.samples === 4 && t.particles === 1 && t.mirror === '1/2', `${name}: ${wantLite ? 'no MSAA, 40% particles, mirror at 1/4, dpr ≤ 1' : 'MSAA 4, all particles, mirror at 1/2'} (${JSON.stringify({ s: t.samples, p: t.particles, m: t.mirror, dpr: t.dpr })})`);
+      if (name === 'plenty of everything' || name === '4 cores') { // floor 1's room: the lite tier draws fewer folds, glitter and particles
+        await q.evaluate(() => { window.__eldom.dev.released(); window.__eldom.dev.arrive(1); });
+        await q.waitForFunction(() => window.__eldom.state().phase === 'floor' && window.__eldom.state().floor === 1, null, { timeout: 40000 }); await wait(1800);
+        const rset = (await q.evaluate(() => window.__eldom.state())).room.set;
+        check(rset && rset.lite === wantLite && rset.codeDots === 83, `${name}: floor 1's room is built for the ${wantLite ? 'lite' : 'full'} tier (${rset && rset.segments} segments, ${rset && rset.codeDots} code dots)`);
+        roomSets[name] = rset;
+        await shot('room-' + (wantLite ? 'lite' : 'full'));
+      }
       if (name === 'plenty of everything') fullRun = await measure(q);
       if (name === '4 cores') liteRun = await measure(q);
       if (name === '4 cores' || name === 'plenty of everything') { // the adaptive ladder, fed synthetic frame times
@@ -1634,6 +1653,7 @@ const SCENARIOS = {
       }
       await q.close();
     }
+    if (roomSets['plenty of everything'] && roomSets['4 cores']) check(roomSets['4 cores'].segments < roomSets['plenty of everything'].segments, `the room draws fewer lines on the lite tier (${roomSets['4 cores'].segments} < ${roomSets['plenty of everything'].segments})`);
     if (coarse) { // the phone profile itself: lite although every other signal is generous
       const q = await open({ cores: 8, memory: 8, saveData: false });
       const t = (await q.evaluate(() => window.__eldom.state())).tier;
