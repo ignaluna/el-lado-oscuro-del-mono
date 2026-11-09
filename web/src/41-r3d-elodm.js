@@ -53,27 +53,11 @@ const ELODM_KINDS = {
     return () => {};
   },
 
-  // 4 — ¿Qué carajo?: a dove that does not land while everything rushes; a backpack full of other people's things
-  dove(F, ctx) {
-    const { pos: o, s } = elementSpot(F, ctx);
-    const white = F.lineMat([0.96, 0.95, 0.92], 0.9);
-    shape(F, o, s, [[-0.25, -0.55], [0.25, -0.55], [0.3, -0.2], [0.18, -0.08], [-0.18, -0.08], [-0.3, -0.2]], F.lineMat(F.accent, 0.7));
-    shape(F, o, s, [[-0.12, -0.08], [-0.1, 0.02], [0.1, 0.02], [0.12, -0.08]], F.lineMat(F.accent, 0.5), false);
-    const bird = new ctx.THREE.Group(); F.group.add(bird);
-    const body = F.line([[-0.12, 0], [0.02, 0.04], [0.12, 0.03], [0.16, 0.06], [0.12, 0], [-0.04, -0.03], [-0.12, 0]].map(([x, y]) => F.V3(x * s, y * s, 0)), white, false);
-    const wingL = F.line([[0, 0.02], [-0.06, 0.18], [-0.14, 0.22]].map(([x, y]) => F.V3(x * s, y * s, 0)), white, false);
-    const wingR = F.line([[0.02, 0.02], [0.05, 0.16], [0.0, 0.22]].map(([x, y]) => F.V3(x * s, y * s, 0.02 * s)), white, false);
-    for (const l of [body, wingL, wingR]) { F.group.remove(l); bird.add(l); }
-    F.light(F.V3(o.x, o.y + s * 0.4, o.z - 1), 0.7, s * 6);
-    let ph = 0;
-    return (dt, t) => {
-      const tr = world.trial, calm = Math.max(tr.solved, tr.progress * 0.7);
-      ph += dt * (1 - calm * 0.85);
-      const rad = s * 0.42 * (1 - calm), land = F.V3(o.x, o.y - 0.08 * s + 0.04 * s, o.z);
-      bird.position.set(land.x + Math.cos(ph * 1.6) * rad, land.y + s * 0.35 * (1 - calm) + Math.sin(ph * 2.3) * rad * 0.3, land.z + Math.sin(ph * 1.6) * rad * 0.5);
-      const flap = Math.sin(t * 14) * (1 - tr.solved);
-      wingL.rotation.x = flap * 0.9; wingR.rotation.x = -flap * 0.9;
-    };
+  // 4 — ¿Qué carajo?: the cover, walkable, two raised hands and three drops, with a backpack's drag marks on the water. Its art is a
+  // room (49-r3d-room-4-que-carajo.js) built beside the floor; the floor itself only keeps a faint light.
+  dove(F) {
+    F.light(F.V3(F.A.x, 2.4, F.A.z - 1), 0.35, 8);
+    return () => {};
   },
 
   // 5 — Explotar: a letter under pressure, wrapped in dark threads (what was inherited without choosing)

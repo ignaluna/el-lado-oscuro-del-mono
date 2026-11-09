@@ -523,6 +523,136 @@ async function playGrito(p, { check, shot, thorough = false }) {
 }
 
 /**
+ * Plays floor 4's room (the two hands) with real clicks: the left palm's line (the map: left, right, right, left, right), the five forks
+ * of the drag marks (each one a tap on a chalk arrow), the five things lying at the end of the right turns, and both hands closing on
+ * each one. Then the drops, and the slow stay. `thorough` adds saved states that must be rejected, wrong turns, one hand alone, dragging,
+ * the hint ladder of every stage, an interrupted stay, a reload in the middle. Returns the room's state at the end.
+ */
+async function playCarajo(p, { check, shot, thorough = false }) {
+  const FLOOR = 4, KEY = 'eldom.room.que-carajo.v1', ROUTE = ['i', 'd', 'd', 'i', 'd'], SIDE = { i: 'izquierda', d: 'derecha' }, OTHER = { i: 'd', d: 'i' };
+  const rmState = async () => (await state(p)).room;
+  const until = async (pred, ms = 15000) => { const t0 = Date.now(); let s; for (;;) { s = await rmState(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(150); } };
+  const act = (name) => p.locator(`#rm-acts [data-act="${name}"]`).first();
+  const hot = (label) => p.locator(`.hot:not([hidden])[aria-label^="${label}"]`).first();
+  /** Turns (to the left, in steps) until the hotspot is on screen: what a visitor does to look around. */
+  const seeHot = async (label) => { for (let i = 0; i < 26 && !(await hot(label).isVisible()); i++) { await p.keyboard.down('q'); await wait(170); await p.keyboard.up('q'); await wait(260); } };
+  const tapHot = async (label) => { await seeHot(label); await hot(label).click({ timeout: 8000 }); };
+  const toWide = async () => { while ((await rmState()).view !== 'wide') { await p.keyboard.press('Escape'); await wait(1300); } };
+  const reload = async () => {
+    await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
+    await ev(p, () => window.__eldom.dev.released()); await ev(p, (f) => window.__eldom.dev.arrive(f), FLOOR); await waitFloor(p, FLOOR); await wait(2600);
+  };
+  const turn = (side) => tapHot(`Un ramal de las marcas de arrastre, hacia la ${SIDE[side]}`);
+  const hintLadder = async (stage, rx, msg) => {
+    await p.locator('#rm-hint').click(); await wait(200); let s = await rmState(); const h1 = s.status;
+    check(h1.length > 20 && s.more && s.stage === stage, `${msg}: hint 1 "${h1}"`);
+    await p.locator('#rm-more').click(); await wait(200); const h2 = (await rmState()).status;
+    await p.locator('#rm-more').click(); await wait(200); s = await rmState();
+    check(h2 !== h1 && s.status !== h2 && rx.test(s.status) && !s.more, `${msg}: hint 3 gives the whole answer ("${s.status}") and there is no fourth`);
+    if (await p.locator('#rm-close').isVisible()) { await p.locator('#rm-close').click(); await wait(300); }
+    return h1;
+  };
+  let s = await rmState();
+
+  if (thorough) {
+    // a saved state that makes no sense is rejected and a valid prefix is kept (each case starts from the room's own fresh state)
+    const plant = async (raw) => { await ev(p, ([k, r]) => localStorage.setItem(k, typeof r === 'string' ? r : JSON.stringify(r)), [KEY, raw]); await reload(); return rmState(); };
+    s = await plant({ v: 1, stage: 3, seen: true, forks: 9, found: 7, held: 99, done: true });
+    check(!s.done && s.stage <= 1 && s.held === 0 && s.found === 0 && s.forks === 0, `corrupted state (99 things held): rejected, nothing after it is kept (${JSON.stringify(s.saved)})`);
+    s = await plant({ v: 1, seen: true, forks: 3, found: 5, held: 2, done: true });
+    check(!s.done && s.held === 2 && s.found === 2 && s.forks === 2 && s.phase === 'fork', `a thing found that cannot be (5 with 2 held): it and what follows are dropped (held ${s.held}, found ${s.found}, forks ${s.forks})`);
+    s = await plant({ v: 1, seen: true, forks: 5, found: 5, held: 4, done: true });
+    check(!s.done && s.held === 4 && s.found === 5 && s.phase === 'hold', '"done" without the five things held is refused (one thing is still to be held)');
+    s = await plant({ v: 1, seen: true, forks: 4, found: 1, held: 1 });
+    check(s.held === 1 && s.found === 1 && s.forks === 1, `a fork taken too far ahead is dropped (forks ${s.forks})`);
+    s = await plant({ v: 2, seen: true, forks: 2, found: 2, held: 2 });
+    check(s.stage === 0 && s.held === 0 && !s.seen, 'a saved state of another version: a fresh room');
+    s = await plant('esto no es json{');
+    check(!s.done && s.stage === 0 && s.held === 0, 'an unreadable saved state: a fresh room');
+    await ev(p, () => window.__eldom.dev.roomReset()); await wait(600);
+    s = await rmState();
+  }
+  check(s.here && s.view === 'wide' && s.stage === 0 && s.forks === 0 && s.found === 0 && s.held === 0 && s.route === 'IDDID', `the room: standing in it, stage ${s.stage}, nothing found yet`);
+  // nothing can be taken or held before it is its turn
+  await ev(p, () => window.__eldom.ui.roomTap('rm-cosa-0')); await ev(p, () => window.__eldom.ui.roomTap('rm-ramal-1-i')); await wait(300); s = await rmState();
+  check(s.found === 0 && s.forks === 0 && s.view === 'wide', 'a thing cannot be taken before its fork, nor a fork before the one that comes first');
+
+  // 1. the map: the left palm's line
+  if (thorough) await hintLadder(0, /izquierda, derecha, derecha, izquierda, derecha/, 'stage 0');
+  await tapHot('La palma de la mano izquierda'); s = await until((x) => x.view === 'palma' && x.panel); await wait(900);
+  check(s.seen && s.stage === 1 && s.visual.v.seen === 1 && /izquierda, derecha, derecha, izquierda, derecha/.test(s.status), `1. the left palm: the line turns "${s.status}"`);
+  await act('seguir').click(); await wait(300); s = await rmState();
+  check(/1, izquierda\. 2, derecha\. 3, derecha\. 4, izquierda\. 5, derecha\./.test(s.status), `following the line: "${s.status}"`);
+  if (thorough) await shot('room4-02-palm');
+  await toWide();
+  if (thorough) {
+    await p.locator('#rm-hint').click(); await wait(200); s = await rmState();
+    check(/Las marcas se bifurcan/.test(s.status) && s.stage === 1 && s.more, `the hint counter starts again when the stage advances: "${s.status}"`);
+    await p.locator('#rm-more').click(); await wait(200); await p.locator('#rm-more').click(); await wait(200); s = await rmState();
+    check(/MANO IZQUIERDA y MANO DERECHA/.test(s.status) && !s.more, `stage 1: hint 3 gives the whole answer ("${s.status}")`);
+    if (await p.locator('#rm-close').isVisible()) { await p.locator('#rm-close').click(); await wait(300); }
+  }
+
+  // 2 and 3. five forks, five things, five times both hands
+  for (let k = 0; k < 5; k++) {
+    if (thorough && k === 0) { // the wrong turn: the marks go round in circles; the right one lets them go on
+      await turn(OTHER[ROUTE[0]]); await wait(500); s = await rmState();
+      const cap = await p.locator('#cap-hint').innerText();
+      check(s.forks === 0 && s.tries === 1 && s.visual.v.curl[0] === 1 && /círculos/i.test(cap), `the wrong turn at the first fork: "${cap}" (tries ${s.tries}, still ${s.forks} forks)`);
+      s = await until((x) => x.visual.v.curl[0] === 0, 5000);
+      check(s.visual.v.curl[0] === 0, 'the wrong way shows only while it is followed');
+    }
+    await turn(ROUTE[k]); await wait(500); s = await rmState();
+    check(s.forks === k + 1 && s.found === k && s.visual.v.forks === k + 1, `fork ${k + 1}: ${SIDE[ROUTE[k]]}, the marks go on (${s.forks} forks)`);
+    if (thorough && k === 0) { // a fork waits for what lies at the end of the last one
+      await ev(p, () => window.__eldom.ui.roomTap('rm-ramal-1-d')); await ev(p, () => window.__eldom.ui.roomTap('rm-ramal-1-i')); await wait(300); s = await rmState();
+      check(s.forks === 1, 'the next fork cannot be taken before the thing is found and held');
+    }
+    await seeHot('Una cosa del camino'); const before = (await rmState()).found;
+    await hot('Una cosa del camino').click({ timeout: 8000 }); await wait(400); s = await rmState();
+    check(s.found === k + 1 && s.found !== before && s.phase === 'hold', `thing ${k + 1} taken from the water`);
+    if (k === 0) { const cap = await p.locator('#cap-hint').innerText(); check(/bolsitas de residuo/i.test(cap) && s.view === 'wide', `taking one says so on screen: "${cap}"`); }
+    if (thorough && k === 2) { // a reload in the middle keeps what was found and what is held
+      await reload(); s = await rmState();
+      check(s.forks === 3 && s.found === 3 && s.held === 2 && s.phase === 'hold' && s.visual.v.held === 2 && !(await hot('Una cosa del camino').isVisible()), `a reload keeps the forks (${s.forks}), the things found (${s.found}) and held (${s.held})`);
+    }
+    await tapHot('Las dos manos'); s = await until((x) => x.view === 'manos' && x.panel); await wait(900);
+    check(s.acts.some((a) => a.act === 'izquierda') && s.acts.some((a) => a.act === 'derecha') && /Pesa/.test(s.status), `both hands are offered: "${s.status}"`);
+    if (thorough && k === 0) {
+      await act('izquierda').click(); await wait(300); s = await rmState();
+      check(s.held === 0 && s.acts.find((a) => a.act === 'izquierda').pressed === 'true' && /una sola mano/.test(s.status), `one hand alone: "${s.status}"`);
+      await act('arrastrar').click(); await wait(300); s = await rmState();
+      check(s.held === 0 && s.tries === 2 && /arrastrás/.test(s.status), `dragging it: "${s.status}"`);
+      await shot('room4-03-one-hand');
+    }
+    if (!(thorough && k === 0)) await act('izquierda').click();
+    await wait(200); await act('derecha').click();
+    s = await until((x) => x.held === k + 1 && !x.busy, 10000);
+    check(s.held === k + 1 && s.visual.v.held === k + 1 && (k < 4 ? s.stage === 1 && /pesa distinto/i.test(s.status) : s.stage === 2 && s.visual.v.slow === 1), `both hands: thing ${k + 1} held ("${s.status}")`);
+    if (thorough && k === 0) await shot('room4-04-first-held');
+    await toWide();
+  }
+  if (thorough) await shot('room4-05-all-held');
+
+  // 4. the drops, and the stay
+  if (thorough) await hintLadder(2, /QUEDARTE/, 'stage 2');
+  await tapHot('Las tres gotas'); s = await until((x) => x.view === 'gotas' && x.panel); await wait(900);
+  check(s.acts.some((a) => a.act === 'quedarte') && /Quedate un rato/.test(s.status) && s.visual.v.slow === 1, `the drops fall slowly: "${s.status}"`);
+  if (thorough) {
+    await act('quedarte').click(); await wait(900); s = await rmState();
+    check(s.acts.find((a) => a.act === 'quedarte').pressed === 'true' && !s.done, 'one tap starts the slow stay (no holding the finger down)');
+    await act('quedarte').click(); await wait(500); s = await rmState();
+    check(!s.done && s.acts.find((a) => a.act === 'quedarte').pressed === 'false' && /Soltaste/.test(s.status), `a second tap interrupts it: "${s.status}"`);
+    await act('quedarte').click(); await wait(900); await p.locator('#rm-back').click(); await wait(1500); s = await rmState();
+    check(!s.done && s.view === 'wide', 'any other tap interrupts the stay too (going back to the room)');
+    await tapHot('Las tres gotas'); await until((x) => x.view === 'gotas' && x.panel); await wait(900);
+  }
+  await act('quedarte').click();
+  await p.waitForFunction(() => window.__eldom.state().room.done, null, { timeout: 20000 });
+  return rmState();
+}
+
+/**
  * What is particular to each room's walkthrough (the `room` and `trials` scenarios read it; a floor with a room in ROOMS needs an entry):
  *   floor, chapter, minSegments (a sanity floor for the chalk lines), play(p, {check, shot, thorough}) → the room's state at the end,
  *   built(set) (what the set reports about itself), hots (labels on screen on arrival), afterSolve(state), solvedRoom(state) (after a
@@ -577,6 +707,21 @@ const ROOM_WALKS = {
       await p.locator('#rm-acts [data-act="sentir-calor"]').click(); await wait(500);
     },
     midOK: (s) => s.noticed === 'calor' && s.visual.v.sign[0] === 1 && s.visual.v.tag === 1, midMsg: 'a reload keeps the sign that was noticed (the heat) and nothing else',
+  },
+  'que-carajo': {
+    floor: 4, chapter: 'cap-4', minSegments: 1800, play: playCarajo,
+    built: (set) => set.strokes > 600 && set.route === 'IDDID' && set.things === 5 && set.drops === 3,
+    tierBuilt: (set) => set.route === 'IDDID' && set.things === 5,
+    hots: [/^La palma de la mano izquierda/, /^Las dos manos/, /^Las tres gotas/, /^Un ramal de las marcas de arrastre, hacia la izquierda/, /^Un ramal de las marcas de arrastre, hacia la derecha/],
+    afterSolve: (s) => s.visual.v.calm === 1 && s.held === 5,
+    solvedRoom: (s) => s.visual.v.calm === 1 && s.visual.v.held === 5 && s.visual.v.forks === 5 && s.visual.v.seen === 1 && s.held === 5,
+    solvedHot: /casi quietas/,
+    replayHot: 'Las tres gotas', replayView: 'gotas',
+    freshRoom: (s) => s.visual.v.calm === 0 && s.visual.v.held === 0 && s.visual.v.forks === 0 && s.held === 0,
+    async midWalk(p) {
+      await ev(p, () => window.__eldom.ui.roomTap('rm-ramal-0-i')); await wait(800); // the first fork, the right turn (left)
+    },
+    midOK: (s) => s.forks === 1 && s.found === 0 && s.visual.v.forks === 1 && s.held === 0, midMsg: 'a reload keeps the first turn that was taken (and nothing else)',
   },
 };
 
@@ -870,7 +1015,7 @@ const SCENARIOS = {
     await ev(p, () => window.__eldom.dev.released());
     await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin'); await ev(p, () => window.__eldom.dev.platform('youtube')); await wait(1200);
     const record = cfg.tracks.filter((t) => t.album === 'elodm');
-    check(record.map((t) => `${t.floor}:${t.id}:${t.chapter}:${t.element}`).join(' ') === '1:en-una:cap-1:realidad-simulada 2:que-te-esta-pasando:cap-2:sistema 3:el-lado-oscuro-del-mono:cap-3:grito 4:que-carajo:cap-4:paloma 5:explotar:cap-6:dolor-heredado 6:pato:cap-5:pato 7:casi-perdido:cap-8:fuego 8:no-me-perdones:cap-7:vacio 9:portales:cap-9:arbol', 'floors, songs, chapters and elements: the band\'s table');
+    check(record.map((t) => `${t.floor}:${t.id}:${t.chapter}:${t.element}`).join(' ') === '1:en-una:cap-1:realidad-simulada 2:que-te-esta-pasando:cap-2:sistema 3:el-lado-oscuro-del-mono:cap-3:grito 4:que-carajo:cap-4:manos 5:explotar:cap-6:dolor-heredado 6:pato:cap-5:pato 7:casi-perdido:cap-8:fuego 8:no-me-perdones:cap-7:vacio 9:portales:cap-9:arbol', 'floors, songs, chapters and elements: the band\'s table');
     check(cfg.catalog.length === 0, `catalog links by id: ${cfg.catalog.join(' · ') || 'all resolved'}`);
     let solved = 0;
     for (const t of record) {
@@ -1508,7 +1653,7 @@ const SCENARIOS = {
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' level check(s) failed: ' + fails.join(' | '));
   },
-  // The rooms (floors 1 and 2 so far; ROOM_WALKS names what is particular to each): the cover drawn in the world and the
+  // The rooms (every floor that has one; ROOM_WALKS names what is particular to each): the cover drawn in the world and the
   // challenge in it, with real clicks; solving gives the page and the chapter once; the room survives a reload; replaying gives
   // nothing twice; reset works. `--floors 2` runs one room only.
   async room(p, shot, log) {
@@ -1537,14 +1682,6 @@ const SCENARIOS = {
       const labels = await ev(p, () => [...document.querySelectorAll('.hot')].filter((b) => !b.hidden).map((b) => b.getAttribute('aria-label')));
       check(W.hots.every((re) => labels.some((l) => re.test(l))), `${n}: the hotspots on screen: ${labels.join(' | ')}`);
       await shot(`${pre}-01-arrive`);
-      // a room solved from fresh with the dev hook (the last step's state, then the solve) is saved in a form that survives a reload
-      await ev(p, () => window.__eldom.dev.roomSolve());
-      await p.waitForFunction(() => window.__eldom.state().overlay === 'book', null, { timeout: 12000 }); await p.locator('#bk-close').click(); await wait(1500);
-      check((await rmState()).saved && (await rmState()).saved.done, `${n}: solved from fresh with the dev hook: the saved state says done (${JSON.stringify((await rmState()).saved)})`);
-      await reload(n);
-      s = await rmState();
-      check(s.done && s.stage === 3 && W.solvedRoom(s), `${n}: solved from fresh with the dev hook, a reload keeps the room solved`);
-      await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.clearBook(); window.__eldom.dev.roomReset(); }); await wait(900);
       // the whole puzzle
       const end = await W.play(p, { check, shot, thorough: true });
       check(end.done && end.stage === 3 && W.afterSolve(end), `${n}: the last step solves the floor: "${end.status}"`);
@@ -1585,6 +1722,15 @@ const SCENARIOS = {
       await reload(n);
       s = await rmState();
       check(W.midOK(s), `${n}: ${W.midMsg}`);
+      // a room solved from fresh with the dev hook (the last step's state, then the solve) is saved in a form that survives a reload
+      await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.clearBook(); window.__eldom.dev.roomReset(); }); await reload(n); // (a progress reset leaves the floor's challenge: arrive again)
+      await ev(p, () => window.__eldom.dev.roomSolve());
+      await p.waitForFunction(() => window.__eldom.state().room.done, null, { timeout: 12000 }); await wait(2500);
+      if ((await state(p)).overlay === 'book') { await p.locator('#bk-close').click(); await wait(900); }
+      check((await rmState()).saved && (await rmState()).saved.done, `${n}: solved from fresh with the dev hook: the saved state says done (${JSON.stringify((await rmState()).saved)})`);
+      await reload(n);
+      s = await rmState();
+      check(s.done && s.stage === 3 && W.solvedRoom(s), `${n}: solved from fresh with the dev hook, a reload keeps the room solved`);
     }
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' room check(s) failed: ' + fails.join(' | '));
@@ -2068,6 +2214,15 @@ const SCENARIOS = {
     s = await st();
     const inBoard3 = await ev(p, ([x, z, w]) => { const c = Math.cos(w.ry), sn = Math.sin(w.ry), lx = (x - w.x) * c - (z - w.z) * sn, lz = (x - w.x) * sn + (z - w.z) * c; return Math.abs(lx) < w.hw && Math.abs(lz) < w.hd; }, [s.cam.x, s.cam.z, board3]);
     check(!inBoard3 && Math.hypot(s.cam.x - board3.x, s.cam.z - board3.z) > 1.5, `floor 3: walking straight at the board stops the visitor outside it (${Math.hypot(s.cam.x - board3.x, s.cam.z - board3.z).toFixed(2)} m from its centre)`);
+    // floor 4 is a room too (two hands on a board leaning toward the visitor): its footprint is solid
+    await ev(p, () => window.__eldom.dev.arrive(4)); await waitFloor(p, 4); await wait(2200);
+    const rs4 = await ev(p, () => window.__eldom.state().roam.solids), board4 = rs4.find((x) => x.kind === 'box');
+    check(!!board4, `floor 4: the room's board is solid (${rs4.map((x) => x.kind).join(', ')})`);
+    await ev(p, ([x, z, y]) => window.__eldom.dev.roamTo(x, z, y), [board4.x + Math.sin(board4.ry) * 4.6, board4.z + Math.cos(board4.ry) * 4.6, board4.ry]);
+    await ev(p, () => window.__eldom.dev.roamPush(0, 1, 4600));
+    s = await st();
+    const inBoard4 = await ev(p, ([x, z, w]) => { const c = Math.cos(w.ry), sn = Math.sin(w.ry), lx = (x - w.x) * c - (z - w.z) * sn, lz = (x - w.x) * sn + (z - w.z) * c; return Math.abs(lx) < w.hw && Math.abs(lz) < w.hd; }, [s.cam.x, s.cam.z, board4]);
+    check(!inBoard4 && Math.hypot(s.cam.x - board4.x, s.cam.z - board4.z) > 1.8, `floor 4: walking straight at the board stops the visitor outside it (${Math.hypot(s.cam.x - board4.x, s.cam.z - board4.z).toFixed(2)} m from its centre)`);
     // the edge of the world: a long walk away stops at the rim
     await ev(p, () => window.__eldom.dev.roamTo(0, 6, Math.PI));
     await ev(p, () => window.__eldom.dev.roamPush(0, 1, 9000));

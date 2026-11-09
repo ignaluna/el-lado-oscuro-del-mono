@@ -15,7 +15,7 @@ El álbum y el libro se unen por identificadores estables (`tracks[].chapter`), 
 | 1 | En una | Una realidad simulada por computadora | 1 |
 | 2 | ¿Qué te está pasando? | El sistema | 2 |
 | 3 | El lado oscuro del mono | El grito del mono | 3 |
-| 4 | ¿Qué carajo? | Una paloma | 4 |
+| 4 | ¿Qué carajo? | Las dos manos | 4 |
 | 5 | Explotar | El dolor heredado | 6 |
 | 6 | Pato | Un pato | 5 |
 | 7 | Casi Perdido | El fuego | 8 |
@@ -86,16 +86,19 @@ Este piso también es una **sala que se recorre**: la tapa del disco dibujada en
 - **Recompensa:** Capítulo 3 — El lado oscuro del mono (la página vuela al libro, que se abre en el capítulo). Una vez: volver a jugar la sala (**JUGARLO DE NUEVO**, dos toques) no da nada dos veces.
 - **Se guarda:** la sala recuerda las señales notadas, si la palabra se tragó, cuántos dientes se rompieron, los pedazos juntados, los dientes remendados y si está resuelta en este dispositivo, y sigue así tras recargar. Si lo guardado no tiene sentido (señales fuera de orden o repetidas, pedazos que no existen, «resuelta» sin todos los dientes remendados) se descarta y solo se conserva lo válido, desde el principio.
 
-### Piso 4 · ¿Qué carajo? · capítulo 4 · una paloma
-- **Escena:** una mochila abierta con cinco cosas heredadas. Una paloma vuela sin posarse.
-- **Mecánica (sostener en vez de arrastrar):**
-  - Se elige cada cosa y se sostiene con MANO IZQUIERDA y MANO DERECHA a la vez.
-  - Con una sola mano no alcanza.
-  - Cada cosa sostenida acerca un poco a la paloma.
-  - ARRASTRAR LA MOCHILA la espanta, pero no se pierde lo ya sostenido.
-- **Pista en pantalla:** «Pero pesa distinto cuando lo miro de cerca, cuando lo sostengo con las dos manos en vez de arrastrarlo por la vida.»
-- **Solución:** para cada una de las cinco cosas (las bolsitas de papá, las zapatillas de la vieja y la tía, la espada de Pepe, los ñoquis de Eva, los vinos de Rolando): elegirla, MANO IZQUIERDA, MANO DERECHA.
-- **Recompensa:** Capítulo 4 — ¿Qué carajo?
+### Piso 4 · ¿Qué carajo? · capítulo 4 · las dos manos
+Este piso también es una **sala que se recorre**: la tapa del disco dibujada en el mundo, en tiza blanca sobre negro. Es un tablero en relieve que se inclina hacia quien llega (así todo el dibujo se lee desde donde se está parado): dos manos levantadas, con las palmas al frente, los dedos, las rayas de las palmas, el pelo de las muñecas y el contorno de cada mano, calcados del propio dibujo de la tapa (no a ojo), y las tres gotas que caen: una de cada muñeca y una entre las dos. «11:11» firma la esquina. Mientras la sala está sin resolver, todo se mueve: las manos respiran, el pelo se eriza apenas y de cada gota cae una copia. Se camina como en cualquier mundo (el tablero es sólido). Delante del tablero, sobre el agua, las marcas de algo arrastrado (una mochila) cruzan el piso y se bifurcan cinco veces; cada bifurcación son dos flechas de tiza sobre postes. Sin la versión 3D el piso mantiene la placa de siempre.
+- **Mecánica (seguir la línea de la vida, sostener en vez de arrastrar, quedarse):**
+  1. **El mapa.** En la palma izquierda hay una línea de la vida que baja doblando cinco veces: **izquierda, derecha, derecha, izquierda, derecha**. Al mirarla de cerca, cinco brillos la recorren, cada uno a un lado de la línea, y se anuncia el recorrido (SEGUIR LA LÍNEA lo repite numerado). Se dobla como quien camina hacia las manos.
+  2. **Las cinco bifurcaciones.** En cada una, un toque en la flecha de un lado. El giro correcto deja que las marcas sigan, hasta algo heredado tirado en el camino; el equivocado hace que las marcas den vueltas sobre sí mismas («te arrastrás en círculos») y no cambia nada. Se sigue una bifurcación por vez: la siguiente aparece cuando lo anterior ya está sostenido.
+  3. **Las cinco cosas**, en el orden del capítulo: las bolsitas de residuo que vendía papá, las zapatillas que compartían la vieja y la tía, la espada de Pepe, los ñoquis de Eva y los vinos de Rolando. Se toma cada una del agua.
+  4. **Las dos manos.** En las manos, la cosa se sostiene con **MANO IZQUIERDA** y **MANO DERECHA**: las dos hacen falta (con una sola «se sigue arrastrando»; ARRASTRARLA no sirve de nada). Cada cosa sostenida enciende un par de yemas, acerca un poco las manos y hace caer las gotas más despacio. Son cinco.
+  5. **Quedarse.** Con las cinco sostenidas, en las gotas, **QUEDARTE** empieza una cuenta lenta de 6 segundos (un toque; otro toque, o cualquier otro botón, la interrumpe): «Y sin embargo, los pájaros cantan. El agua del mate se enfría.» Al terminar se abre el capítulo.
+- **Si se equivoca:** un giro equivocado, una sola mano o arrastrar no cambian nada de lo ya hecho: solo lo avisan. No hay castigo.
+- **Pista en pantalla:** «Pero pesa distinto cuando lo miro de cerca, cuando lo sostengo con las dos manos en vez de arrastrarlo por la vida.» (la sala dice al llegar: «Dos manos levantadas y tres gotas. En el piso, marcas de algo arrastrado.»). **PISTA** tiene tres niveles por paso (el mapa, el camino y las manos, el quedarse); el último da la solución de ese paso.
+- **Solución:** mirar la palma izquierda; seguir las marcas girando izquierda, derecha, derecha, izquierda, derecha; en cada tramo tomar la cosa del camino y, en las dos manos, tocar MANO IZQUIERDA y MANO DERECHA (cinco veces); en las gotas, QUEDARTE y esperar la cuenta.
+- **Recompensa:** Capítulo 4 — ¿Qué carajo? (la página vuela al libro, que se abre en el capítulo). Una vez: volver a jugar la sala (**JUGARLO DE NUEVO**, dos toques) no da nada dos veces.
+- **Se guarda:** la sala recuerda si se miró la línea, cuántas bifurcaciones se tomaron, cuántas cosas se tomaron y se sostienen y si está resuelta en este dispositivo, y sigue así tras recargar. Si lo guardado no tiene sentido (más cosas sostenidas que las cinco, una bifurcación sin la cosa anterior, «resuelta» sin las cinco sostenidas) se descarta y solo se conserva lo válido.
 
 ### Piso 5 · Explotar · capítulo 6 · el dolor heredado
 - **Escena:** la carta a la abuela Eva, envuelta en hilos oscuros, junto a un manómetro con la aguja cerca del rojo.
@@ -182,8 +185,8 @@ Este piso también es una **sala que se recorre**: la tapa del disco dibujada en
 ## Dónde agregar las tapas y el audio
 
 **Tapas.**
-1. Guardar cada ilustración en `web/assets/portadas/`, por ejemplo `web/assets/portadas/paloma.jpg`.
-2. En `web/src/00-base.html`, en `COVER_ELEMENTS`, completar `art: "portadas/paloma.jpg"` en el elemento que corresponde.
+1. Guardar cada ilustración en `web/assets/portadas/`, por ejemplo `web/assets/portadas/manos.jpg`.
+2. En `web/src/00-base.html`, en `COVER_ELEMENTS`, completar `art: "portadas/manos.jpg"` en el elemento que corresponde.
 
 El build la publica junto a la página, y frena si falta el archivo. La placa del desafío la muestra arriba de la escena. Este es el único lugar que une canción, elemento e ilustración.
 
