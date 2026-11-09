@@ -46,28 +46,11 @@ const ELODM_KINDS = {
     return () => {};
   },
 
-  // 3 — El lado oscuro del mono: a corner of a bar (a scenic interpretation of Keller) — counter, lamp, a broken glass
-  bar(F, ctx) {
-    const { THREE } = ctx, { pos: o, s } = elementSpot(F, ctx);
-    const wood = F.lineMat([0.86, 0.62, 0.42], 0.7);
-    shape(F, o, s, [[-0.55, -0.22], [0.55, -0.22]], wood, false);
-    shape(F, o, s, [[-0.55, -0.3], [0.55, -0.3]], wood, false);
-    shape(F, o, s, [[-0.45, -0.3], [-0.45, -0.55]], wood, false); shape(F, o, s, [[0.45, -0.3], [0.45, -0.55]], wood, false);
-    shape(F, o, s, [[0.05, 0.55], [0.05, 0.3], [-0.05, 0.3], [0.05, 0.3], [0.15, 0.22], [-0.05, 0.22], [0.05, 0.3]], F.lineMat([0.95, 0.85, 0.65], 0.7), false);
-    const lamp = F.mesh(new THREE.CircleGeometry(s * 0.09, 24), F.basic([1, 0.78, 0.5], 0.4, { side: THREE.DoubleSide }), o.x + 0.05 * s, o.y + 0.2 * s, o.z);
-    const glass = shape(F, o, s, [[-0.08, -0.22], [-0.1, 0.02], [0.1, 0.02], [0.08, -0.22]], F.lineMat([0.92, 0.9, 0.86], 0.85));
-    const shards = Array.from({ length: 6 }, (_, i) => {
-      const a = (i / 6) * TAU, rr = 0.2 + (i % 3) * 0.06;
-      const m = shape(F, { x: o.x + Math.cos(a) * rr * s, y: o.y - 0.24 * s, z: o.z + Math.sin(a) * rr * s * 0.6 }, s, [[0, 0], [0.04, 0.012], [0.015, 0.035]], F.lineMat([0.92, 0.9, 0.86], 0.8));
-      return { m, a, rr };
-    });
-    F.light(F.V3(o.x, o.y + s * 0.2, o.z - 0.8), 0.9, s * 5);
-    return (dt, t) => {
-      const tr = world.trial, k = Math.max(tr.solved, tr.progress * 0.5);
-      lamp.material.opacity = 0.25 + 0.2 * tr.solved + 0.05 * Math.sin(t * 9) * (1 - tr.solved);
-      glass.material.opacity = 0.3 + 0.6 * tr.solved;
-      for (const sh of shards) { const r = sh.rr * (1 - tr.solved); sh.m.position.set((Math.cos(sh.a) * r - Math.cos(sh.a) * sh.rr) * s, 0, (Math.sin(sh.a) * r - Math.sin(sh.a) * sh.rr) * s * 0.6); sh.m.material.opacity = 0.8 * (1 - k * 0.6); }
-    };
+  // 3 — El lado oscuro del mono: the cover, walkable, a screaming mouth with a tag coming out of it. Its art is a room
+  // (49-r3d-room-3-el-lado-oscuro-del-mono.js) built beside the floor; the floor itself only keeps a faint light.
+  bar(F) {
+    F.light(F.V3(F.A.x, 2.4, F.A.z - 1), 0.35, 8);
+    return () => {};
   },
 
   // 4 — ¿Qué carajo?: a dove that does not land while everything rushes; a backpack full of other people's things

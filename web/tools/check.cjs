@@ -310,7 +310,7 @@ async function playSistema(p, { check, shot, thorough = false }) {
   await tapHot('El hueco'); s = await until((x) => x.view === 'hole' && x.panel); await wait(900);
   check(s.view === 'hole' && /LLENO: 0 %/.test(s.title) && /no se mueve/.test(s.status) && s.acts.some((a) => a.act === 'mas'), `the hole: "${s.title}" — ${s.status}`);
   if (thorough) await shot('room2-02-hole');
-  await act('mas').click(); await wait(500); s = await rmState();
+  await act('mas').click(); s = await until((x) => x.visual.v.surge > 0.05, 5000); // (a poll: the surge is an animated value)
   check(/La aguja tiembla y vuelve a cero/.test(s.status) && s.visual.v.surge > 0.05, `pouring more: "${s.status}" (the flow surges, the gauge stays at zero)`);
   s = await until((x) => !x.busy && x.visual.v.surge < 0.02, 8000);
   check(s.stage === 0 && s.cuts === '', 'pouring more changes nothing: still nothing cut');
@@ -373,6 +373,143 @@ async function playSistema(p, { check, shot, thorough = false }) {
 }
 
 /**
+ * Plays floor 3's room (the scream) with real clicks: the three signs of the body (heat, tension, the word), the slow swallow, the
+ * shards on the water (turning and walking to find them), and a shard into each crossed-out tooth. `thorough` adds saved states that
+ * must be rejected, the wrong orders, the hint ladder of every stage, an interrupted swallow, a break (one more ✗ and one more shard),
+ * a reload in the middle. Returns the room's state at the end.
+ */
+async function playGrito(p, { check, shot, thorough = false }) {
+  const FLOOR = 3, KEY = 'eldom.room.el-lado-oscuro-del-mono.v1';
+  const rmState = async () => (await state(p)).room;
+  const until = async (pred, ms = 15000) => { const t0 = Date.now(); let s; for (;;) { s = await rmState(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(150); } };
+  const act = (name) => p.locator(`#rm-acts [data-act="${name}"]`).first();
+  const hot = (label) => p.locator(`.hot:not([hidden])[aria-label^="${label}"]`).first();
+  /** Turns (to the left, in steps) until the hotspot is on screen: what a visitor does to look around. */
+  const seeHot = async (label) => { for (let i = 0; i < 26 && !(await hot(label).isVisible()); i++) { await p.keyboard.down('q'); await wait(170); await p.keyboard.up('q'); await wait(260); } };
+  const tapHot = async (label) => { await seeHot(label); await hot(label).click({ timeout: 8000 }); };
+  const toWide = async () => { while ((await rmState()).view !== 'wide') { await p.keyboard.press('Escape'); await wait(1300); } };
+  const reload = async () => {
+    await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
+    await ev(p, () => window.__eldom.dev.released()); await ev(p, (f) => window.__eldom.dev.arrive(f), FLOOR); await waitFloor(p, FLOOR); await wait(2600);
+  };
+  const SIGN = { calor: ['Salpicaduras', 'tinta'], tension: ['El pelo', 'pelo'], palabra: ['Una firma', 'firma'] };
+  /** Looks at a sign and presses its button. */
+  const sense = async (id) => { await tapHot(SIGN[id][0]); await until((x) => x.view === SIGN[id][1] && x.panel); await wait(900); await act('sentir-' + id).click(); await wait(300); return rmState(); };
+  /** The three tiers of a hint: each one different, the last gives the solution. Returns the first tier. */
+  const hintLadder = async (stage, rx, msg) => {
+    await p.locator('#rm-hint').click(); await wait(200); let s = await rmState(); const h1 = s.status;
+    check(h1.length > 20 && s.more && s.stage === stage, `${msg}: hint 1 "${h1}"`);
+    await p.locator('#rm-more').click(); await wait(200); const h2 = (await rmState()).status;
+    await p.locator('#rm-more').click(); await wait(200); s = await rmState();
+    check(h2 !== h1 && s.status !== h2 && rx.test(s.status) && !s.more, `${msg}: hint 3 gives the whole answer ("${s.status}") and there is no fourth`);
+    if (await p.locator('#rm-close').isVisible()) { await p.locator('#rm-close').click(); await wait(300); }
+    return h1;
+  };
+  let s = await rmState();
+
+  if (thorough) {
+    // a saved state that makes no sense is rejected and a valid prefix is kept (each case starts from the room's own fresh state)
+    const plant = async (raw) => { await ev(p, ([k, r]) => localStorage.setItem(k, typeof r === 'string' ? r : JSON.stringify(r)), [KEY, raw]); await reload(); return rmState(); };
+    s = await plant({ v: 1, stage: 3, noticed: ['palabra', 'calor', 'calor'], swallowed: true, breaks: 99, taken: [0, 0, 77], fixed: 9, done: true });
+    check(!s.done && s.stage === 0 && s.noticed === '' && !s.swallowed && s.taken === '' && s.fixed === 0 && s.breaks === 0, `corrupted state (signs out of order, 99 breaks, repeated shards): rejected, a fresh room (${JSON.stringify(s.saved)})`);
+    s = await plant({ v: 1, noticed: ['calor', 'tension', 'tension', 'palabra'], swallowed: true, breaks: 1.5, taken: [0], fixed: 1, done: true });
+    check(!s.done && s.noticed === 'calor,tension' && !s.swallowed && s.fixed === 0, `a repeated sign stops the saved order: only the valid prefix is kept ("${s.noticed}")`);
+    s = await plant({ v: 1, noticed: ['calor', 'tension', 'palabra'], swallowed: true, breaks: 2, taken: [0, 1, 1, 9, 2], fixed: 4, done: true });
+    check(!s.done && s.swallowed && s.need === 5 && s.taken === '0,1,2' && s.fixed === 0 && s.stage === 2, `saved shards: repeats and out-of-range ones are dropped, more teeth mended than shards taken is refused, "done" without every tooth mended is refused (taken ${s.taken}, fixed ${s.fixed})`);
+    s = await plant('esto no es json{');
+    check(!s.done && s.stage === 0 && s.noticed === '', 'an unreadable saved state: a fresh room');
+    await ev(p, () => window.__eldom.dev.roomReset()); await wait(600);
+    s = await rmState();
+  }
+  check(s.here && s.view === 'wide' && s.stage === 0 && s.noticed === '' && s.need === 3, `the room: standing in it, stage ${s.stage}, ${s.need} teeth crossed out`);
+  await ev(p, () => window.__eldom.ui.roomTap('rm-pieza-0')); await wait(300); s = await rmState();
+  check(s.taken === '' && s.view === 'wide', 'a shard cannot be taken before the word is swallowed');
+
+  // 1. the body warns: heat, tension, the word, in the clue's order (anything else and what was noticed is lost)
+  if (thorough) {
+    await hintLadder(0, /1, calor.*2, tensión.*3, la palabra/, 'stage 0');
+    s = await sense('tension');
+    check(s.tries === 1 && s.noticed === '' && /No siempre llego/.test(s.status), `tension before heat: "${s.status}"`);
+    await toWide(); s = await sense('calor');
+    check(s.noticed === 'calor' && s.visual.v.sign[0] === 1 && /Calor\./.test(s.status), `heat first: "${s.status}"`);
+    check(s.acts.length === 1 && await act('sentir-calor').isDisabled(), 'a sign already noticed cannot be noticed twice (its button says so)');
+    await toWide(); s = await sense('palabra');
+    check(s.tries === 2 && s.noticed === '' && s.visual.v.sign.every((x) => x === 0) && /No siempre llego/.test(s.status), 'the word before tension: everything noticed so far is lost');
+    await shot('room3-02-signs');
+  }
+  await toWide(); s = await sense('calor');
+  check(s.noticed === 'calor' && s.visual.v.sign[0] === 1, `1. heat: "${s.status}"`);
+  await toWide(); s = await sense('tension');
+  check(s.noticed === 'calor,tension' && s.visual.v.sign[1] === 1, `2. tension: "${s.status}"`);
+  await toWide(); s = await sense('palabra');
+  check(s.noticed === 'calor,tension,palabra' && s.stage === 1 && s.visual.v.tag === 0.6 && s.visual.v.free === 0 && /quieta/.test(s.status), `3. the word pushing: the tag freezes half out ("${s.status}")`);
+  check(s.acts.some((a) => a.act === 'tragar') && s.acts.some((a) => a.act === 'tocar'), 'the tag offers swallowing the word or touching it');
+  if (thorough) await shot('room3-03-frozen');
+
+  // 2. the word: a slow swallow (one tap starts it, another interrupts it), or touching the tag
+  if (thorough) {
+    await p.locator('#rm-hint').click(); await wait(200); s = await rmState();
+    check(/La firma quedó a medias/.test(s.status) && s.stage === 1 && s.more, `the hint counter starts again when the stage advances: "${s.status}"`);
+    await p.locator('#rm-more').click(); await wait(200); await p.locator('#rm-more').click(); await wait(200); s = await rmState();
+    check(/TRAGAR LA PALABRA/.test(s.status) && !s.more, `stage 1: hint 3 gives the whole answer ("${s.status}")`);
+    await act('tragar').click(); await wait(900); s = await rmState();
+    check(s.acts.find((a) => a.act === 'tragar').pressed === 'true' && !s.swallowed, 'one tap starts the slow swallow (no holding the finger down)');
+    await act('tragar').click(); await wait(500); s = await rmState();
+    check(!s.swallowed && s.acts.find((a) => a.act === 'tragar').pressed === 'false' && /Soltaste/.test(s.status), `a second tap interrupts it: "${s.status}"`);
+    await act('tragar').click(); await wait(900); await act('tocar').click(); await wait(500); s = await rmState();
+    check(s.acts.find((a) => a.act === 'tragar').pressed === 'false' && !s.swallowed, 'any other tap interrupts the swallow too');
+    check(s.breaks === 1 && s.need === 4 && s.tries === 3 && s.visual.v.x.filter((x) => x === 1).length === 4 && /Callate/.test(s.status), `touching the tag: "${s.status}" (one more ✗: ${s.need} now, one more shard)`);
+    await until((x) => !x.busy, 8000); await shot('room3-04-break');
+  }
+  await act('tragar').click();
+  await until((x) => x.swallowed, 12000); s = await until((x) => !x.busy, 8000);
+  check(s.swallowed && s.stage === 2 && s.visual.v.tag === 0 && s.visual.v.ready === 1 && /Vuelve adentro/.test(s.status), `the word goes back in: "${s.status}"`);
+  await toWide();
+
+  // 3. the teeth with an ✗ and the shards on the water
+  await tapHot('La boca'); s = await until((x) => x.view === 'dientes' && x.panel); await wait(900);
+  const need = s.need;
+  check(s.acts.some((a) => a.act === 'encastrar') && /dientes con una ✗/i.test(s.status) && s.visual.v.x.filter((x) => x === 1).length === need, `the mouth: ${need} teeth with an ✗ ("${s.status}")`);
+  if (thorough) { await shot('room3-05-teeth'); await hintLadder(2, /ENCASTRAR UN PEDAZO/, 'stage 2'); }
+  await act('encastrar').click(); await wait(300); s = await rmState();
+  check(s.fixed === 0 && /No llevás ningún pedazo/.test(s.status), `no shard in hand: "${s.status}"`);
+  await toWide();
+  if (thorough) { // the visitor walks (the shards are far from where they arrive)
+    const z0 = (await state(p)).cam.z; await p.keyboard.down('w'); await wait(900); await p.keyboard.up('w'); await wait(400);
+    check(Math.abs((await state(p)).cam.z - z0) > 0.5, 'walking forward moves the visitor');
+  }
+  for (let i = 0; i < need; i++) {
+    await seeHot('Un pedazo');
+    const before = (await rmState()).taken;
+    await hot('Un pedazo').click({ timeout: 8000 }); await wait(400); s = await rmState();
+    check(s.taken.split(',').filter(Boolean).length === i + 1 && s.taken !== before, `shard ${i + 1} of ${need} taken from the water (${s.taken})`);
+    if (i === 0) {
+      const cap = await p.locator('#cap-hint').innerText();
+      check(/pedazo de diente/i.test(cap) && s.view === 'wide', `taking one says so on screen: "${cap}"`);
+      if (thorough) { // a reload in the middle keeps what was taken
+        await reload(); s = await rmState();
+        check(s.swallowed && s.taken.split(',').filter(Boolean).length === 1 && s.stage === 2 && s.visual.v.shard.filter((x) => x === 1).length === need - 1, `a reload keeps the shard taken (${s.taken}) and the rest where they float`);
+      }
+    }
+  }
+  check(!(await hot('Un pedazo').isVisible()), 'every shard is taken: none is left to touch');
+  if (thorough) await shot('room3-06-gathered');
+
+  // 4. a shard into each crossed-out tooth: gold, the crack in sight; the last one mends the mouth
+  await tapHot('La boca'); s = await until((x) => x.view === 'dientes' && x.panel); await wait(900);
+  for (let i = 0; i < need; i++) {
+    await act('encastrar').click();
+    if (i < need - 1) {
+      s = await until((x) => x.fixed === i + 1 && !x.busy, 8000);
+      check(s.fixed === i + 1 && s.visual.v.fix[i] === 1 && /dorado/.test(s.status) && !s.done, `tooth ${i + 1} of ${need} mended, now gold: "${s.status}"`);
+      if (thorough && i === 0) await shot('room3-07-first-gold');
+    }
+  }
+  await p.waitForFunction(() => window.__eldom.state().room.done, null, { timeout: 15000 });
+  return rmState();
+}
+
+/**
  * What is particular to each room's walkthrough (the `room` and `trials` scenarios read it; a floor with a room in ROOMS needs an entry):
  *   floor, chapter, minSegments (a sanity floor for the chalk lines), play(p, {check, shot, thorough}) → the room's state at the end,
  *   built(set) (what the set reports about itself), hots (labels on screen on arrival), afterSolve(state), solvedRoom(state) (after a
@@ -383,6 +520,7 @@ const ROOM_WALKS = {
   'en-una': {
     floor: 1, chapter: 'cap-1', minSegments: 1000, play: playEnUna,
     built: (set) => set.codeDots === 83,
+    tierBuilt: (set) => set.codeDots === 83,
     hots: [/^La pantalla de la máquina/, /^Una taza de café/],
     afterSolve: (s) => s.visual.shut > 0.98,
     solvedRoom: (s) => s.visual.shut > 0.98 && s.visual.mono > 0.98,
@@ -398,6 +536,7 @@ const ROOM_WALKS = {
   'que-te-esta-pasando': {
     floor: 2, chapter: 'cap-2', minSegments: 1500, play: playSistema,
     built: (set) => set.wire === 'sustancias,amor,plata,exito' && set.windows > 150,
+    tierBuilt: (set) => !!set.wire,
     hots: [/^El hueco/, /^Un laberinto/, /^Un edificio/, /^Un cohete/, /^Una nube/, /^Cápsulas/],
     afterSolve: (s) => s.visual.v.quiet > 0.98 && s.visual.v.solved === 1,
     solvedRoom: (s) => s.visual.v.quiet > 0.98 && s.visual.v.solved === 1 && s.visual.v.cut.every((x) => x === 1),
@@ -409,6 +548,22 @@ const ROOM_WALKS = {
       await p.locator('#rm-acts [data-act="cortar-sustancias"]').click(); await wait(2200);
     },
     midOK: (s) => s.cuts === 'sustancias' && s.visual.v.cut[3] === 1 && s.visual.v.quiet === 0, midMsg: 'a reload keeps what was cut (the chimney stays out, the rest runs)',
+  },
+  'el-lado-oscuro-del-mono': {
+    floor: 3, chapter: 'cap-3', minSegments: 1200, play: playGrito,
+    built: (set) => set.teeth === 19 && set.breakable === 8 && set.shards === 8,
+    tierBuilt: (set) => set.shards === 8,
+    hots: [/^Salpicaduras/, /^El pelo/, /^Una firma/, /^La boca/],
+    afterSolve: (s) => s.visual.v.calm === 1 && s.visual.v.word === 1 && s.fixed === s.need,
+    solvedRoom: (s) => s.visual.v.calm === 1 && s.visual.v.word === 1 && s.visual.v.fix.filter((x) => x === 1).length === s.need && s.visual.v.shard.every((x) => x === 0),
+    solvedHot: /remendados/,
+    replayHot: 'La boca', replayView: 'dientes',
+    freshRoom: (s) => s.visual.v.calm === 0 && s.visual.v.tag === 1 && s.visual.v.fix.every((x) => x === 0) && s.noticed === '',
+    async midWalk(p) {
+      await ev(p, () => window.__eldom.ui.roomTap('rm-salpicadura')); await wait(1500);
+      await p.locator('#rm-acts [data-act="sentir-calor"]').click(); await wait(500);
+    },
+    midOK: (s) => s.noticed === 'calor' && s.visual.v.sign[0] === 1 && s.visual.v.tag === 1, midMsg: 'a reload keeps the sign that was noticed (the heat) and nothing else',
   },
 };
 
@@ -702,7 +857,7 @@ const SCENARIOS = {
     await ev(p, () => window.__eldom.dev.released());
     await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin'); await ev(p, () => window.__eldom.dev.platform('youtube')); await wait(1200);
     const record = cfg.tracks.filter((t) => t.album === 'elodm');
-    check(record.map((t) => `${t.floor}:${t.id}:${t.chapter}:${t.element}`).join(' ') === '1:en-una:cap-1:realidad-simulada 2:que-te-esta-pasando:cap-2:sistema 3:el-lado-oscuro-del-mono:cap-3:bar-keller 4:que-carajo:cap-4:paloma 5:explotar:cap-6:dolor-heredado 6:pato:cap-5:pato 7:casi-perdido:cap-8:fuego 8:no-me-perdones:cap-7:vacio 9:portales:cap-9:arbol', 'floors, songs, chapters and elements: the band\'s table');
+    check(record.map((t) => `${t.floor}:${t.id}:${t.chapter}:${t.element}`).join(' ') === '1:en-una:cap-1:realidad-simulada 2:que-te-esta-pasando:cap-2:sistema 3:el-lado-oscuro-del-mono:cap-3:grito 4:que-carajo:cap-4:paloma 5:explotar:cap-6:dolor-heredado 6:pato:cap-5:pato 7:casi-perdido:cap-8:fuego 8:no-me-perdones:cap-7:vacio 9:portales:cap-9:arbol', 'floors, songs, chapters and elements: the band\'s table');
     check(cfg.catalog.length === 0, `catalog links by id: ${cfg.catalog.join(' · ') || 'all resolved'}`);
     let solved = 0;
     for (const t of record) {
@@ -1883,6 +2038,15 @@ const SCENARIOS = {
     s = await st();
     const inBoard = await ev(p, ([x, z, w]) => { const c = Math.cos(w.ry), sn = Math.sin(w.ry), lx = (x - w.x) * c - (z - w.z) * sn, lz = (x - w.x) * sn + (z - w.z) * c; return Math.abs(lx) < w.hw && Math.abs(lz) < w.hd; }, [s.cam.x, s.cam.z, board]);
     check(!inBoard && Math.hypot(s.cam.x - board.x, s.cam.z - board.z) > 1.8, `floor 2: walking straight at the board stops the visitor outside it (${Math.hypot(s.cam.x - board.x, s.cam.z - board.z).toFixed(2)} m from its centre)`);
+    // floor 3 is a room too (the screaming mouth, a board leaning toward the visitor): its footprint is solid
+    await ev(p, () => window.__eldom.dev.arrive(3)); await waitFloor(p, 3); await wait(2200);
+    const rs3 = await ev(p, () => window.__eldom.state().roam.solids), board3 = rs3.find((x) => x.kind === 'box');
+    check(!!board3, `floor 3: the room's board is solid (${rs3.map((x) => x.kind).join(', ')})`);
+    await ev(p, ([x, z, y]) => window.__eldom.dev.roamTo(x, z, y), [board3.x + Math.sin(board3.ry) * 4.2, board3.z + Math.cos(board3.ry) * 4.2, board3.ry]);
+    await ev(p, () => window.__eldom.dev.roamPush(0, 1, 4200));
+    s = await st();
+    const inBoard3 = await ev(p, ([x, z, w]) => { const c = Math.cos(w.ry), sn = Math.sin(w.ry), lx = (x - w.x) * c - (z - w.z) * sn, lz = (x - w.x) * sn + (z - w.z) * c; return Math.abs(lx) < w.hw && Math.abs(lz) < w.hd; }, [s.cam.x, s.cam.z, board3]);
+    check(!inBoard3 && Math.hypot(s.cam.x - board3.x, s.cam.z - board3.z) > 1.5, `floor 3: walking straight at the board stops the visitor outside it (${Math.hypot(s.cam.x - board3.x, s.cam.z - board3.z).toFixed(2)} m from its centre)`);
     // the edge of the world: a long walk away stops at the rim
     await ev(p, () => window.__eldom.dev.roamTo(0, 6, Math.PI));
     await ev(p, () => window.__eldom.dev.roamPush(0, 1, 9000));
@@ -1948,14 +2112,15 @@ const SCENARIOS = {
       const t = (await q.evaluate(() => window.__eldom.state())).tier;
       check(t && (t.tier === 'lite') === wantLite, `${name}: ${wantLite ? 'lite' : 'full'} tier (${t && t.tier})`);
       check(wantLite ? t.samples === 0 && t.particles === 0.4 && t.mirror === '1/4' && t.dpr <= 1 : t.samples === 4 && t.particles === 1 && t.mirror === '1/2', `${name}: ${wantLite ? 'no MSAA, 40% particles, mirror at 1/4, dpr ≤ 1' : 'MSAA 4, all particles, mirror at 1/2'} (${JSON.stringify({ s: t.samples, p: t.particles, m: t.mirror, dpr: t.dpr })})`);
-      if (name === 'plenty of everything' || name === '4 cores') { // the rooms (floors 1 and 2): the lite tier draws fewer lines, glitter and particles
-        for (const n of [1, 2]) {
+      if (name === 'plenty of everything' || name === '4 cores') { // the rooms (every floor with one): the lite tier draws fewer lines, glitter and particles
+        for (const W of Object.values(ROOM_WALKS)) {
+          const n = W.floor;
           await q.evaluate((f) => { window.__eldom.dev.released(); window.__eldom.dev.arrive(f); }, n);
           await q.waitForFunction((f) => window.__eldom.state().phase === 'floor' && window.__eldom.state().floor === f, n, { timeout: 40000 }); await wait(1800);
           const rset = (await q.evaluate(() => window.__eldom.state())).room.set;
-          check(rset && rset.lite === wantLite && (n === 1 ? rset.codeDots === 83 : !!rset.wire), `${name}: floor ${n}'s room is built for the ${wantLite ? 'lite' : 'full'} tier (${rset && rset.segments} segments)`);
+          check(rset && rset.lite === wantLite && W.tierBuilt(rset), `${name}: floor ${n}'s room is built for the ${wantLite ? 'lite' : 'full'} tier (${rset && rset.segments} segments)`);
           roomSets[name + n] = rset;
-          await shot((n === 1 ? 'room-' : 'room2-') + (wantLite ? 'lite' : 'full'));
+          await shot((n === 1 ? 'room-' : `room${n}-`) + (wantLite ? 'lite' : 'full'));
         }
       }
       if (name === 'plenty of everything') fullRun = await measure(q);
@@ -1980,7 +2145,7 @@ const SCENARIOS = {
       }
       await q.close();
     }
-    for (const n of [1, 2]) if (roomSets['plenty of everything' + n] && roomSets['4 cores' + n]) check(roomSets['4 cores' + n].segments < roomSets['plenty of everything' + n].segments, `floor ${n}'s room draws fewer lines on the lite tier (${roomSets['4 cores' + n].segments} < ${roomSets['plenty of everything' + n].segments})`);
+    for (const { floor: n } of Object.values(ROOM_WALKS)) if (roomSets['plenty of everything' + n] && roomSets['4 cores' + n]) check(roomSets['4 cores' + n].segments < roomSets['plenty of everything' + n].segments, `floor ${n}'s room draws fewer lines on the lite tier (${roomSets['4 cores' + n].segments} < ${roomSets['plenty of everything' + n].segments})`);
     if (coarse) { // the phone profile itself: lite although every other signal is generous
       const q = await open({ cores: 8, memory: 8, saveData: false });
       const t = (await q.evaluate(() => window.__eldom.state())).tier;

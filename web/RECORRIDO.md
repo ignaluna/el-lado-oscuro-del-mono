@@ -14,7 +14,7 @@ El álbum y el libro se unen por identificadores estables (`tracks[].chapter`), 
 |---|---|---|---|
 | 1 | En una | Una realidad simulada por computadora | 1 |
 | 2 | ¿Qué te está pasando? | El sistema | 2 |
-| 3 | El lado oscuro del mono | El bar Keller (interpretación escénica) | 3 |
+| 3 | El lado oscuro del mono | El grito del mono | 3 |
 | 4 | ¿Qué carajo? | Una paloma | 4 |
 | 5 | Explotar | El dolor heredado | 6 |
 | 6 | Pato | Un pato | 5 |
@@ -39,7 +39,7 @@ El álbum y el libro se unen por identificadores estables (`tracks[].chapter`), 
 
 **Accesibilidad.** Todo se hace con botones, también con teclado y lector de pantalla. Ningún desafío necesita sonido, pasar el mouse por encima, arrastrar con precisión ni moverse rápido.
 
-**"Quedarse" (pisos 1 y 7).** (En el piso 1 es el último paso de la sala; en el piso 2 son las tres respiraciones del final, sin cuenta.) Con un toque empieza una cuenta lenta, de 4 a 5 segundos, que se ve en el mismo botón. No hace falta mantener el dedo apretado. Otro toque, o cualquier otro botón, la interrumpe.
+**"Quedarse" (pisos 1, 3 y 7).** (En el piso 1 es el último paso de la sala; en el piso 2 son las tres respiraciones del final, sin cuenta; en el piso 3 es TRAGAR LA PALABRA.) Con un toque empieza una cuenta lenta, de 4 a 5 segundos, que se ve en el mismo botón. No hace falta mantener el dedo apretado. Otro toque, o cualquier otro botón, la interrumpe.
 
 ## Los nueve desafíos
 
@@ -73,16 +73,18 @@ Este piso también es una **sala que se recorre**: la tapa del disco dibujada en
 - **Recompensa:** Capítulo 2 — ¿Qué te está pasando? (la página vuela al libro, que se abre en el capítulo). Una vez: volver a jugar la sala (**JUGARLO DE NUEVO**, dos toques) no da nada dos veces.
 - **Se guarda:** la sala recuerda lo que se cortó, las respiraciones y si está resuelta en este dispositivo, y sigue así tras recargar.
 
-### Piso 3 · El lado oscuro del mono · capítulo 3 · el bar Keller (interpretación escénica)
-- **Escena:** una esquina de bar con barra, lámpara y vaso. Ella llora en un rincón. Tres marcas muestran el cuerpo. Sobre la mesa hay pedazos de vidrio de antes.
-- **Mecánica (reconocer el orden y reparar):**
-  - Nombrar los avisos del cuerpo en orden y decir «Callate.» antes de que la palabra salga.
-  - Si el orden está mal, sale «Dejá de llorar.», se rompe otro vaso y la escena se repite.
-  - Después se juntan los pedazos uno por uno; debajo aparece «perdón.».
-- **Pista en pantalla:** «A veces el cuerpo avisa. / Calor. Tensión. La palabra empujando. / “Callate.”»
-- **Solución:** CALOR → TENSIÓN → LA PALABRA EMPUJANDO → «CALLATE.»; luego JUNTAR UN PEDAZO hasta juntarlos todos (3, más uno por cada vaso roto).
-- **Recompensa:** Capítulo 3 — El lado oscuro del mono.
-- **Nota:** el bar es una interpretación escénica, no una reproducción del Keller.
+### Piso 3 · El lado oscuro del mono · capítulo 3 · el grito del mono
+Este piso también es una **sala que se recorre**: la tapa del disco dibujada en el mundo, en tiza blanca sobre negro. Es un tablero en relieve que se inclina hacia quien llega (así todo el dibujo se lee desde donde se está parado, con los dientes saliendo del papel): una boca de mono enorme, a los gritos, enmarcada por pelo de puntas y dos ojos furiosos; dientes de oro y de plata (el brillo dorado y plateado de la tapa), varios de abajo tachados con una ✗; una firma de graffiti (un tubo pálido y un garabato de lazos y letras) que sale de la boca; dos estrellas en forma de asterisco, tinta salpicada arriba a la izquierda, una gota que cae del labio y «11:11» en la esquina. Mientras la boca grita, todo se mueve: tiembla la boca, se eriza el pelo, la firma crece y se encoge, la tinta salpicada se calienta, brillan los dientes de oro y cae la gota. Se camina como en cualquier mundo (el tablero es sólido). Sobre el agua, alrededor, flotan pedazos de diente. Sin la versión 3D el piso mantiene la placa de siempre.
+- **Mecánica (el cuerpo avisa, tragar la palabra, reparar lo roto):**
+  1. **El cuerpo avisa.** Tres señales están escondidas en el dibujo y hay que notarlas en el orden en que las nombra el capítulo: **calor** (las salpicaduras de tinta: ACERCAR LA MANO), **tensión** (el pelo erizado: PASAR LA MANO) y **la palabra empujando** (la firma que sale de la boca: ESCUCHAR LA FIRMA). Con las tres, la firma se frena a medias, medio afuera de la boca.
+  2. **Tragar la palabra.** En la firma, **TRAGAR LA PALABRA** empieza una cuenta lenta de 5 segundos (un toque; otro toque, o cualquier otro botón, la interrumpe) y la firma vuelve a la boca. En cambio **TOCAR LA FIRMA** deja salir «Callate.»: se rompe otro diente (otra ✗) y cae otro pedazo al agua.
+  3. **Juntar los pedazos.** Flotan sobre el agua, a los costados y lejos del lugar de llegada, tantos pedazos de diente como dientes con ✗ (3, más uno por cada vez que se dejó salir la palabra). Hay que girar, caminar y mirar para encontrarlos, y tocar cada uno. En la boca, **ENCASTRAR UN PEDAZO** repara un diente: queda dorado, con la raja a la vista (como el kintsugi: el perdón no borra la rotura, la repara a la vista).
+  4. **«perdón.»** Con el último diente remendado la boca se calma y aparece la palabra «perdón.»: se abre el capítulo.
+- **Si se equivoca:** una señal fuera de orden borra lo que se había notado («No siempre llego.»). Encastrar sin pedazos encima avisa dónde están. Nada más: no hay castigo.
+- **Pista en pantalla:** «A veces el cuerpo avisa. / Calor. Tensión. La palabra empujando. / “Callate.”» (la sala dice al llegar: «Una boca enorme grita. A veces el cuerpo avisa.»). **PISTA** tiene tres niveles por paso (las señales, la firma, los pedazos y los dientes); el último da la solución de ese paso.
+- **Solución:** notar el calor (la tinta), la tensión (el pelo) y la palabra (la firma), en ese orden; TRAGAR LA PALABRA y esperar la cuenta; juntar todos los pedazos del agua; en la boca, ENCASTRAR UN PEDAZO por cada diente con ✗.
+- **Recompensa:** Capítulo 3 — El lado oscuro del mono (la página vuela al libro, que se abre en el capítulo). Una vez: volver a jugar la sala (**JUGARLO DE NUEVO**, dos toques) no da nada dos veces.
+- **Se guarda:** la sala recuerda las señales notadas, si la palabra se tragó, cuántos dientes se rompieron, los pedazos juntados, los dientes remendados y si está resuelta en este dispositivo, y sigue así tras recargar. Si lo guardado no tiene sentido (señales fuera de orden o repetidas, pedazos que no existen, «resuelta» sin todos los dientes remendados) se descarta y solo se conserva lo válido, desde el principio.
 
 ### Piso 4 · ¿Qué carajo? · capítulo 4 · una paloma
 - **Escena:** una mochila abierta con cinco cosas heredadas. Una paloma vuela sin posarse.
