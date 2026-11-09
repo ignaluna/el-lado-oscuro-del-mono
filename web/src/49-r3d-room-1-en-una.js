@@ -20,6 +20,7 @@ const GLYPH_PATTERN = { 0: ['111', '101', '101', '101', '111'], 1: ['010', '110'
 
 /** What the monitor shows: the asterisk (8 spokes, lit or not), or the digits of the clock. */
 function drawEnUnaScreen(ctx, w, h, st) {
+  ctx.globalCompositeOperation = 'source-over'; // (the chalk draws additively: clear with the plain mode)
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
   const S = w, k = makeChalk(ctx, { op: 'lighter', bg: '#000' }, S, 31);
   if (st.mode === 'clock') {
@@ -46,6 +47,7 @@ function drawEnUnaScreen(ctx, w, h, st) {
 
 /** The mono, as the mirror keeps him (the same one of the old plate: round face, two ears, a muzzle). */
 function drawEnUnaMono(ctx, w, h) {
+  ctx.globalCompositeOperation = 'source-over';
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
   const k = makeChalk(ctx, { op: 'lighter', bg: '#000' }, w, 17), cx = w / 2, cy = h * 0.5, R = w * 0.3;
   k.arc(cx, cy - R * 0.08, R, 0, TAU, 0.03, 'g', 3);
@@ -69,14 +71,15 @@ ROOM_SETS['en-una'] = function buildEnUna(ctx, kit, track) {
   root.rotation.y = Math.atan2(-S.x, 2.7 - S.z); // the front (+z local) faces the place where the visitor stands
   const grp = (parent = root, x = 0, y = 0, z = 0) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
   let segTotal = 0;
-  const lines = (rib, o) => { segTotal += rib.count; return kit.lines(rib, o); };
+  const bgLines = []; // every group that fades when the visitor looks through the visor (the rest is handled one by one)
+  const lines = (rib, o = {}) => { segTotal += rib.count; const L = kit.lines(rib, o); if (!o.own) bgLines.push(L); return L; };
   const IV = [0.93, 0.9, 0.82];
 
   // ---- the floor: the paper's edge and the signature ----
   const frameR = kit.ribbons(3);
   { const x0 = -3.6, x1 = 4.3, z0 = -1.3, z1 = 2.1, y = 0.012;
     frameR.poly([[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]], 1.6, 0.5, true); }
-  const frameL = lines(frameR); root.add(frameL.obj);
+  const frameL = lines(frameR, { own: true }); root.add(frameL.obj);
   const sig = kit.plane(ctx.canvasTex(256, 96, (c, w, h) => { c.fillStyle = '#000'; c.fillRect(0, 0, w, h); c.font = FONT_DISPLAY(70, '', 500); c.textAlign = 'center'; c.textBaseline = 'middle'; c.shadowColor = 'rgba(255,255,255,.5)'; c.shadowBlur = 10; c.fillStyle = '#fff'; c.fillText('11:11', w / 2, h / 2 + 4); }), 0.8, 0.3, { alpha: 0.8 });
   sig.mesh.position.set(3.6, 0.015, 1.65); sig.mesh.rotation.x = -Math.PI / 2; root.add(sig.mesh);
 
@@ -114,7 +117,7 @@ ROOM_SETS['en-una'] = function buildEnUna(ctx, kit, track) {
     M.poly([[1.34, 1.75, 0.04], [1.44, 1.75, 0.05], ...pts], W1, 0.95);
     M.poly(RG.arc([1.74, 0.03, 0.1], [1, 0, 0], [0, 0, 1], 0.2, 0.12, 24, 3.14, 7.2), W0, 0.8);
     const c2 = []; for (let i = 0; i <= 8; i++) c2.push([0.52 + i * 0.015, 1.42 + 0.03 * Math.sin(i * 2.2), 0.0]); M.poly(c2, W1, 0.9); }
-  const machine = lines(M, { glow: true }); root.add(machine.obj);
+  const machine = lines(M, { glow: true, own: true }); root.add(machine.obj);
   const solidsLocal = [];
 
   // ---- antenna rings (they turn) and sparks (they flicker) ----
@@ -126,7 +129,7 @@ ROOM_SETS['en-una'] = function buildEnUna(ctx, kit, track) {
   });
   const sparkR = kit.ribbons(30);
   for (let i = 0; i < 7; i++) { const a = -1.15 + i * 0.38, d = [Math.sin(a), Math.cos(a), 0], l0 = 0.1, l1 = i % 2 ? 0.26 : 0.34; sparkR.seg([0.2 + d[0] * l0, 3.7 + d[1] * l0, 0], [0.2 + d[0] * l1, 3.7 + d[1] * l1, 0], W1, 1); }
-  const sparks = lines(sparkR, { glow: true }); root.add(sparks.obj);
+  const sparks = lines(sparkR, { glow: true, own: true }); root.add(sparks.obj);
 
   // ---- the keyboard (rows of keys that dip) ----
   const kb = grp(root, 0, 0, 0), keyRows = [];
@@ -208,7 +211,7 @@ ROOM_SETS['en-una'] = function buildEnUna(ctx, kit, track) {
     B.poly(RG.arc([tip[0] - 0.02, tip[1] + 0.03, 0], [1, 0, 0], [0, 1, 0], 0.05, 0.05, 12), W1, 1, true);
     for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; B.seg([tip[0] - 0.02 + Math.cos(a) * 0.055, tip[1] + 0.03 + Math.sin(a) * 0.055, 0], [tip[0] - 0.02 + Math.cos(a) * 0.085, tip[1] + 0.03 + Math.sin(a) * 0.085, 0], W0, 0.8); }
     for (const [dx, dy, r] of [[-0.74, y + 0.55, 0.05]]) { B.seg([dx - r, dy, 0], [dx + r, dy, 0], W0, 1); B.seg([dx, dy - r, 0], [dx, dy + r, 0], W0, 1); B.seg([dx - r * 0.5, dy - r * 0.5, 0], [dx + r * 0.5, dy + r * 0.5, 0], W0, 0.8); B.seg([dx - r * 0.5, dy + r * 0.5, 0], [dx + r * 0.5, dy - r * 0.5, 0], W0, 0.8); } // the star
-    const L = lines(B, { glow: true }); sl.add(L.obj); sleeper.L = L;
+    const L = lines(B, { glow: true, own: true }); sl.add(L.obj); sleeper.L = L;
     const nG = lite ? 34 : 86, rows = [];
     for (let i = 0; i < nG; i++) { const th = (rnd() - 0.5) * 2.7, ph = 0.1 + rnd() * 0.75, q = RG.ell([0, y + 0.18, 0], 0.4, 0.3, 0.33, th, ph); rows.push([q[0], q[1], q[2], 0.028 + rnd() * 0.03, 0.55 + rnd() * 0.45, rnd(), 0]); }
     sleeper.glitter = kit.points(rows, { shape: 3, twinkle: 0.85, tint: [0.82, 0.88, 1] }); sl.add(sleeper.glitter.obj);
@@ -227,7 +230,7 @@ ROOM_SETS['en-una'] = function buildEnUna(ctx, kit, track) {
       for (let i = 1; i < 4; i++) { const k = i / 4, xl = lerp(base[0] - 0.17, tip[0], k), xr = lerp(base[0] + 0.17, tip[0], k), yy = lerp(base[1], tip[1], k); B.seg([xl, yy, 0], [xr, yy + 0.04, 0], W0, 0.7); }
       B.poly(RG.arc([tip[0], tip[1] + 0.03, 0], [1, 0, 0], [0, 1, 0], 0.045, 0.045, 12), W1, 1, true); };
     hat(0, -0.05);
-    const L = lines(B, { glow: true }); vg.add(L.obj); visor.L = L;
+    const L = lines(B, { glow: true, own: true }); vg.add(L.obj); visor.L = L;
     const nG = lite ? 50 : 130, rows = [];
     for (let i = 0; i < nG; i++) { const th = (rnd() - 0.5) * 6.0, yy = y + 0.01 + rnd() * 0.11, x = 0.02 + 0.355 * Math.sin(th), z = 0.295 * Math.cos(th); rows.push([x, yy, z, 0.022 + rnd() * 0.03, 0.6 + rnd() * 0.4, rnd(), 0]); }
     visor.glitter = kit.points(rows, { shape: 3, twinkle: 0.8, tint: [1, 0.78, 0.28] }); vg.add(visor.glitter.obj);
@@ -267,7 +270,7 @@ ROOM_SETS['en-una'] = function buildEnUna(ctx, kit, track) {
     const Ew = root.localToWorld(V3(...E));
     const W = free ? Math.min(1, (free.x1 - free.x0)) : 1, Hh = free ? Math.min(1, (free.y1 - free.y0)) : 1;
     const Rpx = Math.min(0.3 * Hh, 0.34 * W * a); // ring radius as a fraction of the screen height
-    const Rr = Rpx * 2 * tanV, hD = Rr * 0.4, wD = hD * 0.56, cell = hD / 4, dot = cell * 0.62;
+    const Rr = Rpx * 2 * tanV, hD = Rr * 0.36, wD = hD * 0.6, cell = hD / 4, dot = cell * 0.78;
     const tx0 = (2 * cx - 1) * tanH, ty0 = (1 - 2 * cy) * tanV;
     cd.exp = [];
     let n = 0;
@@ -283,7 +286,7 @@ ROOM_SETS['en-una'] = function buildEnUna(ctx, kit, track) {
       const ang = (i * Math.PI) / 4, ox = Math.sin(ang) * Rr, oy = Math.cos(ang) * Rr, pat = GLYPH_PATTERN[bit];
       pat.forEach((row, r) => { for (let q = 0; q < 3; q++) if (row[q] === '1' && n < NCODE - 3) put(ox + (q - 1) * wD / 2, oy + (2 - r) * cell, dot, 1, dr()); });
     });
-    { const ox = 0, oy = Rr + hD * 0.78; for (const [dx, dy] of [[-1, 1], [1, 1], [0, 0]]) if (n < NCODE) put(ox + dx * cell * 0.8, oy + dy * cell * 0.9, dot * 1.1, 1, dr()); } // the start mark: a small ▼ above the top digit
+    { const ox = 0, oy = Rr + hD * 1.0; for (const [dx, dy] of [[-1, 1], [1, 1], [0, 0]]) if (n < NCODE) put(ox + dx * cell * 0.8, oy + dy * cell * 0.9, dot * 1.1, 1, dr()); } // the start mark: a small ▼ above the top digit
     for (; n < NCODE; ) { code.dat[n * 4 + 1] = 0; n++; }
     code.geo.attributes.position.needsUpdate = true; code.geo.attributes.aData.needsUpdate = true;
     cd.ready = true; cd.count = cd.exp.length;
@@ -321,7 +324,7 @@ ROOM_SETS['en-una'] = function buildEnUna(ctx, kit, track) {
   }
   const fit = (w, h, fw, fh, fov, a) => { const tv = 2 * Math.tan((fov * Math.PI) / 360); return Math.max(h / (fh * tv), w / (fw * tv * a)); };
   function pose(view, a, free) {
-    const f = free || { x0: 0.3, y0: 0.1, x1: 0.95, y1: 0.55 }, sx = (f.x0 + f.x1) / 2, sy = (f.y0 + f.y1) / 2, fw = (f.x1 - f.x0) * 0.92, fh = (f.y1 - f.y0) * 0.92, phone = a < 0.8;
+    const f = free || { x0: 0.3, y0: 0.1, x1: 0.95, y1: 0.55 }, sx = (f.x0 + f.x1) / 2, sy = (f.y0 + f.y1) / 2, fw = (f.x1 - f.x0) * 0.9, fh = (f.y1 - f.y0) * 0.86, phone = a < 0.8;
     const fov = phone ? 56 : 44;
     if (view === 'screen') { const d = fit(1.0, 1.22, fw, fh, fov, a), c = S.screen.c; return aim([c[0], c[1] + d * 0.03, c[2] + d], [c[0], c[1], c[2]], sx, sy, fov, a); }
     if (view === 'cup') { const d = fit(0.4, 0.34, fw, fh, fov, a), c = [S.cup[0], S.cup[1] + 0.07, S.cup[2]]; return aim([c[0] + d * 0.15, c[1] + d * 0.42, c[2] + d * 0.9], c, sx, sy, fov, a); }
@@ -341,7 +344,7 @@ ROOM_SETS['en-una'] = function buildEnUna(ctx, kit, track) {
     const w = world.room, m = world.reduced ? 0 : 1;
     st.T += dt * m; RU.uTime.value = st.T;
     st.run = damp(st.run, 1 - w.shut, 3, dt);
-    const on = st.run;
+    const on = st.run, bg = 1 - 0.9 * w.through;
     // the screen: what it shows now
     const key = w.mode + '|' + w.spokes.join('') + '|' + w.clock.join('');
     if (key !== scrState.key) { scrState.key = key; scrState.mode = w.mode; scrState.spokes = w.spokes.slice(); scrState.clock = w.clock.slice(); redraw(); }
@@ -354,17 +357,18 @@ ROOM_SETS['en-una'] = function buildEnUna(ctx, kit, track) {
     handA.h.rotation.x = -0.78 + 0.05 * Math.sin(st.ph * 0.55) * on; handA.g.position.y = handA.base - 0.012 * Math.max(0, Math.sin(st.ph * 1.1)) * on; handA.g.position.x = -0.8 + 0.03 * Math.sin(st.ph * 0.21) * on;
     handB.g.position.y = handB.base + 0.004 * Math.sin(t * 1.3) * m; handB.h.rotation.x = -1.1 + 0.025 * Math.sin(st.ph * 0.3 + 1) * on;
     rings.rotation.y += dt * 0.7 * on * m; ringL.forEach((g, i) => { g.rotation.z = (i - 1) * 0.12 + Math.sin(st.T * (0.8 + i * 0.3)) * 0.1 * on; g.rotation.x = Math.sin(st.T * 0.6 + i) * 0.12 * on; });
-    sparks.set((0.25 + 0.75 * Math.max(0, Math.sin(st.T * 13) * Math.sin(st.T * 4.7) * 0.5 + 0.55)) * on * (m ? 1 : 0.6));
-    stream.set(on); column.set(0.8 * on + 0.15);
-    machine.set(1 - 0.4 * w.shut - 0.6 * w.through);
+    sparks.set((0.25 + 0.75 * Math.max(0, Math.sin(st.T * 13) * Math.sin(st.T * 4.7) * 0.5 + 0.55)) * on * (m ? 1 : 0.6) * bg);
+    stream.set(on * bg); column.set((0.8 * on + 0.15) * bg);
+    for (const L of bgLines) L.set(bg);
+    machine.set((1 - 0.4 * w.shut) * bg);
     // the cup turns over
-    const ck = w.cup; cupBody.rotation.x = ck * Math.PI; cupG.position.y = S.cup[1] + Math.sin(ck * Math.PI) * 0.07; steam.set(0.6 * (1 - ck) * (1 - 0.5 * w.shut));
+    const ck = w.cup; cupBody.rotation.x = ck * Math.PI; cupG.position.y = S.cup[1] + Math.sin(ck * Math.PI) * 0.07; steam.set(0.6 * (1 - ck) * (1 - 0.5 * w.shut) * bg);
     // breathing
     slBody.scale.y = 1 + 0.014 * Math.sin(t * 1.15) * m; sleeper.L.set(1 - 0.5 * w.through); sleeper.glitter.set(1 - 0.7 * w.through); visor.L.set(1 - 0.85 * w.through); visor.glitter.set(1 - 0.8 * w.through);
     // the cone: decoys step back when the visitor looks from the visor; the code is bright there
-    rays.set(0.9 * (1 - 0.7 * w.through) * (0.35 + 0.65 * on)); circles.set(0.85 * (1 - 0.75 * w.through) * (0.35 + 0.65 * on));
+    rays.set(0.9 * (1 - 0.8 * w.through) * (0.35 + 0.65 * on)); circles.set(0.85 * (1 - 0.82 * w.through) * (0.35 + 0.65 * on));
     code.set(0.95);
-    frameL.set(0.5); sig.set(0.8);
+    frameL.set(0.5 * bg); sig.set(0.8 * bg);
     // the page flying to the book
     const pg = w.page;
     sheet.mesh.visible = pg > 0.001 && pg < 0.999;

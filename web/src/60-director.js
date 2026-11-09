@@ -38,6 +38,7 @@ const Hot = (() => {
       map.set(id, { el: b, on: false });
     },
     label(id, text) { const it = map.get(id); if (it) it.el.setAttribute('aria-label', text); },
+    focus(id) { const it = map.get(id); if (it && !it.el.hidden) it.el.focus({ preventScroll: true }); },
     enable(pred) { for (const [id, it] of map) { it.on = pred(id); if (!it.on && world.hover === id) world.hover = null; } },
     update() {
       for (const [id, it] of map) {
@@ -66,11 +67,13 @@ function syncUI() {
   { // the level: "alejarse" while looking closely; the hint while unsolved; reset once done
     const lv = Level.here(), close = lv && Level.view !== 'wide';
     $('#lv-back').hidden = !(close && !ov);
-    $('#cap-back').hidden = !!close; $('#cap-invite').hidden = !!close;
+    const rmClose = Room.inspecting();
+    $('#cap-back').hidden = !!(close || rmClose); $('#cap-invite').hidden = !!(close || rmClose);
     $('#lv-hint').hidden = !(lv && !Level.s.done && !ov);
     $('#lv-reset').hidden = !(lv && Level.s.done && !ov && !close);
     if (!lv) { $('#lv-tip').hidden = true; }
   }
+  Room.sync();
   const inGallery = p === 'gallery', atPiece = inGallery && world.gallery.at >= 0;
   $('#gal-actions').hidden = !inGallery;
   $('#gal-cap').hidden = !atPiece || !!ov;
@@ -865,6 +868,8 @@ const Input = (() => {
     if (App.overlay === 'level') { Level.keep(); return; }
     if (!App.overlay && !$('#lv-tip').hidden) { Level.closeTip(); return; }
     if (!App.overlay && Level.inspecting()) { Level.go('wide'); return; }
+    if (!App.overlay && Room.inspecting()) { Room.backStep(); return; }
+    if (!App.overlay && Room.tipOn) { Room.closeTip(); return; }
     if (App.overlay === 'book') Book.close();
     else if (App.overlay === 'trial') Trial.close();
     else if (App.overlay === 'reveal') Reveal.stay();
@@ -945,8 +950,10 @@ const Dev = (() => {
       if (App.overlay === 'book') Book.render();
       syncUI();
     },
-    progressReset() { Progress.reset(); world.panelDown = false; Trial.leave(); syncUI(); },
-    trialSolve() { Trial.solveNow(); },
+    progressReset() { Progress.reset(); world.panelDown = false; Trial.leave(); Room.onProgressReset(); syncUI(); },
+    trialSolve() { if (Room.here()) Room.solveNow(); else Trial.solveNow(); },
+    roomSolve() { Room.solveNow(); },
+    roomReset() { Room.reset(true); },
     bookBuy(ebookUrl, physicalUrl) { BOOK.buy.ebookUrl = ebookUrl || ''; BOOK.buy.physicalUrl = physicalUrl || ''; if (App.overlay === 'book') Book.render(); },
     force2D() { switchTo2D(); },
     /** Opens every floor's official player on this device and waits for it to answer (no playback). */
@@ -1116,6 +1123,11 @@ function initUI() {
   for (const id of ROOM_HOTS) Hot.add(id, id, () => Room.tap(id));
   $('#lv-back').addEventListener('click', () => Level.go('wide'));
   Trial.init();
+  $('#rm-back').addEventListener('click', () => Room.backStep());
+  $('#rm-hint').addEventListener('click', () => Room.hint());
+  $('#rm-more').addEventListener('click', () => Room.hint());
+  $('#rm-close').addEventListener('click', () => Room.closeTip());
+  $('#rm-reset').addEventListener('click', () => Room.reset());
   $('#reveal-stay').addEventListener('click', () => Reveal.stay());
   $('#cab-view').addEventListener('click', () => {
     if (world.phase !== 'cabin' || Seq.busy('main')) return;
@@ -1168,7 +1180,7 @@ function initUI() {
   snd.addEventListener('click', () => { Sound.unlock(); Sound.toggle(); paint(); });
   paint();
   let rz = 0;
-  window.addEventListener('resize', () => { cancelAnimationFrame(rz); rz = requestAnimationFrame(() => { R.resize(); reframe(); if (App.overlay === 'invite') Invite.place(); if (App.overlay === 'book') Book.place(); if (!$('#lv-tip').hidden) Level.place($('#lv-tip')); if (App.overlay === 'level') Level.place($('#lv-card')); }); });
+  window.addEventListener('resize', () => { cancelAnimationFrame(rz); rz = requestAnimationFrame(() => { R.resize(); reframe(); if (App.overlay === 'invite') Invite.place(); if (App.overlay === 'book') Book.place(); if (!$('#lv-tip').hidden) Level.place($('#lv-tip')); Room.place(); if (App.overlay === 'level') Level.place($('#lv-card')); }); });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { stopLoop(); Sound.suspend(); if (PlayerPortal.current) PlayerPortal.current.pageHidden(); }
     else { Sound.resume(); startLoop(); }
@@ -1184,7 +1196,7 @@ function reframe() {
   if (p === 'prelaunch' || p === 'open') setPose(poseFromShot(App.overlay === 'form' ? Shots.form(a) : App.overlay === 'listen' ? Shots.listen(a) : Shots.spawn(a)));
   else if (p === 'cabin') { setPose(poseFromShot(Shots.panel(a))); syncUI(); }
   else if (p === 'floor') { if (PlayerPortal.current && window.innerWidth >= 640 && (Roam.docked || window.innerHeight < 520)) { Roam.docked = true; PlayerPortal.current.setDock('compact'); }
-    if (Level.inspecting()) Level.reframe(); else if (Roam.moved > 0.1) world.cam.fov = poseFromShot(Shots.floor(a)).fov; else setPose(poseFromShot(Shots.floor(a))); }
+    if (Level.inspecting()) Level.reframe(); else if (Room.inspecting()) Room.reframe(); else if (Roam.moved > 0.1) world.cam.fov = poseFromShot(Shots.floor(a)).fov; else setPose(poseFromShot(Shots.floor(a))); }
   else if (p === 'gallery') Gallery.reframe();
 }
 
@@ -1282,11 +1294,12 @@ async function boot() {
       closeListen: () => Listen.close(), enter: () => enterCabin(), returnToElevator: () => returnToElevator(),
       pressLobby: () => pressLobby(), pressGallery: () => pressGallery(), openGallery: () => Gallery.enterFromLobby(), galleryFocus: (i) => Gallery.focus(i), galleryStep: (dlt) => Gallery.step(dlt), galleryBack: () => Gallery.back(), leaveGallery: () => Gallery.leave(), pickBook: () => Book.pickUp(), openBook: (at) => Book.open(at), closeBook: () => Book.close(), bookTurn: (dlt) => Book.turn(dlt),
       levelTap: (id) => Level.tap(id), levelGo: (v) => Level.go(v), levelHint: () => Level.hint(), levelKeep: () => Level.keep(), levelElevator: () => Level.toElevator(), levelReset: (force) => Level.reset(force), levelTake: () => Level.take(),
+      roomTap: (id) => Room.tap(id), roomGo: (v) => Room.go(v), roomHint: () => Room.hint(), roomBack: () => Room.backStep(),
       trialOpen: () => Trial.open(), trialClose: () => Trial.close(), trialHint: () => Trial.hint(), trialAct: (...a) => Trial.act(...a), panelSection: () => togglePanelSection(),
       invite: (n) => Invite.open(n ? trackOf(n) : null), closeInvite: () => Invite.close(), gateChoose: (p) => Gate.choose(p), gateDismiss: () => Gate.dismiss(),
     },
     dev: { prelaunch: A.prelaunch, lastTen: A.lastTen, released: A.released, openDoors: A.openDoors, closeDoors: A.closeDoors, exterior: A.exterior, interior: A.interior, gallery: A.gallery, gallerySample: A.gallerySample,
-      arrive: A.arrive, platform: A.platform, press: A.press, embedMode: A.embedMode, clearLead: A.clearLead, clearBook: A.clearBook, levelFloor: A.levelFloor, levelReset: A.levelReset, levelSolve: A.levelSolve, playerTest: A.playerTest, adaptTest: (ms, s) => (R && R.adaptTest ? R.adaptTest(ms, s) : null), roamTo: A.roamTo, roamPush: A.roamPush, bookFind: A.bookFind, bookAll: A.bookAll, progressReset: A.progressReset, trialSolve: A.trialSolve, bookBuy: A.bookBuy, force2D: A.force2D, reducedMotion: A.reducedMotion, timeScale: A.timeScale },
+      arrive: A.arrive, platform: A.platform, press: A.press, embedMode: A.embedMode, clearLead: A.clearLead, clearBook: A.clearBook, levelFloor: A.levelFloor, levelReset: A.levelReset, levelSolve: A.levelSolve, playerTest: A.playerTest, adaptTest: (ms, s) => (R && R.adaptTest ? R.adaptTest(ms, s) : null), roamTo: A.roamTo, roamPush: A.roamPush, bookFind: A.bookFind, bookAll: A.bookAll, progressReset: A.progressReset, trialSolve: A.trialSolve, roomSolve: A.roomSolve, roomReset: A.roomReset, bookBuy: A.bookBuy, force2D: A.force2D, reducedMotion: A.reducedMotion, timeScale: A.timeScale },
   };
   boot().then(readyRes, (e) => { console.error(e); readyRes(); });
 }

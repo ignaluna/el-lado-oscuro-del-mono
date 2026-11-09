@@ -185,6 +185,100 @@ async function clickSubmit(p) {
   await p.click(sel);
 }
 
+
+/**
+ * Plays floor 1's room with real clicks (hotspots, the plate's buttons, Escape): code from the visor, the clock from the cup,
+ * the mirror. `thorough` adds the wrong tries, the hint ladder and the interrupted look. Returns the room's state at the end.
+ */
+async function playRoom(p, { check, shot, thorough = false }) {
+  const rmState = async () => (await state(p)).room;
+  const until = async (pred, ms = 15000) => { const t0 = Date.now(); let s; for (;;) { s = await rmState(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(150); } };
+  const act = (name) => p.locator(`#rm-acts [data-act="${name}"]`).first();
+  const hot = (label) => p.locator(`.hot[aria-label^="${label}"]`).first();
+  /** A tap on a hotspot; on a phone the figure may be around the corner: turn (E), like a visitor. */
+  const tapHot = async (label) => {
+    for (let i = 0; i < 9 && !(await hot(label).isVisible()); i++) { const key = i < 3 ? 'e' : 'q'; await p.keyboard.down(key); await wait(i < 3 ? 220 : 150); await p.keyboard.up(key); await wait(300); }
+    await hot(label).click({ timeout: 8000 });
+  };
+  const toWide = async () => { while ((await rmState()).view !== 'wide') { await p.keyboard.press('Escape'); await wait(1300); } };
+  const code = [1, 0, 1, 1, 0, 0, 1, 0];
+  let s = await rmState();
+  check(s.here && s.view === 'wide' && s.stage === 0, `the room: standing in it, stage ${s.stage}`);
+
+  // 1. the screen asks for a code
+  await tapHot('La pantalla de la máquina'); s = await until((x) => x.view === 'screen' && x.panel); await wait(900);
+  check(s.view === 'screen' && /ASTERISCO/.test(s.title) && s.acts.filter((a) => /^spoke-/.test(a.act)).length === 8 && s.acts.some((a) => a.act === 'probar'), `the screen: eight spokes and PROBAR ("${s.title}")`);
+  if (thorough) {
+    await shot('room-02-screen');
+    await act('probar').click(); await wait(300); s = await rmState();
+    check(s.tries === 1 && /El algoritmo ya está escrito/.test(s.status) && s.stage === 0, `a wrong code: gentle feedback, the lock stays ("${s.status}")`);
+    await act('spoke-3').click(); await act('spoke-4').click(); await act('probar').click(); await wait(300); s = await rmState();
+    check(s.tries === 2 && s.spokes === '00000000' && s.visual.spokes === '00000000', 'a wrong code puts that lock\'s spokes out again (nothing else is lost)');
+    // the hint ladder: three tiers, the last one gives the code
+    await p.locator('#rm-hint').click(); await wait(200); s = await rmState(); const h1 = s.status;
+    check(h1.length > 20 && s.more, `hint 1 of this stage: "${h1}"`);
+    await p.locator('#rm-more').click(); await wait(200); const h2 = (await rmState()).status;
+    await p.locator('#rm-more').click(); await wait(200); s = await rmState();
+    check(h2 !== h1 && s.status.includes(code.join(' ')) && !s.more && s.hints === 3, `hint 3 gives the whole answer ("${s.status}") and there is no fourth`);
+  }
+  await toWide();
+
+  // 2. look through the visor: the dots line up
+  await tapHot('El que mira'); s = await until((x) => x.view === 'visor'); await wait(900);
+  check(s.view === 'visor' && s.acts.some((a) => a.act === 'mirar-visor'), 'the visor: "MIRAR POR SU VISOR" is offered');
+  await act('mirar-visor').click(); s = await until((x) => x.view === 'through'); await wait(2400); s = await rmState();
+  check(s.view === 'through' && s.status.includes(code.join(' ')) && s.align !== null && s.align < 0.02, `through the visor: "${s.status}" — the code dots sit within ${(s.align * 100).toFixed(2)}% of the ring (real perspective)`);
+  if (thorough) await shot('room-03-visor');
+  await p.keyboard.press('Escape'); s = await until((x) => x.view === 'visor'); await wait(1300); s = await rmState();
+  check(s.view === 'visor' && s.visual.through < 0.05, 'Escape leaves the visor: the dots scatter again');
+  await toWide();
+
+  // 3. the cup, turned over, says 11:11
+  await tapHot('Una taza de café'); s = await until((x) => x.view === 'cup'); await wait(900);
+  await act('taza').click(); await wait(1300); s = await rmState();
+  check(s.cupTurned && /11:11/.test(s.status) && s.visual.cup > 0.95, `the cup, turned over: "${s.status}"`);
+  if (thorough) await shot('room-04-cup');
+  await toWide();
+
+  // 4. the code: spokes lit where there is a 1, then PROBAR
+  await tapHot('La pantalla de la máquina'); s = await until((x) => x.view === 'screen' && x.panel); await wait(900);
+  for (let i = 0; i < 8; i++) if (code[i]) await act('spoke-' + i).click();
+  s = await rmState();
+  check(s.spokes === code.join('') && s.visual.spokes === code.join(''), `the spokes are set to ${s.spokes}`);
+  if (thorough) await shot('room-05-code');
+  await act('probar').click(); s = await until((x) => x.stage === 1 && !x.busy); await wait(500); s = await rmState();
+  check(s.stage === 1 && s.visual.mode === 'clock' && s.acts.some((a) => a.act === 'wheel-0'), `the code opens the screen: a stopped clock (${s.clock})`);
+
+  // 5. the clock: a wrong hour first, then 11:11
+  if (thorough) {
+    await act('hora').click(); await wait(300); s = await rmState();
+    check(s.stage === 1 && s.tries >= 3 && /Esa no es la hora/.test(s.status) && s.clock === '0347', `a wrong hour: gentle feedback, the clock goes back ("${s.status}")`);
+  }
+  const limits = [10, 10, 6, 10];
+  for (let i = 0; i < 4; i++) { s = await rmState(); const n = (1 - Number(s.clock[i]) + limits[i]) % limits[i]; for (let k = 0; k < n; k++) await act('wheel-' + i).click(); }
+  s = await rmState();
+  check(s.clock === '1111' && s.visual.clock === '1111', 'the wheels read 11:11');
+  if (thorough) await shot('room-06-clock');
+  await act('hora').click(); await wait(600); s = await rmState();
+  check(s.busy || s.visual.shut > 0, 'PONER EN HORA at 11:11: the machine starts to stop');
+  s = await until((x) => x.stage === 2 && !x.busy, 20000); await wait(600); s = await rmState();
+  check(s.stage === 2 && s.visual.shut > 0.98 && s.visual.mode === 'dark' && s.visual.mono > 0.98, 'the machine stopped: data, sparks and hands still, the screen dark, the mono in the glass');
+  if (thorough) await shot('room-07-mirror');
+
+  // 6. the mirror: a slow look (one tap starts it, any other tap interrupts it)
+  check(s.acts.some((a) => a.act === 'mirar'), 'MIRARLO DE NUEVO is offered');
+  if (thorough) {
+    await act('mirar').click(); await wait(900); s = await rmState();
+    check(s.acts.find((a) => a.act === 'mirar').pressed === 'true', 'one tap starts the count (no holding the finger down)');
+    await p.locator('#rm-back').click(); await wait(1500); s = await rmState();
+    check(!s.done && s.view === 'wide', 'any other tap interrupts it: nothing is solved');
+    await tapHot('La pantalla de la máquina'); await until((x) => x.view === 'screen' && x.panel); await wait(900);
+  }
+  await act('mirar').click();
+  await p.waitForFunction(() => window.__eldom.state().room.done, null, { timeout: 15000 });
+  return rmState();
+}
+
 const SCENARIOS = {
   async smoke(p, shot) {
     await shot('prelaunch');
@@ -488,8 +582,21 @@ const SCENARIOS = {
       check(s0.portal && s0.portal.pending && !(await iframeCount(p)), `${t.floor} «${t.title}»: no player of another record — the audio waits for the release`);
       let d = await tr();
       check(d.here && d.element === t.element, `${t.floor}: its element (${d.element}) stands in the world`);
-      // the element itself is the way in (floor 1, a tap on it in the world); the button under the floor's name too
-      await p.locator(t.floor === 1 ? '.hot[aria-label^="Acercarte"]' : '#tr-open').first().click(); await p.waitForFunction(() => window.__eldom.state().overlay === 'trial', null, { timeout: 8000 }); await wait(500);
+      if (t.floor === 1) { // a room: the cover, walkable; solved with its hotspots and the plate's buttons, then the book
+        const rd = await ev(p, () => window.__eldom.state().room);
+        check(rd.here && rd.set && rd.set.segments > 1000, '1: the cover is drawn in the world (a walkable room, ' + (rd.set && rd.set.segments) + ' chalk lines)');
+        check(rd.clue && cfg.bookText[t.chapter].paras.some((x) => rd.clue.split('\n').some((line) => (typeof x === 'string' ? x : x.t).includes(line.slice(0, 40)))), '1: its clue is a fragment of chapter 1');
+        await p.locator('#rm-hint').click(); await wait(250);
+        const hs = (await state(p)).room;
+        check(hs.status.length > 10 && !(await state(p)).progress.solved.includes(t.id), `1: a hint ("${hs.status}")`);
+        await shot('1-room');
+        await p.locator('#rm-close').click(); await wait(200);
+        const end = await playRoom(p, { check, shot });
+        check(end.done && end.stage === 3, `1: solved from what is on screen — "${end.status}"`);
+        await wait(900); await shot('1-room-solved');
+      } else {
+      // the element itself is the way in (a tap on it in the world); the button under the floor's name too
+      await p.locator('#tr-open').first().click(); await p.waitForFunction(() => window.__eldom.state().overlay === 'trial', null, { timeout: 8000 }); await wait(500);
       await shot(`${t.floor}-${t.id}`);
       d = await tr();
       check(d.clue && cfg.bookText[t.chapter].paras.some((x) => d.clue.split('\n').some((line) => (typeof x === 'string' ? x : x.t).includes(line.replace(/^… ?/, '').slice(0, 40)))), `${t.floor}: its clue is a fragment of chapter ${t.chapter.slice(4)}`);
@@ -507,6 +614,7 @@ const SCENARIOS = {
       d = await tr();
       check(d.finishing, `${t.floor}: solved from what is on screen (${d.walkthrough.length} steps) — "${d.status}"`);
       await wait(900); await shot(`${t.floor}-${t.id}-solved`);
+      }
       await p.waitForFunction(() => window.__eldom.state().overlay === 'book', null, { timeout: 12000 });
       await wait(500);
       const b = (await state(p)).book;
@@ -1096,6 +1204,69 @@ const SCENARIOS = {
     check(JSON.stringify(st.visited) === '[-1]', `no other floor touched (visited ${JSON.stringify(st.visited)})`);
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' level check(s) failed: ' + fails.join(' | '));
+  },
+  // Floor 1's room: the cover drawn in the world and the four-step challenge in it, with real clicks; solving gives the page and
+  // chapter 1 once; the room survives a reload; replaying gives nothing twice; reset works.
+  async room(p, shot, log) {
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    const rmState = async () => (await state(p)).room;
+    const cfg = await ev(p, () => window.__eldom.config());
+    await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.clearBook(); window.__eldom.dev.roomReset(); });
+    await ev(p, () => window.__eldom.dev.released());
+    await ev(p, () => window.__eldom.dev.arrive(1)); await waitFloor(p, 1); await wait(2600);
+    let s = await rmState();
+    check(s.here && s.set && s.set.segments > 1000 && s.set.codeDots === 83, `the cover is built in the world: ${s.set && s.set.segments} chalk lines, the code in ${s.set && s.set.codeDots} dots`);
+    check(((await state(p)).portal || {}).dock === 'compact' || p.viewportSize().width < 640, 'the official player waits in the corner (the room is the floor)');
+    check(s.clue && cfg.bookText['cap-1'].paras.some((x) => s.clue.split('\n').some((line) => (typeof x === 'string' ? x : x.t).includes(line.slice(0, 40)))), 'the clue is the book\'s own words');
+    const labels = await ev(p, () => [...document.querySelectorAll('.hot')].filter((b) => !b.hidden).map((b) => b.getAttribute('aria-label')));
+    check(labels.some((l) => /^La pantalla de la máquina/.test(l)) && labels.some((l) => /^Una taza de café/.test(l)), `the hotspots on screen: ${labels.join(' | ')}`);
+    await shot('room-01-arrive');
+    // the whole puzzle
+    const end = await playRoom(p, { check, shot, thorough: true });
+    check(end.done && end.stage === 3 && end.visual.shut > 0.98, `the last look solves the floor: "${end.status}"`);
+    await p.waitForFunction(() => window.__eldom.state().overlay === 'book', null, { timeout: 12000 }); await wait(500);
+    let st = await state(p);
+    const b = st.book;
+    check(b.leafIds[b.at] === 'cap-1' && b.text.includes(cfg.bookText['cap-1'].heading.trim()) && b.count === '1 / 9', `the book opens on «${cfg.bookText['cap-1'].heading.trim()}» (${b.count})`);
+    await shot('room-08-book');
+    await p.locator('#bk-close').click(); await wait(900);
+    st = await state(p);
+    check(st.progress.count === 1 && st.progress.solved.includes('en-una'), 'progress 1/9: only this floor');
+    check(st.room.saved && st.room.saved.done && st.room.saved.stage === 3, `the room's own state is saved (${JSON.stringify(st.room.saved)})`);
+    // a reload keeps it solved
+    await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
+    await ev(p, () => window.__eldom.dev.released()); await ev(p, () => window.__eldom.dev.arrive(1)); await waitFloor(p, 1); await wait(2600);
+    s = await rmState();
+    check(s.done && s.visual.shut > 0.98 && s.visual.mono > 0.98 && (await state(p)).progress.count === 1, 'after a reload: the room is solved and the machine stays stopped');
+    check(await ev(p, () => [...document.querySelectorAll('.hot')].some((x) => !x.hidden && /el mono te mira/.test(x.getAttribute('aria-label')))), 'its screen says so');
+    await shot('room-09-solved-room');
+    // replay: the solved room gives nothing twice
+    await p.locator('.hot[aria-label^="La pantalla de la máquina"]').first().click(); await wait(1600);
+    s = await rmState();
+    check(s.view === 'screen' && s.acts.some((a) => a.act === 'leer') && s.acts.some((a) => a.act === 'otra-vez') && /ya está en tu libro/.test(s.status), `a solved room offers the chapter and a new game ("${s.status}")`);
+    await p.locator('#rm-acts [data-act="otra-vez"]').click(); await wait(250);
+    check(/REINICIAR/.test(await p.locator('#rm-acts [data-act="otra-vez"]').innerText()), 'reset asks first (two taps)');
+    await p.locator('#rm-acts [data-act="otra-vez"]').click(); await wait(1800);
+    s = await rmState();
+    check(!s.done && s.stage === 0 && s.visual.shut === 0 && s.visual.mode === 'code' && (await state(p)).progress.count === 1, 'reset: the room starts again (asterisk, the machine running), the book keeps its chapter');
+    const pagesBefore = (await state(p)).book.pages.length;
+    const again = await playRoom(p, { check, shot });
+    await wait(3600);
+    st = await state(p);
+    check(again.done && st.overlay !== 'book' && st.progress.count === 1 && st.book.pages.length === pagesBefore && /ya estaba/.test((await rmState()).status), `playing it again gives nothing twice: "${(await rmState()).status}" (still ${st.progress.count}/9, book ${st.book.pages.length} chapters)`);
+    await ev(p, () => window.__eldom.dev.roomReset()); await wait(600);
+    s = await rmState();
+    check(!s.done && s.stage === 0 && s.saved.stage === 0, 'dev.roomReset starts the room again');
+    // the lock's state survives a reload midway
+    await ev(p, () => window.__eldom.ui.roomTap('rm-screen')); await wait(1500);
+    await p.locator('#rm-acts [data-act="spoke-0"]').click(); await p.locator('#rm-acts [data-act="spoke-2"]').click();
+    await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
+    await ev(p, () => window.__eldom.dev.released()); await ev(p, () => window.__eldom.dev.arrive(1)); await waitFloor(p, 1); await wait(2400);
+    s = await rmState();
+    check(s.spokes === '10100000' && s.visual.spokes === '10100000', 'a reload keeps the spokes that were set');
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' room check(s) failed: ' + fails.join(' | '));
   },
   // DEV "Probar reproductores": the same check a phone can run by hand.
   async selftest(p, shot, log) {
@@ -2190,6 +2361,7 @@ const SCENARIOS = {
     await waitFloor(p, 1);
     await wait(3000);
     await shot('2d-floor-1');
+    if (!(await p.locator('#tr-open').isVisible()) || (await state(p)).room.id) throw new Error('2D fallback: floor 1 lost its plate (no room without the 3D world)');
   },
 };
 

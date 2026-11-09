@@ -39,16 +39,22 @@ El álbum y el libro se unen por identificadores estables (`tracks[].chapter`), 
 
 **Accesibilidad.** Todo se hace con botones, también con teclado y lector de pantalla. Ningún desafío necesita sonido, pasar el mouse por encima, arrastrar con precisión ni moverse rápido.
 
-**"Quedarse" (pisos 1 y 7).** Con un toque empieza una cuenta lenta, de 4 a 5 segundos, que se ve en el mismo botón. No hace falta mantener el dedo apretado. Otro toque, o cualquier otro botón, la interrumpe.
+**"Quedarse" (pisos 1 y 7).** (En el piso 1 es el último paso de la sala.) Con un toque empieza una cuenta lenta, de 4 a 5 segundos, que se ve en el mismo botón. No hace falta mantener el dedo apretado. Otro toque, o cualquier otro botón, la interrumpe.
 
 ## Los nueve desafíos
 
 ### Piso 1 · En una · capítulo 1 · una realidad simulada por computadora
-- **Escena:** tres pantallas encendidas que titilan (espejo, ruido, piso) alrededor de una columna de humo. El mono espera detrás del espejo.
-- **Mecánica (ordenar y quedarse):** despertar es apagar las pantallas en el orden en que despierta el capítulo. Si el orden está mal, se vuelven a encender todas. Al final aparece el mono y hay que mirarlo de nuevo con una cuenta lenta.
-- **Pista en pantalla:** «El ruido aturde. El piso tiembla. El espejo no devuelve tu máscara. / Y ya no podés seguir dormido.»
-- **Solución:** apagar RUIDO, después PISO, después ESPEJO; luego MIRARLO DE NUEVO (4 s).
-- **Recompensa:** Capítulo 1 — En una.
+Este piso es una **sala que se recorre** (no una placa): la tapa del disco dibujada en el mundo, en tiza blanca sobre negro. Una computadora con dos cerebros encima y una antena con anillos y chispas; un teclado, una taza con vapor y un cable por el costado; a la izquierda, el que duerme (gorro de dormir, brillo plateado); a la derecha, el del visor dorado y gorro de cumpleaños, mirando un cono de puntos, círculos y números. Manos con mangas rotas suben desde abajo y tipean. «11:11» firma el piso. Mientras la máquina anda, todo se mueve: las manos tipean, los números caen desde la antena, la antena chispea, la taza humea, el que duerme respira. Se camina como en cualquier mundo (el reproductor oficial espera en la esquina; el escritorio y los dos personajes son sólidos). Sin la versión 3D (modo 2D de emergencia) el piso mantiene la placa de siempre.
+- **Mecánica (cuatro pasos, todo con botones):**
+  1. **La pantalla** muestra un asterisco de ocho rayos que pide un código. Se tocan los rayos (RAYO 1 ARRIBA, … en el sentido del reloj) y PROBAR.
+  2. **El visor.** Tocar al del visor y **MIRAR POR SU VISOR**: la cámara pasa a sus ojos y los puntos sueltos del cono se ordenan, en perspectiva real, en ocho cifras sobre un círculo, desde arriba y en el sentido del reloj. Al salir (ALEJARSE o Escape) vuelven a esparcirse. Se anuncia: «Los puntos se ordenan: 1 0 1 1 0 0 1 0».
+  3. **El reloj.** Con el código la pantalla se vuelve un reloj detenido (03:47). La **taza**, dada vuelta, muestra 11:11 en el fondo, igual que la firma del piso. Se ponen las cuatro cifras en 11:11 (tocar cada una) y PONER EN HORA: la máquina se detiene (no cae más data, las chispas se apagan, las manos paran, la pantalla se apaga).
+  4. **El espejo.** La pantalla oscura muestra al mono. **MIRARLO DE NUEVO**: con un toque empieza una cuenta lenta de 4 s (otro toque la interrumpe) y resuelve el piso.
+- **Si se equivoca:** un código mal dicho apaga los rayos («Ese no es el código. El algoritmo ya está escrito.»); una hora mal puesta devuelve el reloj a su hora («Esa no es la hora.»). Nada más: no hay castigo.
+- **Pista en pantalla:** «La data baja desde arriba. La ilusión de elegir. / El algoritmo ya está escrito.» (al llegar). **PISTA** tiene tres niveles por paso; el último da la solución de ese paso.
+- **Solución:** rayos 1, 3, 4 y 7 encendidos (código 1 0 1 1 0 0 1 0) y PROBAR; dar vuelta la taza (11:11); relojes en 11:11 y PONER EN HORA; MIRARLO DE NUEVO (4 s).
+- **Recompensa:** Capítulo 1 — En una (la página vuela al libro, que se abre en el capítulo). Una vez: volver a jugar la sala (**JUGARLO DE NUEVO**, dos toques) no da nada dos veces.
+- **Se guarda:** la sala recuerda su estado (rayos, reloj, taza, resuelta) en este dispositivo, y sigue resuelta tras recargar.
 
 ### Piso 2 · ¿Qué te está pasando? · capítulo 2 · el sistema
 - **Escena:** una máquina con cuatro bocas (plata, éxito, amor, sustancias) que vierten en un hueco negro. La aguja del hueco siempre marca «LLENO: 0 %».
