@@ -2045,6 +2045,105 @@ const SCENARIOS = {
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' signin check(s) failed: ' + fails.join(' | '));
   },
+  // The Spotify notice at selection (once per visit, never a modal) and the way out of a sample: "MEJOR POR YOUTUBE", sign-in,
+  // "YA TENGO SESIÓN", Escape, keyboard focus, shown once; then a sample (stand-in embed) offers "SEGUIR EN YOUTUBE", which
+  // reopens the same song on YouTube at the second the visitor had reached.
+  async spnotice(p, shot, log) {
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    const cfg = await ev(p, () => window.__eldom.config());
+    const t = cfg.tracks.find((x) => x.floor < 0 && x.youtubeVideoId && (x.spotifyTrackUri || x.spotifyAlbumId));
+    const album = 'https://open.spotify.com/album/' + cfg.demo.spotifyAlbumId;
+    const login = (u) => 'https://accounts.spotify.com/login?continue=' + encodeURIComponent(u);
+    const open = () => ev(p, () => { const e = document.querySelector('#spn'); return !!e && !e.hidden && e.getBoundingClientRect().width > 0; });
+    const until = async (pred, ms = 8000) => { const t0 = Date.now(); for (;;) { if (await pred()) return true; if (Date.now() - t0 > ms) return false; await wait(120); } };
+    const forget = () => ev(p, () => sessionStorage.removeItem('eldom.spnotice'));
+    const platform = () => ev(p, () => ({ world: window.__eldom.state().platform, stored: sessionStorage.getItem('eldom.platform') }));
+    const choose = async (pf) => { await ev(p, (x) => window.__eldom.dev.platform(x), pf); await waitPhase(p, 'cabin'); await wait(300); };
+    await p.route('https://open.spotify.com/embed/**', (r) => r.fulfill({ status: 200, contentType: 'text/html',
+      body: '<!doctype html><body style="background:#111"><script>parent.postMessage({type:"ready"},"*");setTimeout(()=>parent.postMessage({type:"playback_update",payload:{isPaused:false,isBuffering:false,duration:30000,position:7400,playingURI:"spotify:track:stub"}},"*"),1500);</script></body>' }));
+    await p.context().route(/^https:\/\/accounts\.spotify\.com\//, (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>login</title>' }));
+
+    await ev(p, () => window.__eldom.dev.released());
+    await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin');
+    check(!(await open()), 'nothing shows before Spotify is chosen');
+    await choose('youtube');
+    check(!(await open()), 'choosing YouTube shows no notice');
+
+    // 1. the first time, by keyboard (focus goes in and comes back on Escape)
+    await p.locator('button.hot[aria-label^="Viajar por Spotify"]').focus();
+    await p.keyboard.press('Enter');
+    check(await until(open), 'choosing Spotify shows the notice');
+    const a = await ev(p, () => {
+      const e = document.querySelector('#spn'), r = e.getBoundingClientRect(), t = document.getElementById(e.getAttribute('aria-labelledby')), b = document.getElementById(e.getAttribute('aria-describedby'));
+      const btn = [...e.querySelectorAll('a,button')].map((x) => ({ text: x.textContent.trim(), h: x.getBoundingClientRect().height, w: x.getBoundingClientRect().width }));
+      return { role: e.getAttribute('role'), title: t && t.textContent, body: b && b.textContent, btn, x: r.x, y: r.y, r: r.right, b: r.bottom, vw: innerWidth, vh: innerHeight, flag: sessionStorage.getItem('eldom.spnotice'),
+        focus: document.activeElement && document.activeElement.id, a: e.querySelector('#spn-signin').getAttribute('href'), target: e.querySelector('#spn-signin').target, rel: e.querySelector('#spn-signin').rel };
+    });
+    check(a.role === 'region' && !!a.title && /30 segundos/.test(a.body) && !/tel[eé]fono|celular|m[oó]vil/i.test(a.body), `a labelled region that says it is a 30 s sample without a session ("${a.body}")`);
+    check(a.btn.map((b) => b.text).join('|') === 'INICIAR SESIÓN EN SPOTIFY ↗|YA TENGO SESIÓN|MEJOR POR YOUTUBE' && a.btn.every((b) => b.h > 20 && b.w > 20), 'three buttons: sign in, ya tengo sesión, mejor por YouTube');
+    check(a.x >= 0 && a.y >= 0 && a.r <= a.vw && a.b <= a.vh, `it fits on screen (${Math.round(a.x)},${Math.round(a.y)} to ${Math.round(a.r)},${Math.round(a.b)} in ${a.vw}×${a.vh})`);
+    check(a.a === login(album) && a.target === '_blank' && /noopener/.test(a.rel), `sign-in is Spotify's own login in a new tab (${a.a.slice(0, 60)}…)`);
+    check(a.flag === '1' && a.focus === 'spn-signin', `remembered for the visit; the keyboard lands on the first button (focus ${a.focus})`);
+    check((await state(p)).phase === 'cabin', 'the ride is not blocked: still in the cabin, no overlay');
+    await wait(700); await shot('01-notice');
+    await p.keyboard.press('Escape');
+    check(!(await open()) && (await ev(p, () => (document.activeElement.getAttribute('aria-label') || '').startsWith('Viajar por Spotify'))), 'Escape closes it and the focus returns to the button that opened it');
+    check((await platform()).world === 'spotify', 'and Spotify stays chosen');
+
+    // 2. once per visit
+    await choose('youtube'); await choose('spotify');
+    check(!(await open()), 'choosing Spotify again in the same visit shows nothing');
+
+    // 3. sign in: a new tab with Spotify's login, the notice leaves
+    await forget(); await choose('spotify');
+    check(await until(open), 'a new visit shows it again (flag cleared)');
+    const [pop] = await Promise.all([p.waitForEvent('popup'), p.locator('#spn-signin').click()]);
+    await pop.waitForLoadState().catch(() => {});
+    const pu = pop.url(); await pop.close();
+    check(pu === login(album) && !(await open()), `INICIAR SESIÓN opens Spotify's login in a new tab and the notice leaves (${pu.slice(0, 50)}…)`);
+
+    // 4. ya tengo sesión
+    await forget(); await choose('spotify'); await until(open);
+    await p.locator('#spn-have').click();
+    check(!(await open()) && (await platform()).world === 'spotify', 'YA TENGO SESIÓN closes it and keeps Spotify');
+
+    // 5. mejor por YouTube
+    await forget(); await choose('spotify'); await until(open);
+    await p.locator('#spn-yt').click();
+    check(!(await open()), 'MEJOR POR YOUTUBE closes it');
+    await waitPhase(p, 'cabin'); await wait(500);
+    const pf = await platform();
+    check(pf.world === 'youtube' && pf.stored === 'youtube', `and the platform is YouTube (world ${pf.world}, stored ${pf.stored})`);
+    await choose('spotify');
+    check(!(await open()), 'the flag held: Spotify again shows nothing');
+
+    // 6. the notice leaves with the cabin (a floor press), without waiting for an answer
+    await forget(); await choose('spotify'); await until(open);
+    await ev(p, (n) => window.__eldom.dev.arrive(n), t.floor); await waitFloor(p, t.floor);
+    check(!(await open()), 'arriving on a floor leaves no notice behind');
+
+    // 7. a sample on this floor: the way on is YouTube, at the second reached
+    await p.waitForSelector('.portal iframe', { timeout: 15000 });
+    check(await until(async () => (await state(p)).portal.preview, 10000), 'the (stand-in) Spotify embed reports a 30 s sample');
+    const yt = p.locator('.portal-links button.portal-yt');
+    check((await yt.count()) === 1 && (await yt.textContent()) === 'SEGUIR EN YOUTUBE', 'a sample offers SEGUIR EN YOUTUBE');
+    check((await ev(p, () => [...document.querySelectorAll('.portal-links a')].some((a) => /CONTINUAR EN SPOTIFY/.test(a.textContent)))), 'and CONTINUAR EN SPOTIFY stays');
+    await shot('02-sample');
+    await yt.click();
+    await p.waitForSelector('.portal iframe[src*="youtube.com/embed"]', { timeout: 15000 });
+    const src = await ev(p, () => document.querySelector('.portal iframe').src);
+    const want = (t.youtubeStartSeconds || 0) + 7;
+    check(src.includes(`/embed/${t.youtubeVideoId}`) && new URL(src).searchParams.get('start') === String(want), `YouTube opens the same song at the same second (start=${new URL(src).searchParams.get('start')}, expected ${want})`);
+    const s1 = await state(p);
+    check(s1.platform === 'youtube' && s1.portal.provider === 'youtube' && s1.floor === t.floor, 'the platform is YouTube and the visitor stays on the floor');
+    check((await ev(p, () => sessionStorage.getItem('eldom.platform'))) === 'youtube', 'the choice is remembered for the visit');
+    await shot('03-youtube');
+    await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 25000);
+    await p.unroute('https://open.spotify.com/embed/**');
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' spnotice check(s) failed: ' + fails.join(' | '));
+  },
   async csp(p, shot, log) {
     await ev(p, () => window.__eldom.ui.openListen());
     await wait(900);

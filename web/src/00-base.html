@@ -289,6 +289,19 @@ button{font-family:inherit;color:inherit}
 .token:active{transform:translateY(2px)}
 #question .plate-x{position:static;pointer-events:auto}
 
+/* ---- Spotify notice (once per visit, at selection; never blocks the ride) ---- */
+#spn{position:fixed;z-index:21;left:50%;top:calc(env(safe-area-inset-top,0px) + 100px);transform:translateX(-50%);width:min(440px,calc(100vw - 24px));padding:16px 18px 12px;
+  background-color:#0d0d10;background-image:var(--metal-noise,none);box-shadow:inset 0 0 0 1px rgba(235,229,213,.4),inset 0 0 0 6px #0a0a0c,inset 0 0 0 7px rgba(235,229,213,.16);opacity:0;transition:opacity .4s ease}
+#spn.on{opacity:1}
+#spn h2{margin:0 0 6px;font-family:var(--f-caps);font-weight:400;font-size:12px;letter-spacing:.3em;color:var(--ivory)}
+#spn p{margin:0 0 10px;font-family:var(--f-mono);font-size:13px;line-height:1.5;color:rgba(235,229,213,.86)}
+.spn-act{display:flex;flex-wrap:wrap;gap:2px 20px}
+.spn-b{background:none;border:0;border-bottom:1px solid rgba(235,229,213,.25);padding:8px 0;min-height:36px;font-family:var(--f-caps);font-size:11px;letter-spacing:.2em;color:rgba(235,229,213,.78);text-decoration:none;cursor:pointer}
+.spn-b:hover,.spn-b:focus-visible{color:var(--ivory);border-bottom-color:var(--ivory)}
+.spn-main{color:var(--ivory);border-bottom-color:var(--ivory)}
+@media (pointer:coarse){.spn-b{min-height:44px;display:flex;align-items:center}}
+@media (max-height:520px){#spn{top:calc(env(safe-area-inset-top,0px) + 8px);padding:10px 16px 6px}#spn p{margin-bottom:4px}}
+
 /* ---- portal (official players) ---- */
 #portal-root{position:fixed;inset:0;z-index:30;pointer-events:none}
 .portal{position:fixed;pointer-events:auto;outline:none;opacity:0;transition:opacity .6s ease}
@@ -316,6 +329,9 @@ button{font-family:inherit;color:inherit}
 .portal-links a:hover,.portal-links a:focus-visible{color:var(--ivory);border-bottom-color:var(--ivory)}
 .portal-links a.strong{font-size:12.5px;color:var(--ivory);border-bottom-color:var(--ivory)}
 .portal-links a.sess{color:var(--ivory);border-bottom-color:var(--ivory)}
+.portal-links button.portal-yt{background:none;border:0;padding:8px 14px;font-family:var(--f-caps);font-size:12.5px;letter-spacing:.22em;color:var(--ivory);cursor:pointer;box-shadow:inset 0 0 0 1px rgba(235,229,213,.6),inset 0 0 0 4px #0b0b0e,inset 0 0 0 5px rgba(235,229,213,.25)}
+.portal-links button.portal-yt:hover,.portal-links button.portal-yt:focus-visible{background:#17171c}
+@media (pointer:coarse){.portal-links button.portal-yt{min-height:44px}}
 .portal-session{flex:1 0 100%;margin:0;font-family:var(--f-mono);font-size:11.5px;line-height:1.4;color:rgba(235,229,213,.78)}
 .portal-close{margin-left:auto;background:none;border:0;padding:6px 2px;font-family:var(--f-caps);font-size:11px;letter-spacing:.3em;color:rgba(235,229,213,.7);cursor:pointer}
 .portal-close:hover,.portal-close:focus-visible{color:var(--ivory)}
@@ -343,7 +359,7 @@ button{font-family:inherit;color:inherit}
 #dev.shy .chip{display:none}
 #dev .corner{position:fixed;left:0;bottom:0;width:48px;height:48px;background:transparent;border:0;padding:0;opacity:0}
 
-@media (prefers-reduced-motion:reduce){#plate,.cap,#title,#question,.portal{transition-duration:.01s}}
+@media (prefers-reduced-motion:reduce){#plate,.cap,#title,#question,#spn,.portal{transition-duration:.01s}}
 </style>
 
 <div id="stage" aria-hidden="true"></div>
@@ -469,6 +485,16 @@ button{font-family:inherit;color:inherit}
   </div>
   <button id="q-close" class="plate-x" type="button">CERRAR</button>
 </div>
+
+<section id="spn" hidden role="region" aria-labelledby="spn-title" aria-describedby="spn-body">
+  <h2 id="spn-title">SPOTIFY SIN SESIÓN</h2>
+  <p id="spn-body">Si no iniciaste sesión en Spotify en este navegador, suena solo una muestra de 30 segundos.</p>
+  <div class="spn-act">
+    <a id="spn-signin" class="spn-b spn-main" href="https://accounts.spotify.com/login" target="_blank" rel="noopener">INICIAR SESIÓN EN SPOTIFY ↗</a>
+    <button id="spn-have" class="spn-b" type="button">YA TENGO SESIÓN</button>
+    <button id="spn-yt" class="spn-b" type="button">MEJOR POR YOUTUBE</button>
+  </div>
+</section>
 
 <div id="trial" hidden role="dialog" aria-labelledby="tr-title">
   <div class="tr-bar"><p id="tr-where" class="tr-where"></p><button id="tr-close" class="plate-x" type="button">CERRAR</button></div>
@@ -737,6 +763,8 @@ const COPY = {
   preview: "Estás escuchando una muestra.",
   spSession: "Sin sesión de Spotify, suena una muestra.", // true on every device: it never says what a phone can or cannot play
   spSignIn: "INICIAR SESIÓN EN SPOTIFY ↗",
+  spToYoutube: "SEGUIR EN YOUTUBE", // offered once Spotify answers with a sample and the song has a YouTube id: same second, same song
+  spToYoutubeLive: "Seguís por YouTube.",
   continueSpotify: "CONTINUAR EN SPOTIFY ↗",
   newTab: "Se abre en una pestaña nueva.",
   ytFail: "Este video no se pudo cargar acá.",
@@ -1343,9 +1371,12 @@ class PlayerPortal {
     const id = o.trackUri ? String(o.trackUri).split(':').pop() : null;
     return id ? `https://open.spotify.com/track/${id}` : `https://open.spotify.com/album/${o.albumId}`;
   }
+  /** Where the song is now, in seconds on the YouTube video: the track's own start there plus the Spotify position. */
+  youtubeSecond() { return (this.o.start || 0) + Math.max(0, Math.floor((Number(this.diag.position) || 0) / 1000)); }
   albumUrl() { return `https://open.spotify.com/album/${this.o.albumId}`; }
   /** Spotify's own login page, which comes back to the same song or album once the visitor is in. */
-  signInUrl() { return 'https://accounts.spotify.com/login?continue=' + encodeURIComponent(this.linkUrl()); }
+  signInUrl() { return PlayerPortal.signInFor(this.linkUrl()); }
+  static signInFor(url) { return 'https://accounts.spotify.com/login?continue=' + encodeURIComponent(url); }
   static coarse() { return matchMedia('(pointer: coarse)').matches; }
   static portraitPhone() { return PlayerPortal.coarse() && window.innerWidth < 640 && window.innerHeight > window.innerWidth; }
 
@@ -1484,6 +1515,8 @@ class PlayerPortal {
       // one short line says so (until the sample itself is detected: its own note takes over), and the way to fix it is
       // on hand: on a computer, Spotify's own login page; on a phone (coarse pointer), the song itself in the app.
       const phone = !yt && PlayerPortal.coarse();
+      // a sample, and the same song exists on YouTube: the primary way on, from the second the visitor reached
+      if (!yt && this.preview && this.o.videoId && this.o.onYoutube) this.links.append(h('button', { class: 'portal-yt', type: 'button', text: COPY.spToYoutube, onclick: () => this.o.onYoutube(this.youtubeSecond()) }));
       if (!yt && !this.preview && !this.slow) this.links.append(h('p', { class: 'portal-session', id: 'portal-session', text: COPY.spSession }));
       if (!yt && !phone) this.links.append(h('a', { href: this.signInUrl(), target: '_blank', rel: 'noopener', 'aria-describedby': this.preview || this.slow ? null : 'portal-session',
         class: this.preview ? 'sess strong' : 'sess', text: COPY.spSignIn, onclick: () => this.armSignIn(), onauxclick: () => this.armSignIn() }));
