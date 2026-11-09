@@ -39,7 +39,7 @@ El álbum y el libro se unen por identificadores estables (`tracks[].chapter`), 
 
 **Accesibilidad.** Todo se hace con botones, también con teclado y lector de pantalla. Ningún desafío necesita sonido, pasar el mouse por encima, arrastrar con precisión ni moverse rápido.
 
-**"Quedarse" (pisos 1 y 7).** (En el piso 1 es el último paso de la sala.) Con un toque empieza una cuenta lenta, de 4 a 5 segundos, que se ve en el mismo botón. No hace falta mantener el dedo apretado. Otro toque, o cualquier otro botón, la interrumpe.
+**"Quedarse" (pisos 1 y 7).** (En el piso 1 es el último paso de la sala; en el piso 2 son las tres respiraciones del final, sin cuenta.) Con un toque empieza una cuenta lenta, de 4 a 5 segundos, que se ve en el mismo botón. No hace falta mantener el dedo apretado. Otro toque, o cualquier otro botón, la interrumpe.
 
 ## Los nueve desafíos
 
@@ -57,11 +57,21 @@ Este piso es una **sala que se recorre** (no una placa): la tapa del disco dibuj
 - **Se guarda:** la sala recuerda su estado (rayos, reloj, taza, resuelta) en este dispositivo, y sigue resuelta tras recargar.
 
 ### Piso 2 · ¿Qué te está pasando? · capítulo 2 · el sistema
-- **Escena:** una máquina con cuatro bocas (plata, éxito, amor, sustancias) que vierten en un hueco negro. La aguja del hueco siempre marca «LLENO: 0 %».
-- **Mecánica (transformar y habitar):** ECHAR MÁS no cambia nada. Cerrar las cuatro bocas deja el hueco quieto. Después hay que quedarse respirando, inhalar y exhalar tres veces, al ritmo propio.
-- **Pista en pantalla:** «Nos obligan a llenarlo. Con plata, con éxito, con amor, con sustancias. / Pero no se llena. / Se habita.»
-- **Solución:** cerrar PLATA, ÉXITO, AMOR y SUSTANCIAS (en cualquier orden); luego INHALAR/EXHALAR tres veces.
-- **Recompensa:** Capítulo 2 — ¿Qué te está pasando?
+Este piso también es una **sala que se recorre**: la tapa del disco dibujada en el mundo, en tiza blanca sobre negro, como una ciudad que es un circuito. Está armada como un tablero en relieve que se inclina hacia quien llega (para que todo el dibujo se lea desde donde se está parado, con los edificios saliendo del papel): bloques con ventanas de brillo dorado, un camino que serpentea y otro del medio con carriles de rayitas y cápsulas, todo cayendo a un hueco en el centro; a la izquierda, un laberinto de cables con gotas de puntos; arriba a la izquierda, la nube con espiral, estrellas y flores; a la derecha, las torres con una columna de humo, el cohete con su ✓ y su ✗, la computadora acostada, la constelación y los circuitos; «11:11» firma el piso. Mientras la ciudad anda, todo se mueve: titilan las ventanas, las cosas corren por los caminos hacia el hueco, el humo sube, las cápsulas ruedan, la espiral gira. Se camina como en cualquier mundo (el tablero es sólido). Sin la versión 3D el piso mantiene la placa de siempre.
+- **Mecánica (cortar en el orden del cable, y quedarse):**
+  1. **El hueco.** Todos los caminos y los cables caen al hueco del centro. Su medidor marca «LLENO: 0 %» y no se mueve. ECHAR MÁS no cambia nada: la aguja tiembla y vuelve a cero.
+  2. **El circuito.** En el laberinto de la izquierda hay un solo hilo marcado, que un pulso recorre desde un pin de entrada y va prendiendo cuatro entradas, una por una: sustancias, amor, plata, éxito. Ese es el orden de corte (no es el orden de la frase del capítulo). Al mirarlo se anuncia: «pasa por sustancias, después amor, después plata y por último éxito».
+  3. **Las cuatro entradas** son lugares de la ciudad. Se las toca, se las mira de cerca y se las corta:
+     - **SUSTANCIAS:** las cápsulas del camino y la chimenea con humo. APAGAR LA CHIMENEA.
+     - **AMOR:** la nube con la espiral y las flores. FRENAR LA ESPIRAL.
+     - **PLATA:** el edificio de ventanas doradas. APAGAR LAS LUCES.
+     - **ÉXITO:** el cohete con el tilde. TACHAR EL TILDE (el ✓ se vuelve ✗).
+  4. **El silencio.** Con las cuatro cortadas, la ciudad se queda quieta: el humo se detiene, los caminos se vacían, las ventanas se apagan. En el hueco, **INHALAR** y **EXHALAR** tres veces, cada toque es una mitad de la respiración, sin apuro y sin tiempo. Con la tercera exhalación, el medidor pasa a decir «SE HABITA» y se abre el capítulo.
+- **Si se equivoca:** una entrada cortada fuera de turno hace que «El sistema vuelve a abrir todo»: se reabren todas las que ya estaban cortadas (el humo vuelve, las luces se prenden). Nada más: no hay castigo.
+- **Pista en pantalla:** «Nos obligan a llenarlo. Con plata, con éxito, con amor, con sustancias. / Pero no se llena. / Se habita.» (la sala dice al llegar: «Todos los caminos van al mismo hueco. Nos obligan a llenarlo.»). **PISTA** tiene tres niveles por paso (sin saber el orden, cortando, en el silencio); el último da la solución de ese paso.
+- **Solución:** mirar el circuito (laberinto de la izquierda) para ver el orden; cortar SUSTANCIAS (chimenea), AMOR (espiral), PLATA (luces) y ÉXITO (el tilde), en ese orden; en el hueco, INHALAR, EXHALAR, tres veces.
+- **Recompensa:** Capítulo 2 — ¿Qué te está pasando? (la página vuela al libro, que se abre en el capítulo). Una vez: volver a jugar la sala (**JUGARLO DE NUEVO**, dos toques) no da nada dos veces.
+- **Se guarda:** la sala recuerda lo que se cortó, las respiraciones y si está resuelta en este dispositivo, y sigue así tras recargar.
 
 ### Piso 3 · El lado oscuro del mono · capítulo 3 · el bar Keller (interpretación escénica)
 - **Escena:** una esquina de bar con barra, lámpara y vaso. Ella llora en un rincón. Tres marcas muestran el cuerpo. Sobre la mesa hay pedazos de vidrio de antes.

@@ -281,6 +281,98 @@ async function playEnUna(p, { check, shot, thorough = false }) {
 
 
 /**
+ * Plays floor 2's room (the system) with real clicks: the hole and its gauge, the circuit that gives the order, the four feeds cut in
+ * that order (a wrong order reopens everything), the silence and three breaths. `thorough` adds the wrong orders and the hint ladder.
+ */
+async function playSistema(p, { check, shot, thorough = false }) {
+  const rmState = async () => (await state(p)).room;
+  const until = async (pred, ms = 15000) => { const t0 = Date.now(); let s; for (;;) { s = await rmState(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(150); } };
+  const act = (name) => p.locator(`#rm-acts [data-act="${name}"]`).first();
+  const hot = (label) => p.locator(`.hot[aria-label^="${label}"]`).first();
+  const tapHot = async (label) => {
+    for (let i = 0; i < 9 && !(await hot(label).isVisible()); i++) { const key = i < 3 ? 'e' : 'q'; await p.keyboard.down(key); await wait(i < 3 ? 220 : 150); await p.keyboard.up(key); await wait(300); }
+    await hot(label).click({ timeout: 8000 });
+  };
+  const toWide = async () => { while ((await rmState()).view !== 'wide') { await p.keyboard.press('Escape'); await wait(1300); } };
+  const LABEL = { sustancias: 'Cápsulas', amor: 'Una nube', plata: 'Un edificio', exito: 'Un cohete' };
+  const order = ['sustancias', 'amor', 'plata', 'exito'];
+  /** Looks at a feed and presses its button; waits for the city to answer. */
+  const cutFeed = async (id) => {
+    await tapHot(LABEL[id]); let s = await until((x) => x.view === id && x.panel); await wait(900);
+    check(s.acts.some((a) => a.act === 'cortar-' + id), `${id}: its look offers the cut ("${s.title}")`);
+    await act('cortar-' + id).click(); await wait(400); s = await until((x) => !x.busy, 12000); await wait(300);
+    return rmState();
+  };
+  let s = await rmState();
+  check(s.here && s.view === 'wide' && s.stage === 0 && s.cuts === '', `the room: standing in it, stage ${s.stage}`);
+
+  // 1. the hole: everything drains into it and its gauge never moves
+  await tapHot('El hueco'); s = await until((x) => x.view === 'hole' && x.panel); await wait(900);
+  check(s.view === 'hole' && /LLENO: 0 %/.test(s.title) && /no se mueve/.test(s.status) && s.acts.some((a) => a.act === 'mas'), `the hole: "${s.title}" — ${s.status}`);
+  if (thorough) await shot('room2-02-hole');
+  await act('mas').click(); await wait(500); s = await rmState();
+  check(/La aguja tiembla y vuelve a cero/.test(s.status) && s.visual.v.surge > 0.05, `pouring more: "${s.status}" (the flow surges, the gauge stays at zero)`);
+  s = await until((x) => !x.busy && x.visual.v.surge < 0.02, 8000);
+  check(s.stage === 0 && s.cuts === '', 'pouring more changes nothing: still nothing cut');
+  await toWide();
+
+  if (thorough) {
+    // a wrong order: cut one in the right place, then another out of turn: the system opens everything again
+    await tapHot(LABEL.plata); s = await until((x) => x.view === 'plata' && x.panel); await wait(900);
+    await act('cortar-plata').click(); await wait(500); s = await rmState();
+    check(s.tries === 1 && s.cuts === '' && /El sistema vuelve a abrir todo/.test(s.status), `a wrong order: "${s.status}"`);
+    await toWide();
+    s = await cutFeed('sustancias');
+    check(s.cuts === 'sustancias' && s.visual.v.cut[3] > 0.98, 'the first of the wire (sustancias) stays cut: the chimney is out');
+    await toWide();
+    s = await cutFeed('exito'); await wait(1400); s = await rmState();
+    check(s.cuts === '' && s.tries === 2 && s.visual.v.cut.every((x) => x < 0.05) && /abrir todo/.test(s.status), 'an out-of-turn cut reopens everything that was cut (the chimney smokes again)');
+    await toWide();
+    // the hint ladder: three tiers, the last gives the order
+    await p.locator('#rm-hint').click(); await wait(200); s = await rmState(); const h1 = s.status;
+    check(h1.length > 20 && s.more && /LLENO: 0 %/.test(h1), `hint 1 of this stage: "${h1}"`);
+    await p.locator('#rm-more').click(); await wait(200); const h2 = (await rmState()).status;
+    await p.locator('#rm-more').click(); await wait(200); s = await rmState();
+    check(h2 !== h1 && /sustancias, amor, plata, éxito/.test(s.status) && !s.more && s.hints === 3, `hint 3 gives the whole answer ("${s.status}") and there is no fourth`);
+    await p.locator('#rm-close').click(); await wait(300);
+  }
+
+  // 2. the circuit: a single wire, four entries, in this order; the order is announced
+  await tapHot('Un laberinto'); s = await until((x) => x.view === 'circuit' && x.panel); await wait(900);
+  check(s.view === 'circuit' && /sustancias, después amor, después plata y por último éxito/.test(s.status) && s.seen && s.stage === 1, `the circuit announces the order: "${s.status}"`);
+  if (thorough) await shot('room2-03-circuit');
+  await act('seguir').click(); await wait(300); s = await rmState();
+  check(/1, sustancias\. 2, amor\. 3, plata\. 4, éxito\./.test(s.status), `following the wire: "${s.status}"`);
+  await p.keyboard.press('Escape'); await until((x) => x.view === 'wide'); await wait(1300);
+
+  // 3. the four feeds, in the wire's order
+  for (let i = 0; i < 4; i++) {
+    const id = order[i];
+    s = await cutFeed(id);
+    check(s.cuts === order.slice(0, i + 1).join(',') && s.visual.v.cut[['plata', 'exito', 'amor', 'sustancias'].indexOf(id)] > 0.98, `${i + 1}. ${id} cut: "${s.status}"`);
+    if (thorough && id === 'plata') await shot('room2-04-plata');
+    if (i < 3) await toWide();
+  }
+  s = await until((x) => x.visual.v.quiet > 0.98 && !x.busy, 12000);
+  check(s.stage === 2 && s.cuts === order.join(',') && /Todo en silencio/.test(s.status), `all four cut: the city goes quiet ("${s.status}")`);
+  if (thorough) await shot('room2-05-quiet');
+  await toWide();
+
+  // 4. the silence: three breaths, at one's own pace
+  await tapHot('El hueco'); s = await until((x) => x.view === 'hole' && x.panel); await wait(900);
+  check(/EN SILENCIO/.test(s.title) && s.acts.some((a) => a.act === 'inhalar') && !s.acts.some((a) => a.act === 'mas'), `the hole in silence offers INHALAR ("${s.title}")`);
+  if (thorough) await shot('room2-06-breath');
+  for (let i = 0; i < 3; i++) {
+    await act('inhalar').click(); await wait(i === 0 ? 2200 : 300); s = await rmState();
+    if (i === 0) check(s.visual.v.breath > 0.9 && s.acts.some((a) => a.act === 'exhalar') && !s.acts.some((a) => a.act === 'inhalar'), 'INHALAR opens the hole and offers EXHALAR (each press is one slow half, no timing)');
+    await act('exhalar').click(); await wait(300); s = await rmState();
+    if (i === 0) check(s.breaths === 1 && /En el silencio del aire/.test(s.status), `the first breath: "${s.status}"`);
+  }
+  await p.waitForFunction(() => window.__eldom.state().room.done, null, { timeout: 15000 });
+  return rmState();
+}
+
+/**
  * What is particular to each room's walkthrough (the `room` and `trials` scenarios read it; a floor with a room in ROOMS needs an entry):
  *   floor, chapter, minSegments (a sanity floor for the chalk lines), play(p, {check, shot, thorough}) → the room's state at the end,
  *   built(set) (what the set reports about itself), hots (labels on screen on arrival), afterSolve(state), solvedRoom(state) (after a
@@ -302,6 +394,21 @@ const ROOM_WALKS = {
       await p.locator('#rm-acts [data-act="spoke-0"]').click(); await p.locator('#rm-acts [data-act="spoke-2"]').click();
     },
     midOK: (s) => s.spokes === '10100000' && s.visual.spokes === '10100000', midMsg: 'a reload keeps the spokes that were set',
+  },
+  'que-te-esta-pasando': {
+    floor: 2, chapter: 'cap-2', minSegments: 1500, play: playSistema,
+    built: (set) => set.wire === 'sustancias,amor,plata,exito' && set.windows > 150,
+    hots: [/^El hueco/, /^Un laberinto/, /^Un edificio/, /^Un cohete/, /^Una nube/, /^Cápsulas/],
+    afterSolve: (s) => s.visual.v.quiet > 0.98 && s.visual.v.solved === 1,
+    solvedRoom: (s) => s.visual.v.quiet > 0.98 && s.visual.v.solved === 1 && s.visual.v.cut.every((x) => x === 1),
+    solvedHot: /se habita/,
+    replayHot: 'El hueco', replayView: 'hole',
+    freshRoom: (s) => s.visual.v.quiet === 0 && s.visual.v.solved === 0 && s.visual.v.cut.every((x) => x === 0),
+    async midWalk(p) {
+      await ev(p, () => window.__eldom.ui.roomTap('rm-sustancias')); await wait(1500);
+      await p.locator('#rm-acts [data-act="cortar-sustancias"]').click(); await wait(2200);
+    },
+    midOK: (s) => s.cuts === 'sustancias' && s.visual.v.cut[3] === 1 && s.visual.v.quiet === 0, midMsg: 'a reload keeps what was cut (the chimney stays out, the rest runs)',
   },
 };
 
@@ -1676,7 +1783,7 @@ const SCENARIOS = {
     const vw = p.viewportSize();
 
     await ev(p, () => window.__eldom.dev.released());
-    await ev(p, () => window.__eldom.dev.arrive(2)); await waitFloor(p, 2); await wait(2500);
+    await ev(p, () => window.__eldom.dev.arrive(6)); await waitFloor(p, 6); await wait(2500); // (a world with no room: the first view faces straight ahead and nothing blocks the walk; floors with a room are checked below)
     let s = await st();
     check(s.roam.scene === 'floor', `free walking on a world (scene ${s.roam.scene})`);
     if (touch) check(s.roam.ghost, 'touch screen: the joystick hint ring is shown');
@@ -1767,6 +1874,15 @@ const SCENARIOS = {
     const inDesk = await ev(p, ([x, z, w]) => { const c = Math.cos(w.ry), sn = Math.sin(w.ry), lx = (x - w.x) * c - (z - w.z) * sn, lz = (x - w.x) * sn + (z - w.z) * c; return Math.abs(lx) < w.hw && Math.abs(lz) < w.hd; }, [s.cam.x, s.cam.z, desk]);
     check(!inDesk && Math.hypot(s.cam.x - desk.x, s.cam.z - desk.z) > 0.6, `floor 1: walking straight at the desk stops the visitor outside it (${Math.hypot(s.cam.x - desk.x, s.cam.z - desk.z).toFixed(2)} m from its centre)`);
     await shot('06-at-the-desk');
+    // floor 2 is a room too (the city board leaning toward the visitor): its footprint is solid
+    await ev(p, () => window.__eldom.dev.arrive(2)); await waitFloor(p, 2); await wait(2200);
+    const rs2 = await ev(p, () => window.__eldom.state().roam.solids), board = rs2.find((x) => x.kind === 'box');
+    check(!!board, `floor 2: the room's board is solid (${rs2.map((x) => x.kind).join(', ')})`);
+    await ev(p, ([x, z, y]) => window.__eldom.dev.roamTo(x, z, y), [board.x + Math.sin(board.ry) * 4.2, board.z + Math.cos(board.ry) * 4.2, board.ry]);
+    await ev(p, () => window.__eldom.dev.roamPush(0, 1, 4200));
+    s = await st();
+    const inBoard = await ev(p, ([x, z, w]) => { const c = Math.cos(w.ry), sn = Math.sin(w.ry), lx = (x - w.x) * c - (z - w.z) * sn, lz = (x - w.x) * sn + (z - w.z) * c; return Math.abs(lx) < w.hw && Math.abs(lz) < w.hd; }, [s.cam.x, s.cam.z, board]);
+    check(!inBoard && Math.hypot(s.cam.x - board.x, s.cam.z - board.z) > 1.8, `floor 2: walking straight at the board stops the visitor outside it (${Math.hypot(s.cam.x - board.x, s.cam.z - board.z).toFixed(2)} m from its centre)`);
     // the edge of the world: a long walk away stops at the rim
     await ev(p, () => window.__eldom.dev.roamTo(0, 6, Math.PI));
     await ev(p, () => window.__eldom.dev.roamPush(0, 1, 9000));
@@ -1814,8 +1930,8 @@ const SCENARIOS = {
     ];
     const measure = async (q) => { // renders per second and the distance a 1.5 s push walks, at a world
       await q.evaluate(() => window.__eldom.dev.released());
-      await q.evaluate(() => window.__eldom.dev.arrive(2));
-      await q.waitForFunction(() => window.__eldom.state().phase === 'floor' && window.__eldom.state().floor === 2, null, { timeout: 40000 });
+      await q.evaluate(() => window.__eldom.dev.arrive(6));
+      await q.waitForFunction(() => window.__eldom.state().phase === 'floor' && window.__eldom.state().floor === 6, null, { timeout: 40000 });
       await wait(2500);
       await q.evaluate(() => window.__eldom.dev.roamTo(0, 6, 0)); await wait(500);
       const r0 = (await q.evaluate(() => window.__eldom.state())).tier.renders, z0 = (await q.evaluate(() => window.__eldom.state())).cam.z, t0 = Date.now();
@@ -1832,13 +1948,15 @@ const SCENARIOS = {
       const t = (await q.evaluate(() => window.__eldom.state())).tier;
       check(t && (t.tier === 'lite') === wantLite, `${name}: ${wantLite ? 'lite' : 'full'} tier (${t && t.tier})`);
       check(wantLite ? t.samples === 0 && t.particles === 0.4 && t.mirror === '1/4' && t.dpr <= 1 : t.samples === 4 && t.particles === 1 && t.mirror === '1/2', `${name}: ${wantLite ? 'no MSAA, 40% particles, mirror at 1/4, dpr ≤ 1' : 'MSAA 4, all particles, mirror at 1/2'} (${JSON.stringify({ s: t.samples, p: t.particles, m: t.mirror, dpr: t.dpr })})`);
-      if (name === 'plenty of everything' || name === '4 cores') { // floor 1's room: the lite tier draws fewer folds, glitter and particles
-        await q.evaluate(() => { window.__eldom.dev.released(); window.__eldom.dev.arrive(1); });
-        await q.waitForFunction(() => window.__eldom.state().phase === 'floor' && window.__eldom.state().floor === 1, null, { timeout: 40000 }); await wait(1800);
-        const rset = (await q.evaluate(() => window.__eldom.state())).room.set;
-        check(rset && rset.lite === wantLite && rset.codeDots === 83, `${name}: floor 1's room is built for the ${wantLite ? 'lite' : 'full'} tier (${rset && rset.segments} segments, ${rset && rset.codeDots} code dots)`);
-        roomSets[name] = rset;
-        await shot('room-' + (wantLite ? 'lite' : 'full'));
+      if (name === 'plenty of everything' || name === '4 cores') { // the rooms (floors 1 and 2): the lite tier draws fewer lines, glitter and particles
+        for (const n of [1, 2]) {
+          await q.evaluate((f) => { window.__eldom.dev.released(); window.__eldom.dev.arrive(f); }, n);
+          await q.waitForFunction((f) => window.__eldom.state().phase === 'floor' && window.__eldom.state().floor === f, n, { timeout: 40000 }); await wait(1800);
+          const rset = (await q.evaluate(() => window.__eldom.state())).room.set;
+          check(rset && rset.lite === wantLite && (n === 1 ? rset.codeDots === 83 : !!rset.wire), `${name}: floor ${n}'s room is built for the ${wantLite ? 'lite' : 'full'} tier (${rset && rset.segments} segments)`);
+          roomSets[name + n] = rset;
+          await shot((n === 1 ? 'room-' : 'room2-') + (wantLite ? 'lite' : 'full'));
+        }
       }
       if (name === 'plenty of everything') fullRun = await measure(q);
       if (name === '4 cores') liteRun = await measure(q);
@@ -1862,7 +1980,7 @@ const SCENARIOS = {
       }
       await q.close();
     }
-    if (roomSets['plenty of everything'] && roomSets['4 cores']) check(roomSets['4 cores'].segments < roomSets['plenty of everything'].segments, `the room draws fewer lines on the lite tier (${roomSets['4 cores'].segments} < ${roomSets['plenty of everything'].segments})`);
+    for (const n of [1, 2]) if (roomSets['plenty of everything' + n] && roomSets['4 cores' + n]) check(roomSets['4 cores' + n].segments < roomSets['plenty of everything' + n].segments, `floor ${n}'s room draws fewer lines on the lite tier (${roomSets['4 cores' + n].segments} < ${roomSets['plenty of everything' + n].segments})`);
     if (coarse) { // the phone profile itself: lite although every other signal is generous
       const q = await open({ cores: 8, memory: 8, saveData: false });
       const t = (await q.evaluate(() => window.__eldom.state())).tier;
@@ -2007,7 +2125,7 @@ const SCENARIOS = {
     await ev(p, () => window.__eldom.dev.released());
     const lineUp = () => ev(p, () => { const e = document.querySelector('#cap-hint'); return !e.hidden && /Acostá el teléfono/.test(e.textContent); });
     if (vw.width < vw.height) { // upright: no dialog, one brief line once the walking ring has gone
-      await ev(p, () => window.__eldom.dev.arrive(2)); await waitFloor(p, 2); await wait(2400);
+      await ev(p, () => window.__eldom.dev.arrive(6)); await waitFloor(p, 6); await wait(2400);
       check((await p.locator('#rot-invite').count()) === 0 && (await ev(p, () => ![...document.querySelectorAll('[role=dialog]')].some((e) => e.checkVisibility()))), 'upright phone in a world: no dialog in the way');
       check(!(await lineUp()) && (await state(p)).roam.ghost, 'the walking ring comes first, with no line yet');
       await shot('01-world-upright');

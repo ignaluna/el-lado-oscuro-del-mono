@@ -39,20 +39,11 @@ const ELODM_KINDS = {
     return () => {};
   },
 
-  // 2 — ¿Qué te está pasando?: a machine pours into a hole that never fills
-  machine(F, ctx) {
-    const { THREE } = ctx, { pos: o, s } = elementSpot(F, ctx);
-    const rings = [0.42, 0.33, 0.24, 0.15].map((r) => { const l = F.line(F.circle(r * s, 72).map((p) => F.V3(o.x + p.x, o.y - s * 0.18 + p.y * 0.35, o.z + p.y)), F.lineMat(F.accent, 0.6), true); return l; });
-    const chutes = [-0.42, -0.14, 0.14, 0.42].map((x) => shape(F, o, s, [[x, 0.55], [x * 0.35, -0.1]], F.lineMat([0.9, 0.86, 0.78], 0.55), false));
-    const fall = F.particles(200, { mode: 1, box: [s * 0.8, s * 0.75, s * 0.2], origin: F.V3(o.x, o.y - s * 0.15, o.z), size: 10, alpha: 0.55, speed: 0.25, tint: [0.95, 0.88, 0.7] });
-    F.light(F.V3(o.x, o.y + s * 0.5, o.z - 1), 0.6, s * 6);
-    return (dt, t) => {
-      const tr = world.trial, flow = 1 - Math.max(tr.solved, tr.progress);
-      fall.u.uPhase.value += dt * fall.speed * 4 * flow;
-      fall.u.uAlpha.value = 0.5 * flow;
-      rings.forEach((l, i) => { l.rotation.z = 0; l.material.opacity = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(t * (1 + flow * 2) - i * 0.8)); });
-      chutes.forEach((l) => { l.material.opacity = 0.15 + 0.4 * flow; });
-    };
+  // 2 — ¿Qué te está pasando?: the cover, walkable, a city that is a circuit draining into a hole that never fills. Its art is a
+  // room (49-r3d-room-2-que-te-esta-pasando.js) built beside the floor; the floor itself only keeps a faint light.
+  machine(F) {
+    F.light(F.V3(F.A.x, 2.4, F.A.z - 1), 0.35, 8);
+    return () => {};
   },
 
   // 3 — El lado oscuro del mono: a corner of a bar (a scenic interpretation of Keller) — counter, lamp, a broken glass
