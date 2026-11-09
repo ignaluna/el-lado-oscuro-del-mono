@@ -8,7 +8,11 @@
 //   Everything is reachable with buttons (hotspots, the plate's controls), the keyboard and a screen reader; nothing needs
 //   speed, hover, dragging or sound. The room's own state lives in localStorage ("eldom.room.<id>.v1").
 //   A room definition: { aim, intro, clue, done, hints: [[tier…] per stage], hots: { id: { label(room), view } },
-//     fresh(), normalize(raw), solvedState(), visual(state), panel(room, view) → { title, status, cls, build(actsEl, room) } }
+//     fresh(), normalize(raw), solvedState(), almost(state) → the state at the last step (dev panel, checks),
+//     visual(state), panel(room, view) → { title, status, cls, build(actsEl, room) }, debug(state) → extra fields for the checks }
+//   The saved state is { v, stage, done, tries, hints, … } (the framework reads stage, done and hints; a room adds what it needs).
+//   The ids of every room's hotspots ("rm-…") are collected from ROOMS by the director (ROOM_HOTS); a hotspot only shows
+//   where the set registered its anchor (ctx.anchors[id]) and the room's own definition lists it. A set reads world.room.v.
 // ═══════════════════════════════════════════════════════════════════════════════════════════
 const ROOMS = {};
 
@@ -256,7 +260,7 @@ const Room = {
   /** The dev panel and the checks: the machine already stopped, the last look given. */
   solveNow() {
     if (!this.here() || this.s.done) return;
-    this.s.stage = 2; this.s.spokes = ROOMS[this.id].code.slice(); this.save(); this.applyVisual();
+    this.s = this.def().almost(this.s); this.save(); this.applyVisual(); // the definition brings its state to the last step
     this.solve();
   },
   /** Two taps (the first one asks), unless forced by the checks or the dev panel. */
@@ -284,9 +288,11 @@ const Room = {
   /** For the checks. */
   debug() {
     const d = this.def(), s = this.s, panel = !$('#rm-panel').hidden;
-    return { id: this.id, here: this.here(), view: this.view, busy: this.busy, stage: s ? s.stage : null, done: s ? s.done : null, spokes: s ? s.spokes.join('') : null, clock: s ? s.clock.join('') : null, cupTurned: s ? s.cupTurned : null,
+    const visual = {}; // (arrays read as strings of digits: the checks compare them as such)
+    for (const [k, v] of Object.entries(world.room)) visual[k] = Array.isArray(v) ? v.join('') : v && typeof v === 'object' ? { ...v } : v;
+    return { id: this.id, here: this.here(), view: this.view, busy: this.busy, stage: s ? s.stage : null, done: s ? s.done : null, ...(d && d.debug && s ? d.debug(s) : {}),
       tries: s ? s.tries : null, hints: s ? s.hints : null, clue: d ? d.clue : null, done_line: d ? d.done : null, panel, title: panel ? $('#rm-title').textContent : '', status: $('#rm-status').textContent,
-      more: !$('#rm-more').hidden, saved: this.id ? store.local.json(this.key(), null) : null, visual: { ...world.room, spokes: world.room.spokes.join(''), clock: world.room.clock.join('') },
+      more: !$('#rm-more').hidden, saved: this.id ? store.local.json(this.key(), null) : null, visual,
       acts: [...document.querySelectorAll('#rm-acts [data-act]')].map((b) => ({ act: b.dataset.act, text: b.textContent, pressed: b.getAttribute('aria-pressed'), label: b.getAttribute('aria-label') })),
       set: R && R.roomInfo ? R.roomInfo() : null, align: this.view === 'through' && R && R.roomAlignError ? R.roomAlignError() : null };
   },

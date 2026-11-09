@@ -43,6 +43,9 @@ ROOMS['en-una'] = {
   // ---- state ----
   fresh() { return { v: 1, stage: 0, spokes: [0, 0, 0, 0, 0, 0, 0, 0], clock: [0, 3, 4, 7], cupTurned: false, done: false, tries: 0, hints: 0 }; },
   solvedState() { return { ...this.fresh(), stage: 3, done: true, spokes: this.code.slice(), clock: this.time.slice() }; },
+  /** The machine already stopped, only the last look left (the dev panel and the checks). */
+  almost(s) { s.stage = 2; s.spokes = this.code.slice(); s.clock = this.time.slice(); return s; },
+  debug(s) { return { spokes: s.spokes.join(''), clock: s.clock.join(''), cupTurned: s.cupTurned }; },
   normalize(raw) {
     const f = this.fresh();
     if (!raw || raw.v !== 1) return f;

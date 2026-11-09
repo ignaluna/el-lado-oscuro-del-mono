@@ -187,10 +187,10 @@ async function clickSubmit(p) {
 
 
 /**
- * Plays floor 1's room with real clicks (hotspots, the plate's buttons, Escape): code from the visor, the clock from the cup,
+ * Plays floor 1's room (En una) with real clicks (hotspots, the plate's buttons, Escape): code from the visor, the clock from the cup,
  * the mirror. `thorough` adds the wrong tries, the hint ladder and the interrupted look. Returns the room's state at the end.
  */
-async function playRoom(p, { check, shot, thorough = false }) {
+async function playEnUna(p, { check, shot, thorough = false }) {
   const rmState = async () => (await state(p)).room;
   const until = async (pred, ms = 15000) => { const t0 = Date.now(); let s; for (;;) { s = await rmState(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(150); } };
   const act = (name) => p.locator(`#rm-acts [data-act="${name}"]`).first();
@@ -278,6 +278,32 @@ async function playRoom(p, { check, shot, thorough = false }) {
   await p.waitForFunction(() => window.__eldom.state().room.done, null, { timeout: 15000 });
   return rmState();
 }
+
+
+/**
+ * What is particular to each room's walkthrough (the `room` and `trials` scenarios read it; a floor with a room in ROOMS needs an entry):
+ *   floor, chapter, minSegments (a sanity floor for the chalk lines), play(p, {check, shot, thorough}) → the room's state at the end,
+ *   built(set) (what the set reports about itself), hots (labels on screen on arrival), afterSolve(state), solvedRoom(state) (after a
+ *   reload), solvedHot (the label of the hotspot that says it is solved), replayHot + replayView (what opens the plate with LEER EL
+ *   CAPÍTULO / JUGARLO DE NUEVO), freshRoom(state) (after a reset), midWalk(p) + midOK(state) + midMsg (a step that must survive a reload).
+ */
+const ROOM_WALKS = {
+  'en-una': {
+    floor: 1, chapter: 'cap-1', minSegments: 1000, play: playEnUna,
+    built: (set) => set.codeDots === 83,
+    hots: [/^La pantalla de la máquina/, /^Una taza de café/],
+    afterSolve: (s) => s.visual.shut > 0.98,
+    solvedRoom: (s) => s.visual.shut > 0.98 && s.visual.mono > 0.98,
+    solvedHot: /el mono te mira/,
+    replayHot: 'La pantalla de la máquina', replayView: 'screen',
+    freshRoom: (s) => s.visual.shut === 0 && s.visual.mode === 'code',
+    async midWalk(p) {
+      await ev(p, () => window.__eldom.ui.roomTap('rm-screen')); await wait(1500);
+      await p.locator('#rm-acts [data-act="spoke-0"]').click(); await p.locator('#rm-acts [data-act="spoke-2"]').click();
+    },
+    midOK: (s) => s.spokes === '10100000' && s.visual.spokes === '10100000', midMsg: 'a reload keeps the spokes that were set',
+  },
+};
 
 const SCENARIOS = {
   async smoke(p, shot) {
@@ -582,18 +608,20 @@ const SCENARIOS = {
       check(s0.portal && s0.portal.pending && !(await iframeCount(p)), `${t.floor} «${t.title}»: no player of another record — the audio waits for the release`);
       let d = await tr();
       check(d.here && d.element === t.element, `${t.floor}: its element (${d.element}) stands in the world`);
-      if (t.floor === 1) { // a room: the cover, walkable; solved with its hotspots and the plate's buttons, then the book
+      if (cfg.rooms.includes(t.id)) { // a room: the cover, walkable; solved with its hotspots and the plate's buttons, then the book
+        const W = ROOM_WALKS[t.id], n = t.floor;
+        if (!W) throw new Error(`floor ${n} has a room (ROOMS['${t.id}']) but check.cjs has no walkthrough for it (ROOM_WALKS)`);
         const rd = await ev(p, () => window.__eldom.state().room);
-        check(rd.here && rd.set && rd.set.segments > 1000, '1: the cover is drawn in the world (a walkable room, ' + (rd.set && rd.set.segments) + ' chalk lines)');
-        check(rd.clue && cfg.bookText[t.chapter].paras.some((x) => rd.clue.split('\n').some((line) => (typeof x === 'string' ? x : x.t).includes(line.slice(0, 40)))), '1: its clue is a fragment of chapter 1');
+        check(rd.here && rd.set && rd.set.segments > W.minSegments, `${n}: the cover is drawn in the world (a walkable room, ${rd.set && rd.set.segments} chalk lines)`);
+        check(rd.clue && cfg.bookText[t.chapter].paras.some((x) => rd.clue.split('\n').some((line) => (typeof x === 'string' ? x : x.t).includes(line.slice(0, 40)))), `${n}: its clue is a fragment of chapter ${t.chapter.slice(4)}`);
         await p.locator('#rm-hint').click(); await wait(250);
         const hs = (await state(p)).room;
-        check(hs.status.length > 10 && !(await state(p)).progress.solved.includes(t.id), `1: a hint ("${hs.status}")`);
-        await shot('1-room');
+        check(hs.status.length > 10 && !(await state(p)).progress.solved.includes(t.id), `${n}: a hint ("${hs.status}")`);
+        await shot(`${n}-room`);
         await p.locator('#rm-close').click(); await wait(200);
-        const end = await playRoom(p, { check, shot });
-        check(end.done && end.stage === 3, `1: solved from what is on screen — "${end.status}"`);
-        await wait(900); await shot('1-room-solved');
+        const end = await W.play(p, { check, shot });
+        check(end.done && end.stage === 3, `${n}: solved from what is on screen — "${end.status}"`);
+        await wait(900); await shot(`${n}-room-solved`);
       } else {
       // the element itself is the way in (a tap on it in the world); the button under the floor's name too
       await p.locator('#tr-open').first().click(); await p.waitForFunction(() => window.__eldom.state().overlay === 'trial', null, { timeout: 8000 }); await wait(500);
@@ -1205,66 +1233,76 @@ const SCENARIOS = {
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' level check(s) failed: ' + fails.join(' | '));
   },
-  // Floor 1's room: the cover drawn in the world and the four-step challenge in it, with real clicks; solving gives the page and
-  // chapter 1 once; the room survives a reload; replaying gives nothing twice; reset works.
+  // The rooms (floors 1 and 2 so far; ROOM_WALKS names what is particular to each): the cover drawn in the world and the
+  // challenge in it, with real clicks; solving gives the page and the chapter once; the room survives a reload; replaying gives
+  // nothing twice; reset works. `--floors 2` runs one room only.
   async room(p, shot, log) {
     const fails = [];
     const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
     const rmState = async () => (await state(p)).room;
     const cfg = await ev(p, () => window.__eldom.config());
-    await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.clearBook(); window.__eldom.dev.roomReset(); });
-    await ev(p, () => window.__eldom.dev.released());
-    await ev(p, () => window.__eldom.dev.arrive(1)); await waitFloor(p, 1); await wait(2600);
-    let s = await rmState();
-    check(s.here && s.set && s.set.segments > 1000 && s.set.codeDots === 83, `the cover is built in the world: ${s.set && s.set.segments} chalk lines, the code in ${s.set && s.set.codeDots} dots`);
-    check(((await state(p)).portal || {}).dock === 'compact' || p.viewportSize().width < 640, 'the official player waits in the corner (the room is the floor)');
-    check(s.clue && cfg.bookText['cap-1'].paras.some((x) => s.clue.split('\n').some((line) => (typeof x === 'string' ? x : x.t).includes(line.slice(0, 40)))), 'the clue is the book\'s own words');
-    const labels = await ev(p, () => [...document.querySelectorAll('.hot')].filter((b) => !b.hidden).map((b) => b.getAttribute('aria-label')));
-    check(labels.some((l) => /^La pantalla de la máquina/.test(l)) && labels.some((l) => /^Una taza de café/.test(l)), `the hotspots on screen: ${labels.join(' | ')}`);
-    await shot('room-01-arrive');
-    // the whole puzzle
-    const end = await playRoom(p, { check, shot, thorough: true });
-    check(end.done && end.stage === 3 && end.visual.shut > 0.98, `the last look solves the floor: "${end.status}"`);
-    await p.waitForFunction(() => window.__eldom.state().overlay === 'book', null, { timeout: 12000 }); await wait(500);
-    let st = await state(p);
-    const b = st.book;
-    check(b.leafIds[b.at] === 'cap-1' && b.text.includes(cfg.bookText['cap-1'].heading.trim()) && b.count === '1 / 9', `the book opens on «${cfg.bookText['cap-1'].heading.trim()}» (${b.count})`);
-    await shot('room-08-book');
-    await p.locator('#bk-close').click(); await wait(900);
-    st = await state(p);
-    check(st.progress.count === 1 && st.progress.solved.includes('en-una'), 'progress 1/9: only this floor');
-    check(st.room.saved && st.room.saved.done && st.room.saved.stage === 3, `the room's own state is saved (${JSON.stringify(st.room.saved)})`);
-    // a reload keeps it solved
-    await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
-    await ev(p, () => window.__eldom.dev.released()); await ev(p, () => window.__eldom.dev.arrive(1)); await waitFloor(p, 1); await wait(2600);
-    s = await rmState();
-    check(s.done && s.visual.shut > 0.98 && s.visual.mono > 0.98 && (await state(p)).progress.count === 1, 'after a reload: the room is solved and the machine stays stopped');
-    check(await ev(p, () => [...document.querySelectorAll('.hot')].some((x) => !x.hidden && /el mono te mira/.test(x.getAttribute('aria-label')))), 'its screen says so');
-    await shot('room-09-solved-room');
-    // replay: the solved room gives nothing twice
-    await p.locator('.hot[aria-label^="La pantalla de la máquina"]').first().click(); await wait(1600);
-    s = await rmState();
-    check(s.view === 'screen' && s.acts.some((a) => a.act === 'leer') && s.acts.some((a) => a.act === 'otra-vez') && /ya está en tu libro/.test(s.status), `a solved room offers the chapter and a new game ("${s.status}")`);
-    await p.locator('#rm-acts [data-act="otra-vez"]').click(); await wait(250);
-    check(/REINICIAR/.test(await p.locator('#rm-acts [data-act="otra-vez"]').innerText()), 'reset asks first (two taps)');
-    await p.locator('#rm-acts [data-act="otra-vez"]').click(); await wait(1800);
-    s = await rmState();
-    check(!s.done && s.stage === 0 && s.visual.shut === 0 && s.visual.mode === 'code' && (await state(p)).progress.count === 1, 'reset: the room starts again (asterisk, the machine running), the book keeps its chapter');
-    const pagesBefore = (await state(p)).book.pages.length;
-    const again = await playRoom(p, { check, shot });
-    await wait(3600);
-    st = await state(p);
-    check(again.done && st.overlay !== 'book' && st.progress.count === 1 && st.book.pages.length === pagesBefore && /ya estaba/.test((await rmState()).status), `playing it again gives nothing twice: "${(await rmState()).status}" (still ${st.progress.count}/9, book ${st.book.pages.length} chapters)`);
-    await ev(p, () => window.__eldom.dev.roomReset()); await wait(600);
-    s = await rmState();
-    check(!s.done && s.stage === 0 && s.saved.stage === 0, 'dev.roomReset starts the room again');
-    // the lock's state survives a reload midway
-    await ev(p, () => window.__eldom.ui.roomTap('rm-screen')); await wait(1500);
-    await p.locator('#rm-acts [data-act="spoke-0"]').click(); await p.locator('#rm-acts [data-act="spoke-2"]').click();
-    await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
-    await ev(p, () => window.__eldom.dev.released()); await ev(p, () => window.__eldom.dev.arrive(1)); await waitFloor(p, 1); await wait(2400);
-    s = await rmState();
-    check(s.spokes === '10100000' && s.visual.spokes === '10100000', 'a reload keeps the spokes that were set');
+    const only = (opt('floors', '') || '').split(',').filter(Boolean).map(Number);
+    const reload = async (n) => {
+      await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
+      await ev(p, () => window.__eldom.dev.released()); await ev(p, (f) => window.__eldom.dev.arrive(f), n); await waitFloor(p, n); await wait(2600);
+    };
+    for (const id of cfg.rooms) {
+      const W = ROOM_WALKS[id], n = W ? W.floor : 0;
+      if (!W) throw new Error(`ROOMS['${id}'] has no walkthrough in check.cjs (ROOM_WALKS)`);
+      if (only.length && !only.includes(n)) continue;
+      log(`--- floor ${n}: ${id}`);
+      const pre = n === 1 ? 'room' : `room${n}`, ch = W.chapter, heading = cfg.bookText[ch].heading.trim();
+      await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.clearBook(); window.__eldom.dev.roomReset(); });
+      await ev(p, () => window.__eldom.dev.released());
+      await ev(p, (f) => window.__eldom.dev.arrive(f), n); await waitFloor(p, n); await wait(2600);
+      let s = await rmState();
+      check(s.here && s.id === id && s.set && s.set.segments > W.minSegments && W.built(s.set), `${n}: the cover is built in the world: ${s.set && s.set.segments} chalk lines (${JSON.stringify(s.set)})`);
+      check(((await state(p)).portal || {}).dock === 'compact' || p.viewportSize().width < 640, `${n}: the official player waits in the corner (the room is the floor)`);
+      check(s.clue && cfg.bookText[ch].paras.some((x) => s.clue.split('\n').some((line) => (typeof x === 'string' ? x : x.t).includes(line.slice(0, 40)))), `${n}: the clue is the book's own words`);
+      const labels = await ev(p, () => [...document.querySelectorAll('.hot')].filter((b) => !b.hidden).map((b) => b.getAttribute('aria-label')));
+      check(W.hots.every((re) => labels.some((l) => re.test(l))), `${n}: the hotspots on screen: ${labels.join(' | ')}`);
+      await shot(`${pre}-01-arrive`);
+      // the whole puzzle
+      const end = await W.play(p, { check, shot, thorough: true });
+      check(end.done && end.stage === 3 && W.afterSolve(end), `${n}: the last step solves the floor: "${end.status}"`);
+      await p.waitForFunction(() => window.__eldom.state().overlay === 'book', null, { timeout: 12000 }); await wait(500);
+      let st = await state(p);
+      const b = st.book;
+      check(b.leafIds[b.at] === ch && b.text.includes(heading) && b.count === '1 / 9', `${n}: the book opens on «${heading}» (${b.count})`);
+      await shot(`${pre}-08-book`);
+      await p.locator('#bk-close').click(); await wait(900);
+      st = await state(p);
+      check(st.progress.count === 1 && st.progress.solved.includes(id), `${n}: progress 1/9: only this floor`);
+      check(st.room.saved && st.room.saved.done && st.room.saved.stage === 3, `${n}: the room's own state is saved (${JSON.stringify(st.room.saved)})`);
+      // a reload keeps it solved
+      await reload(n);
+      s = await rmState();
+      check(s.done && W.solvedRoom(s) && (await state(p)).progress.count === 1, `${n}: after a reload the room is solved and stays quiet`);
+      check(await ev(p, (src) => [...document.querySelectorAll('.hot')].some((x) => !x.hidden && new RegExp(src).test(x.getAttribute('aria-label'))), W.solvedHot.source), `${n}: its hotspot says so`);
+      await shot(`${pre}-09-solved-room`);
+      // replay: the solved room gives nothing twice
+      await p.locator(`.hot[aria-label^="${W.replayHot}"]`).first().click(); await wait(1600);
+      s = await rmState();
+      check(s.view === W.replayView && s.acts.some((a) => a.act === 'leer') && s.acts.some((a) => a.act === 'otra-vez') && /ya está en tu libro/.test(s.status), `${n}: a solved room offers the chapter and a new game ("${s.status}")`);
+      await p.locator('#rm-acts [data-act="otra-vez"]').click(); await wait(250);
+      check(/REINICIAR/.test(await p.locator('#rm-acts [data-act="otra-vez"]').innerText()), `${n}: reset asks first (two taps)`);
+      await p.locator('#rm-acts [data-act="otra-vez"]').click(); await wait(1800);
+      s = await rmState();
+      check(!s.done && s.stage === 0 && W.freshRoom(s) && (await state(p)).progress.count === 1, `${n}: reset: the room starts again, the book keeps its chapter`);
+      const pagesBefore = (await state(p)).book.pages.length;
+      const again = await W.play(p, { check, shot });
+      await wait(3600);
+      st = await state(p);
+      check(again.done && st.overlay !== 'book' && st.progress.count === 1 && st.book.pages.length === pagesBefore && /ya estaba/.test((await rmState()).status), `${n}: playing it again gives nothing twice: "${(await rmState()).status}" (still ${st.progress.count}/9, book ${st.book.pages.length} chapters)`);
+      await ev(p, () => window.__eldom.dev.roomReset()); await wait(600);
+      s = await rmState();
+      check(!s.done && s.stage === 0 && s.saved.stage === 0, `${n}: dev.roomReset starts the room again`);
+      // the state survives a reload midway
+      await W.midWalk(p);
+      await reload(n);
+      s = await rmState();
+      check(W.midOK(s), `${n}: ${W.midMsg}`);
+    }
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' room check(s) failed: ' + fails.join(' | '));
   },

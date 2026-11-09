@@ -5,8 +5,12 @@
 //   { root, update(dt, t), pose(view, a, free), solids(), info(), anchors in ctx.anchors }.
 //   Rooms are built when their floor is, and disposed completely when it is left (see destroy()).
 // ═══════════════════════════════════════════════════════════════════════════════════════════
-/** What the controller (59-room-0.js) animates and the set reads every frame. */
-Object.assign(world, { room: { shut: 0, mode: 'code', spokes: [0, 0, 0, 0, 0, 0, 0, 0], clock: [0, 3, 4, 7], cup: 0, through: 0, mono: 0, page: 0, flash: 0, key: '' } });
+/**
+ * What the controller (59-room-0.js) animates and the set reads every frame. `through`, `page` and `flash` belong to the
+ * framework (the close look through something, the page flying to the book, a flash); `shut`, `mode`, `spokes`, `clock`, `cup`
+ * and `mono` are floor 1's. Every other floor keeps its own values in `v` (its definition's visual() sets it whole).
+ */
+Object.assign(world, { room: { shut: 0, mode: 'code', spokes: [0, 0, 0, 0, 0, 0, 0, 0], clock: [0, 3, 4, 7], cup: 0, through: 0, mono: 0, page: 0, flash: 0, key: '', v: {} } });
 
 const RIBBON_VERT = /* glsl */`
 attribute vec3 aOther; attribute vec4 aInfo; attribute float aSeed;

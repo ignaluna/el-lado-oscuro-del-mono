@@ -118,7 +118,7 @@ function syncUI() {
   Dev.refresh();
 }
 function setPhase(p) { world.phase = p; if (p !== 'cabin') SpNotice.close(); syncUI(); }
-const ROOM_HOTS = ['rm-screen', 'rm-visor', 'rm-cup'];
+const ROOM_HOTS = [...new Set(Object.values(ROOMS).flatMap((d) => Object.keys(d.hots)))]; // every room's hotspots (each shows only in its own room)
 const LEVEL_HOTS = ['lv-wall', 'lv-stones', 'lv-painting', 'lv-hatch', 'lv-box', 'lv-dial-0', 'lv-dial-1', 'lv-dial-2', 'lv-latch', 'lv-object'];
 let hintTimer = 0;
 function hint(text, ms = 2600) {
@@ -1263,7 +1263,7 @@ async function boot() {
   let readyRes;
   window.__eldom = {
     ready: new Promise((res) => { readyRes = res; }),
-    config: () => ({ release: RELEASE_AT, demo: DEMO_ALBUM, gallery: { enabled: GALLERY.enabled, pieces: GALLERY.pieces.map(({ id, src, title, caption, thanks }) => ({ id, src, title, caption, thanks })), thanks: GALLERY.thanks.lines }, tracks: tracks.map((t) => ({ album: t.album, floor: t.floor, id: t.id, title: t.title, chapter: t.chapter || null, element: t.element || null, youtubeVideoId: t.youtubeVideoId, youtubeStartSeconds: t.youtubeStartSeconds, spotifyTrackUri: t.spotifyTrackUri, spotifyAlbumId: t.spotifyAlbumId, durationSeconds: t.durationSeconds })), level: { floor: Level.floor(), trackId: LEVEL.trackId, symbols: LEVEL.symbols, stones: LEVEL.stones }, catalog: App.catalog || [],
+    config: () => ({ release: RELEASE_AT, demo: DEMO_ALBUM, gallery: { enabled: GALLERY.enabled, pieces: GALLERY.pieces.map(({ id, src, title, caption, thanks }) => ({ id, src, title, caption, thanks })), thanks: GALLERY.thanks.lines }, tracks: tracks.map((t) => ({ album: t.album, floor: t.floor, id: t.id, title: t.title, chapter: t.chapter || null, element: t.element || null, youtubeVideoId: t.youtubeVideoId, youtubeStartSeconds: t.youtubeStartSeconds, spotifyTrackUri: t.spotifyTrackUri, spotifyAlbumId: t.spotifyAlbumId, durationSeconds: t.durationSeconds })), level: { floor: Level.floor(), trackId: LEVEL.trackId, symbols: LEVEL.symbols, stones: LEVEL.stones }, rooms: Object.keys(ROOMS), catalog: App.catalog || [],
       book: { opening: BOOK.opening.map((p) => p.id), pages: BOOK.pages.map((p) => ({ id: p.id, foundIn: p.foundIn })), closing: BOOK.closing.id, back: BOOK.back.id }, bookText: BOOK_TEXT }),
     state() {
       const port = PlayerPortal.current;
