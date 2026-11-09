@@ -9,7 +9,9 @@
 //   speed, hover, dragging or sound. The room's own state lives in localStorage ("eldom.room.<id>.v1").
 //   A room definition: { aim, intro, clue, done, hints: [[tier…] per stage], hots: { id: { label(room), view } },
 //     fresh(), normalize(raw), solvedState(), almost(state) → the state at the last step (dev panel, checks),
-//     visual(state), panel(room, view) → { title, status, cls, build(actsEl, room) }, debug(state) → extra fields for the checks }
+//     visual(state), panel(room, view) → { title, status, cls, build(actsEl, room) }, debug(state) → extra fields for the checks,
+//     onSolved(state) (optional: the state is final, show it) }
+//   A hotspot may also carry on(room) → false while it must not show, and tap(room) in place of a view (an action without a close look).
 //   The saved state is { v, stage, done, tries, hints, … } (the framework reads stage, done and hints; a room adds what it needs).
 //   The ids of every room's hotspots ("rm-…") are collected from ROOMS by the director (ROOM_HOTS); a hotspot only shows
 //   where the set registered its anchor (ctx.anchors[id]) and the room's own definition lists it. A set reads world.room.v.
@@ -135,14 +137,15 @@ const Room = {
 
   // ---- what can be touched now ----
   hotOn(id) {
-    const d = this.def();
-    return !!(d && this.here() && d.hots && d.hots[id] && this.view === 'wide' && !this.busy);
+    const d = this.def(), h = d && d.hots && d.hots[id];
+    return !!(h && this.here() && this.view === 'wide' && !this.busy && (!h.on || h.on(this)));
   },
   label(id) { const d = this.def() || Object.values(ROOMS)[0]; const h = d && d.hots && d.hots[id]; return h ? (typeof h.label === 'function' ? h.label(this) : h.label) : id; },
   tap(id) {
     if (!this.hotOn(id)) return;
     Sound.unlock();
-    this.go(this.def().hots[id].view);
+    const h = this.def().hots[id];
+    if (h.tap) h.tap(this); else this.go(h.view);
   },
 
   // ---- the plate: title, a line of text, the controls of the view ----
@@ -246,7 +249,9 @@ const Room = {
     if (!d || !s || s.done || !this.here()) return;
     this.cancelHold();
     const first = !Progress.solved(this.id);
-    s.stage = 3; s.done = true; this.save();
+    s.stage = 3; s.done = true;
+    if (d.onSolved) d.onSolved(s); // the state is final: the set shows it
+    this.save();
     Sound.ding();
     if (first) {
       Trial.finish(); // Progress.solve, the chapter into the book, the book opens on it
