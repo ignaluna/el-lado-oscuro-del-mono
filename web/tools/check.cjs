@@ -174,6 +174,28 @@ const waitFloor = (p, n, timeout = 40000) =>
     { timeout },
   );
 const state = (p) => ev(p, () => window.__eldom.state());
+/**
+ * A hotspot is shown while any part of it is on screen, so `isVisible()` does not say a click can land: on a phone's narrow view a turn that
+ * stops as soon as the hotspot is visible can leave its centre past the edge, or under the player or a button, and Playwright then waits 8 s for a
+ * click that cannot land (the recurring mobile-only click timeouts of the room checks). hotPoint is the centre of the first hotspot with that
+ * label that is inside the viewport with nothing over it (or null): the turn helpers turn until there is one, and clickHot clicks that point.
+ */
+const hotPoint = (p, prefix) => ev(p, (l) => {
+  for (const b of document.querySelectorAll('.hot')) {
+    if (b.hidden || !(b.getAttribute('aria-label') || '').startsWith(l)) continue;
+    const r = b.getBoundingClientRect(), x = r.x + r.width / 2, y = r.y + r.height / 2;
+    if (x < 8 || y < 8 || x > innerWidth - 8 || y > innerHeight - 8) continue;
+    const top = document.elementFromPoint(x, y);
+    if (top === b || b.contains(top)) return [x, y];
+  }
+  return null;
+}, prefix);
+const clickHot = async (p, label) => {
+  const t0 = Date.now();
+  for (;;) { const pt = await hotPoint(p, label); if (pt) { await p.mouse.click(pt[0], pt[1]); return; } if (Date.now() - t0 > 8000) break; await wait(150); }
+  const why = await ev(p, (l) => [...document.querySelectorAll('.hot')].filter((b) => !b.hidden && (b.getAttribute('aria-label') || '').startsWith(l)).map((b) => { const r = b.getBoundingClientRect(), top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return { rect: [r.x, r.y, r.width, r.height].map(Math.round), view: [innerWidth, innerHeight], covered: top && top !== b && !b.contains(top) ? top.id || top.className || top.tagName : null }; }), label);
+  throw new Error(`no click can land on "${label}" (turned and waited): ${JSON.stringify(why)}`);
+};
 // GALLERY.enabled in 00-base.html: the gallery scenarios (and the gallery steps of the others) only run while the floor is open
 const galleryOn = (p) => ev(p, () => window.__eldom.config().gallery.enabled);
 // Official players only: a host may add frames of its own (Netlify's badge on free sites is an empty iframe).
@@ -197,8 +219,8 @@ async function playEnUna(p, { check, shot, thorough = false }) {
   const hot = (label) => p.locator(`.hot[aria-label^="${label}"]`).first();
   /** A tap on a hotspot; on a phone the figure may be around the corner: turn (E), like a visitor. */
   const tapHot = async (label) => {
-    for (let i = 0; i < 9 && !(await hot(label).isVisible()); i++) { const key = i < 3 ? 'e' : 'q'; await p.keyboard.down(key); await wait(i < 3 ? 220 : 150); await p.keyboard.up(key); await wait(300); }
-    await hot(label).click({ timeout: 8000 });
+    for (let i = 0; i < 9 && !(await hotPoint(p, label)); i++) { const key = i < 3 ? 'e' : 'q'; await p.keyboard.down(key); await wait(i < 3 ? 220 : 150); await p.keyboard.up(key); await wait(300); }
+    await clickHot(p, label);
   };
   const toWide = async () => { while ((await rmState()).view !== 'wide') { await p.keyboard.press('Escape'); await wait(1300); } };
   const code = [1, 0, 1, 1, 0, 0, 1, 0];
@@ -290,8 +312,8 @@ async function playSistema(p, { check, shot, thorough = false }) {
   const act = (name) => p.locator(`#rm-acts [data-act="${name}"]`).first();
   const hot = (label) => p.locator(`.hot[aria-label^="${label}"]`).first();
   const tapHot = async (label) => {
-    for (let i = 0; i < 9 && !(await hot(label).isVisible()); i++) { const key = i < 3 ? 'e' : 'q'; await p.keyboard.down(key); await wait(i < 3 ? 220 : 150); await p.keyboard.up(key); await wait(300); }
-    await hot(label).click({ timeout: 8000 });
+    for (let i = 0; i < 9 && !(await hotPoint(p, label)); i++) { const key = i < 3 ? 'e' : 'q'; await p.keyboard.down(key); await wait(i < 3 ? 220 : 150); await p.keyboard.up(key); await wait(300); }
+    await clickHot(p, label);
   };
   const toWide = async () => { while ((await rmState()).view !== 'wide') { await p.keyboard.press('Escape'); await wait(1300); } };
   const LABEL = { sustancias: 'Cápsulas', amor: 'Una nube', plata: 'Un edificio', exito: 'Un cohete' };
@@ -385,8 +407,8 @@ async function playGrito(p, { check, shot, thorough = false }) {
   const act = (name) => p.locator(`#rm-acts [data-act="${name}"]`).first();
   const hot = (label) => p.locator(`.hot:not([hidden])[aria-label^="${label}"]`).first();
   /** Turns (to the left, in steps) until the hotspot is on screen: what a visitor does to look around. */
-  const seeHot = async (label) => { for (let i = 0; i < 26 && !(await hot(label).isVisible()); i++) { await p.keyboard.down('q'); await wait(170); await p.keyboard.up('q'); await wait(260); } };
-  const tapHot = async (label) => { await seeHot(label); await hot(label).click({ timeout: 8000 }); };
+  const seeHot = async (label) => { for (let i = 0; i < 26 && !(await hotPoint(p, label)); i++) { await p.keyboard.down('q'); await wait(170); await p.keyboard.up('q'); await wait(260); } };
+  const tapHot = async (label) => { await seeHot(label); await clickHot(p, label); };
   const toWide = async () => { while ((await rmState()).view !== 'wide') { await p.keyboard.press('Escape'); await wait(1300); } };
   const reload = async () => {
     await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
@@ -494,7 +516,7 @@ async function playGrito(p, { check, shot, thorough = false }) {
   for (let i = 0; i < need; i++) {
     await seeHot('Un pedazo');
     const before = (await rmState()).taken;
-    await hot('Un pedazo').click({ timeout: 8000 }); await wait(400); s = await rmState();
+    await clickHot(p, 'Un pedazo'); await wait(400); s = await rmState();
     check(s.taken.split(',').filter(Boolean).length === i + 1 && s.taken !== before, `shard ${i + 1} of ${need} taken from the water (${s.taken})`);
     if (i === 0) {
       const cap = await p.locator('#cap-hint').innerText();
@@ -535,8 +557,8 @@ async function playCarajo(p, { check, shot, thorough = false }) {
   const act = (name) => p.locator(`#rm-acts [data-act="${name}"]`).first();
   const hot = (label) => p.locator(`.hot:not([hidden])[aria-label^="${label}"]`).first();
   /** Turns (to the left, in steps) until the hotspot is on screen: what a visitor does to look around. */
-  const seeHot = async (label) => { for (let i = 0; i < 26 && !(await hot(label).isVisible()); i++) { await p.keyboard.down('q'); await wait(170); await p.keyboard.up('q'); await wait(260); } };
-  const tapHot = async (label) => { await seeHot(label); await hot(label).click({ timeout: 8000 }); };
+  const seeHot = async (label) => { for (let i = 0; i < 26 && !(await hotPoint(p, label)); i++) { await p.keyboard.down('q'); await wait(170); await p.keyboard.up('q'); await wait(260); } };
+  const tapHot = async (label) => { await seeHot(label); await clickHot(p, label); };
   const toWide = async () => { while ((await rmState()).view !== 'wide') { await p.keyboard.press('Escape'); await wait(1300); } };
   const reload = async () => {
     await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
@@ -611,7 +633,7 @@ async function playCarajo(p, { check, shot, thorough = false }) {
       check(s.forks === 1, 'the next fork cannot be taken before the thing is found and held');
     }
     await seeHot('Una cosa del camino'); const before = (await rmState()).found;
-    await hot('Una cosa del camino').click({ timeout: 8000 }); await wait(400); s = await rmState();
+    await clickHot(p, 'Una cosa del camino'); await wait(400); s = await rmState();
     check(s.found === k + 1 && s.found !== before && s.phase === 'hold', `thing ${k + 1} taken from the water`);
     if (k === 0) { const cap = await p.locator('#cap-hint').innerText(); check(/bolsitas de residuo/i.test(cap) && s.view === 'wide', `taking one says so on screen: "${cap}"`); }
     if (thorough && k === 2) { // a reload in the middle keeps what was found and what is held
