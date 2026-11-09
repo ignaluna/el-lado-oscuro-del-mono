@@ -10,7 +10,7 @@
 //   A room definition: { aim, intro, clue, done, hints: [[tier…] per stage], hots: { id: { label(room), view } },
 //     fresh(), normalize(raw), solvedState(), almost(state) → the state at the last step (dev panel, checks),
 //     visual(state), panel(room, view) → { title, status, cls, build(actsEl, room) }, debug(state) → extra fields for the checks,
-//     onSolved(state) (optional: the state is final, show it) }
+//     onSolved(state) (optional: the state is final, show it), onArrive(room) (optional: the visitor just arrived; use room.later for timers) }
 //   A hotspot may also carry on(room) → false while it must not show, and tap(room) in place of a view (an action without a close look).
 //   The saved state is { v, stage, done, tries, hints, … } (the framework reads stage, done and hints; a room adds what it needs).
 //   The ids of every room's hotspots ("rm-…") are collected from ROOMS by the director (ROOM_HOTS); a hotspot only shows
@@ -51,6 +51,7 @@ const Room = {
     if (port && window.innerWidth >= 640) { Roam.docked = true; port.setDock('compact'); } // the room is the floor: the player waits in its corner
     const d = this.def();
     if (d.intro) hint(d.intro, 6200);
+    if (d.onArrive) d.onArrive(this); // (a room that watches the walker starts its own timer here; leaving clears every timer)
     syncUI();
   },
   leave() {
