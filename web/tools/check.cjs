@@ -190,6 +190,18 @@ const hotPoint = (p, prefix) => ev(p, (l) => {
   }
   return null;
 }, prefix);
+/**
+ * Turns (the way a visitor does, with the keys) until a click can land on the hotspot: a sweep to the left in short steps while it is not on
+ * screen, and a small nudge toward it once it shows half past an edge, so a phone's narrow view never leaves it stuck at the border.
+ */
+const turnTo = async (p, label) => {
+  const W = p.viewportSize().width;
+  for (let i = 0; i < 40 && !(await hotPoint(p, label)); i++) {
+    const x = await ev(p, (l) => { const b = [...document.querySelectorAll('.hot')].find((h) => !h.hidden && (h.getAttribute('aria-label') || '').startsWith(l)); if (!b) return null; const r = b.getBoundingClientRect(); return r.x + r.width / 2; }, label);
+    const key = x !== null && x > W - 8 ? 'e' : 'q';
+    await p.keyboard.down(key); await wait(x === null ? 170 : 70); await p.keyboard.up(key); await wait(x === null ? 260 : 200);
+  }
+};
 const clickHot = async (p, label) => {
   const t0 = Date.now();
   for (;;) { const pt = await hotPoint(p, label); if (pt) { await p.mouse.click(pt[0], pt[1]); return; } if (Date.now() - t0 > 8000) break; await wait(150); }
@@ -219,7 +231,7 @@ async function playEnUna(p, { check, shot, thorough = false }) {
   const hot = (label) => p.locator(`.hot[aria-label^="${label}"]`).first();
   /** A tap on a hotspot; on a phone the figure may be around the corner: turn (E), like a visitor. */
   const tapHot = async (label) => {
-    for (let i = 0; i < 9 && !(await hotPoint(p, label)); i++) { const key = i < 3 ? 'e' : 'q'; await p.keyboard.down(key); await wait(i < 3 ? 220 : 150); await p.keyboard.up(key); await wait(300); }
+    await turnTo(p, label);
     await clickHot(p, label);
   };
   const toWide = async () => { while ((await rmState()).view !== 'wide') { await p.keyboard.press('Escape'); await wait(1300); } };
@@ -312,7 +324,7 @@ async function playSistema(p, { check, shot, thorough = false }) {
   const act = (name) => p.locator(`#rm-acts [data-act="${name}"]`).first();
   const hot = (label) => p.locator(`.hot[aria-label^="${label}"]`).first();
   const tapHot = async (label) => {
-    for (let i = 0; i < 9 && !(await hotPoint(p, label)); i++) { const key = i < 3 ? 'e' : 'q'; await p.keyboard.down(key); await wait(i < 3 ? 220 : 150); await p.keyboard.up(key); await wait(300); }
+    await turnTo(p, label);
     await clickHot(p, label);
   };
   const toWide = async () => { while ((await rmState()).view !== 'wide') { await p.keyboard.press('Escape'); await wait(1300); } };
@@ -407,7 +419,7 @@ async function playGrito(p, { check, shot, thorough = false }) {
   const act = (name) => p.locator(`#rm-acts [data-act="${name}"]`).first();
   const hot = (label) => p.locator(`.hot:not([hidden])[aria-label^="${label}"]`).first();
   /** Turns (to the left, in steps) until the hotspot is on screen: what a visitor does to look around. */
-  const seeHot = async (label) => { for (let i = 0; i < 26 && !(await hotPoint(p, label)); i++) { await p.keyboard.down('q'); await wait(170); await p.keyboard.up('q'); await wait(260); } };
+  const seeHot = (label) => turnTo(p, label);
   const tapHot = async (label) => { await seeHot(label); await clickHot(p, label); };
   const toWide = async () => { while ((await rmState()).view !== 'wide') { await p.keyboard.press('Escape'); await wait(1300); } };
   const reload = async () => {
@@ -557,7 +569,7 @@ async function playCarajo(p, { check, shot, thorough = false }) {
   const act = (name) => p.locator(`#rm-acts [data-act="${name}"]`).first();
   const hot = (label) => p.locator(`.hot:not([hidden])[aria-label^="${label}"]`).first();
   /** Turns (to the left, in steps) until the hotspot is on screen: what a visitor does to look around. */
-  const seeHot = async (label) => { for (let i = 0; i < 26 && !(await hotPoint(p, label)); i++) { await p.keyboard.down('q'); await wait(170); await p.keyboard.up('q'); await wait(260); } };
+  const seeHot = (label) => turnTo(p, label);
   const tapHot = async (label) => { await seeHot(label); await clickHot(p, label); };
   const toWide = async () => { while ((await rmState()).view !== 'wide') { await p.keyboard.press('Escape'); await wait(1300); } };
   const reload = async () => {
