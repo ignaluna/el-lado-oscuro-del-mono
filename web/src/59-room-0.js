@@ -32,7 +32,8 @@ const Room = {
 
   def() { return this.id ? ROOMS[this.id] : null; },
   track() { return this.id ? trackById(this.id) : null; },
-  hosts(track) { return !!(track && ROOMS[track.id]); },
+  roomless: false,   // evaluation only (Dev.actions.roomless): every floor is built as a plain world, as if it had no room
+  hosts(track) { return !this.roomless && !!(track && ROOMS[track.id]); },
   /** The room needs the 3D world (the 2D fallback keeps the plate of Trial). */
   available() { return !!(R && R.kind === '3d' && R.roomPose && this.id); },
   here() { return this.available() && world.phase === 'floor' && !!this.track() && world.floor === this.track().floor; },

@@ -954,6 +954,8 @@ const Dev = (() => {
     trialSolve() { if (Room.here()) Room.solveNow(); else Trial.solveNow(); },
     roomSolve() { Room.solveNow(); },
     roomReset() { Room.reset(true); },
+    /** Evaluation only: builds floors as plain worlds, without their room (the roam, rotate-hint and tier checks need a world with nothing in it). Inert in a release build unless #dev is in the address. Not saved, not in the URL: a reload ends it. */
+    roomless(on) { Room.roomless = !!on && (SHOW_DEV_TOOLS || location.hash === '#dev'); },
     bookBuy(ebookUrl, physicalUrl) { BOOK.buy.ebookUrl = ebookUrl || ''; BOOK.buy.physicalUrl = physicalUrl || ''; if (App.overlay === 'book') Book.render(); },
     force2D() { switchTo2D(); },
     /** Opens every floor's official player on this device and waits for it to answer (no playback). */
@@ -1299,7 +1301,7 @@ async function boot() {
       invite: (n) => Invite.open(n ? trackOf(n) : null), closeInvite: () => Invite.close(), gateChoose: (p) => Gate.choose(p), gateDismiss: () => Gate.dismiss(),
     },
     dev: { prelaunch: A.prelaunch, lastTen: A.lastTen, released: A.released, openDoors: A.openDoors, closeDoors: A.closeDoors, exterior: A.exterior, interior: A.interior, gallery: A.gallery, gallerySample: A.gallerySample,
-      arrive: A.arrive, platform: A.platform, press: A.press, embedMode: A.embedMode, clearLead: A.clearLead, clearBook: A.clearBook, levelFloor: A.levelFloor, levelReset: A.levelReset, levelSolve: A.levelSolve, playerTest: A.playerTest, adaptTest: (ms, s) => (R && R.adaptTest ? R.adaptTest(ms, s) : null), roamTo: A.roamTo, roamPush: A.roamPush, bookFind: A.bookFind, bookAll: A.bookAll, progressReset: A.progressReset, trialSolve: A.trialSolve, roomSolve: A.roomSolve, roomReset: A.roomReset, bookBuy: A.bookBuy, force2D: A.force2D, reducedMotion: A.reducedMotion, timeScale: A.timeScale },
+      arrive: A.arrive, platform: A.platform, press: A.press, embedMode: A.embedMode, clearLead: A.clearLead, clearBook: A.clearBook, levelFloor: A.levelFloor, levelReset: A.levelReset, levelSolve: A.levelSolve, playerTest: A.playerTest, adaptTest: (ms, s) => (R && R.adaptTest ? R.adaptTest(ms, s) : null), roamTo: A.roamTo, roamPush: A.roamPush, bookFind: A.bookFind, bookAll: A.bookAll, progressReset: A.progressReset, trialSolve: A.trialSolve, roomSolve: A.roomSolve, roomless: A.roomless, roomReset: A.roomReset, bookBuy: A.bookBuy, force2D: A.force2D, reducedMotion: A.reducedMotion, timeScale: A.timeScale },
   };
   boot().then(readyRes, (e) => { console.error(e); readyRes(); });
 }

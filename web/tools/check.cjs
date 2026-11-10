@@ -2639,7 +2639,8 @@ const SCENARIOS = {
     const vw = p.viewportSize();
 
     await ev(p, () => window.__eldom.dev.released());
-    await ev(p, () => window.__eldom.dev.arrive(6)); await waitFloor(p, 6); await wait(2500); // (a world with no room: the first view faces straight ahead and nothing blocks the walk; floors with a room are checked below)
+    await ev(p, () => window.__eldom.dev.roomless(true)); // (dev only: a floor built without its room, so the first view faces straight ahead and nothing blocks the walk; floors with a room are checked below)
+    await ev(p, () => window.__eldom.dev.arrive(6)); await waitFloor(p, 6); await wait(2500);
     let s = await st();
     check(s.roam.scene === 'floor', `free walking on a world (scene ${s.roam.scene})`);
     if (touch) check(s.roam.ghost, 'touch screen: the joystick hint ring is shown');
@@ -2703,6 +2704,7 @@ const SCENARIOS = {
       await p.locator('#lv-back').click(); await wait(1500);
     }
 
+    await ev(p, () => window.__eldom.dev.roomless(false)); // (the rest of the walk visits floors with their rooms)
     // collisions: walk straight into the level wall and the stones (Tan Buena, −1); the visitor stops outside
     await ev(p, () => window.__eldom.dev.arrive(-1)); await waitFloor(p, -1); await wait(2200);
     const solids = await ev(p, () => window.__eldom.state().roam.solids);
@@ -2818,7 +2820,7 @@ const SCENARIOS = {
     ];
     const measure = async (q) => { // renders per second and the distance a 1.5 s push walks, at a world
       await q.evaluate(() => window.__eldom.dev.released());
-      await q.evaluate(() => window.__eldom.dev.arrive(6));
+      await q.evaluate(() => { window.__eldom.dev.roomless(true); window.__eldom.dev.arrive(6); });
       await q.waitForFunction(() => window.__eldom.state().phase === 'floor' && window.__eldom.state().floor === 6, null, { timeout: 40000 });
       await wait(2500);
       await q.evaluate(() => window.__eldom.dev.roamTo(0, 6, 0)); await wait(500);
@@ -2826,6 +2828,7 @@ const SCENARIOS = {
       await q.evaluate(() => window.__eldom.dev.roamPush(0, 1, 1500));
       await wait(1500);
       const s1 = await q.evaluate(() => window.__eldom.state());
+      await q.evaluate(() => window.__eldom.dev.roomless(false));
       return { fps: (s1.tier.renders - r0) / ((Date.now() - t0) / 1000), walked: Math.abs(s1.cam.z - z0) };
     };
     let fullRun = null, liteRun = null;
@@ -3014,7 +3017,7 @@ const SCENARIOS = {
     await ev(p, () => window.__eldom.dev.released());
     const lineUp = () => ev(p, () => { const e = document.querySelector('#cap-hint'); return !e.hidden && /Acostá el teléfono/.test(e.textContent); });
     if (vw.width < vw.height) { // upright: no dialog, one brief line once the walking ring has gone
-      await ev(p, () => window.__eldom.dev.arrive(6)); await waitFloor(p, 6); await wait(2400);
+      await ev(p, () => { window.__eldom.dev.roomless(true); window.__eldom.dev.arrive(6); }); await waitFloor(p, 6); await wait(2400);
       check((await p.locator('#rot-invite').count()) === 0 && (await ev(p, () => ![...document.querySelectorAll('[role=dialog]')].some((e) => e.checkVisibility()))), 'upright phone in a world: no dialog in the way');
       check(!(await lineUp()) && (await state(p)).roam.ghost, 'the walking ring comes first, with no line yet');
       await shot('01-world-upright');
@@ -3023,7 +3026,7 @@ const SCENARIOS = {
       await shot('02-line');
       await p.waitForFunction(() => document.querySelector('#cap-hint').hidden, null, { timeout: 8000 }).catch(() => {});
       check(!(await lineUp()), 'the line goes by itself');
-      await ev(p, () => window.__eldom.dev.arrive(3)); await waitFloor(p, 3); await wait(8500);
+      await ev(p, () => { window.__eldom.dev.roomless(false); window.__eldom.dev.arrive(3); }); await waitFloor(p, 3); await wait(8500);
       check(!(await lineUp()), 'and it does not come back in the next world');
     } else {
       await ev(p, () => { sessionStorage.removeItem('eldom.platform'); });
