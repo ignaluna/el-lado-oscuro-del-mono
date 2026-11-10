@@ -689,6 +689,163 @@ async function playCarajo(p, { check, shot, thorough = false }) {
 }
 
 /**
+ * Plays floor 8's room (the void) with real clicks: the star that keeps its distance (three steps toward it, by taps), the three paper castles
+ * that show only when the visitor is near (walked to: one with the joystick, the others placed beside them), unfolded one by one into a
+ * road, the glass that is set down while the wave pulls back, and the last word. `thorough` adds saved states that must be rejected, things
+ * touched out of turn, the hint ladder of every stage, wrong tries (a breaking wave, PERDONAME), a reload in the middle.
+ * Returns the room's state at the end.
+ */
+async function playVacio(p, { check, shot, thorough = false }) {
+  const FLOOR = 8, KEY = 'eldom.room.no-me-perdones.v1';
+  const rmState = async () => (await state(p)).room;
+  const until = async (pred, ms = 15000) => { const t0 = Date.now(); let s; for (;;) { s = await rmState(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(120); } };
+  const act = (name) => p.locator(`#rm-acts [data-act="${name}"]`).first();
+  const hot = (label) => p.locator(`.hot:not([hidden])[aria-label^="${label}"]`).first();
+  const seeHot = (label) => turnTo(p, label);
+  const tapHot = async (label) => { await seeHot(label); await clickHot(p, label); };
+  const toWide = async () => { while ((await rmState()).view !== 'wide') { await p.keyboard.press('Escape'); await wait(1300); } };
+  const reload = async () => {
+    await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
+    await ev(p, () => window.__eldom.dev.released()); await ev(p, (f) => window.__eldom.dev.arrive(f), FLOOR); await waitFloor(p, FLOOR); await wait(2600);
+  };
+  const hintLadder = async (stage, rx, msg) => {
+    await p.locator('#rm-hint').click(); await wait(200); let s = await rmState(); const h1 = s.status;
+    check(h1.length > 20 && s.more && s.stage === stage, `${msg}: hint 1 "${h1}"`);
+    await p.locator('#rm-more').click(); await wait(200); const h2 = (await rmState()).status;
+    await p.locator('#rm-more').click(); await wait(200); s = await rmState();
+    check(h2 !== h1 && s.status !== h2 && rx.test(s.status) && !s.more, `${msg}: hint 3 gives the whole answer ("${s.status}") and there is no fourth`);
+    if (await p.locator('#rm-close').isVisible()) { await p.locator('#rm-close').click(); await wait(300); }
+  };
+  /** Stands the visitor `d` metres from castle k (on the side where they are now), facing it. */
+  const stand = async (k, d) => {
+    const st0 = await state(p), c = st0.room.set.castles[k], cam = st0.cam;
+    let dx = cam.x - c.x, dz = cam.z - c.z; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+    const x = c.x + dx * d, z = c.z + dz * d, yaw = Math.atan2(-(c.x - x), -(c.z - z));
+    await ev(p, ([x, z, y]) => window.__eldom.dev.roamTo(x, z, y), [x, z, yaw]); await wait(900);
+  };
+  const castleHots = () => p.locator('.hot:not([hidden])[aria-label^="Un castillo de papel"]').count();
+  let s = await rmState();
+
+  if (thorough) {
+    // a saved state that makes no sense is rejected and a valid prefix is kept
+    const plant = async (raw) => { await ev(p, ([k, r]) => localStorage.setItem(k, typeof r === 'string' ? r : JSON.stringify(r)), [KEY, raw]); await reload(); return rmState(); };
+    s = await plant({ v: 1, stage: 3, steps: 9, open: [0, 1, 2], placed: true, done: true });
+    check(!s.done && s.stage === 0 && s.steps === 0 && s.open === '' && !s.placed, `corrupted state (9 steps): rejected, nothing after it is kept (${JSON.stringify(s.saved)})`);
+    s = await plant({ v: 1, steps: 2, open: [0, 1], placed: true, done: true });
+    check(!s.done && s.steps === 2 && s.open === '' && !s.placed && s.phase === 'star', `castles unfolded before the star was left behind (2 steps): they and what follows are dropped (steps ${s.steps}, open "${s.open}")`);
+    s = await plant({ v: 1, steps: 3, open: [0, 0, 1], placed: true, done: true });
+    check(!s.done && s.open === '0' && !s.placed && s.phase === 'castles', `a castle unfolded twice: the valid prefix is kept (open "${s.open}")`);
+    s = await plant({ v: 1, steps: 3, open: [2, 1, 7], placed: true });
+    check(s.open === '2,1' && !s.placed && s.stage === 1, `a castle that does not exist: the valid prefix is kept (open "${s.open}")`);
+    s = await plant({ v: 1, steps: 3, open: [0, 1], placed: true });
+    check(s.open === '0,1' && !s.placed && s.phase === 'castles', 'the glass set down with a castle still folded is refused');
+    s = await plant({ v: 1, steps: 3, open: [0, 1, 2], placed: false, done: true });
+    check(!s.done && !s.placed && s.phase === 'glass' && s.stage === 2, '"done" without the glass set down is refused');
+    s = await plant({ v: 1, steps: 3, open: [1, 0, 2], placed: true });
+    check(!s.done && s.placed && s.open === '1,0,2' && s.phase === 'finale' && s.stage === 3 && s.visual.v.down === 1, 'a state play can reach is kept as it is (the glass down, the last word still to say)');
+    s = await plant({ v: 2, steps: 3, open: [0, 1, 2], placed: true });
+    check(s.stage === 0 && s.steps === 0 && s.open === '', 'a saved state of another version: a fresh room');
+    s = await plant('esto no es json{');
+    check(!s.done && s.stage === 0 && s.steps === 0, 'an unreadable saved state: a fresh room');
+    await ev(p, () => window.__eldom.dev.roomReset()); await wait(600);
+    s = await rmState();
+  }
+  check(s.here && s.view === 'wide' && s.stage === 0 && s.steps === 0 && s.open === '' && s.set.near.every((x) => x === 0), `the room: standing in it, stage ${s.stage}, the star ahead, no castle in sight`);
+  check((await castleHots()) === 0, 'the castles show only when the visitor is near: none can be touched from the arrival spot');
+  // nothing can be done before its turn
+  await ev(p, () => window.__eldom.ui.roomTap('rm-castillo-0')); await ev(p, () => window.__eldom.ui.roomTap('rm-vaso')); await wait(300); s = await rmState();
+  check(s.open === '' && s.steps === 0 && s.view === 'wide', 'a castle cannot be unfolded, nor the glass looked at, before the star is left behind');
+
+  // 1. the star keeps its distance
+  if (thorough) await hintLadder(0, /tres veces/, 'stage 0');
+  let st0 = await state(p); const d0 = st0.room.set.star + 2.7 - st0.cam.z;
+  for (let k = 1; k <= 3; k++) {
+    await tapHot('Una estrella'); s = await until((x) => x.steps === k && !x.busy, 8000); await wait(1000);
+    const stk = await state(p), dk = stk.room.set.star + 2.7 - stk.cam.z;
+    check(s.steps === k && s.visual.v.steps === k && stk.cam.z > st0.cam.z + 0.9 * k && dk > d0 + 0.3 * k, `step ${k} toward the star: the visitor walked ${(stk.cam.z - 2.7).toFixed(1)} m and the star is ${dk.toFixed(1)} m away (it began ${d0.toFixed(1)} m away): it keeps its distance`);
+    if (k === 1 && thorough) await shot('room8-02-star');
+  }
+  s = await rmState();
+  check(s.stage === 1 && s.phase === 'castles' && s.visual.v.far === 1 && /No hay meta/i.test(await p.locator('#cap-hint').innerText()), `the third step: "${await p.locator('#cap-hint').innerText()}" (stage ${s.stage})`);
+  check(!(await p.locator('.hot:not([hidden])[aria-label^="Una estrella"]').count()), 'the star is no longer a place to go (its hotspot is gone)');
+
+  // 2. the castles
+  if (thorough) {
+    await p.locator('#rm-hint').click(); await wait(200); s = await rmState();
+    check(/castillos de papel/.test(s.status) && s.stage === 1 && s.more, `the hint counter starts again when the stage advances: "${s.status}"`);
+    await p.locator('#rm-more').click(); await wait(200); await p.locator('#rm-more').click(); await wait(200); s = await rmState();
+    check(/del fondo, a la izquierda/.test(s.status) && !s.more, `stage 1: hint 3 gives the whole answer ("${s.status}")`);
+    if (await p.locator('#rm-close').isVisible()) { await p.locator('#rm-close').click(); await wait(300); }
+    await ev(p, () => window.__eldom.ui.roomTap('rm-castillo-1')); await wait(300); s = await rmState();
+    check(s.open === '' && /demasiado lejos/i.test(await p.locator('#cap-hint').innerText()), `a castle too far away is not touched: "${await p.locator('#cap-hint').innerText()}"`);
+  }
+  const ORDER = [0, 1, 2];
+  for (let i = 0; i < 3; i++) {
+    const k = ORDER[i];
+    if (i === 0) { // the first one by really walking: face it from afar and push the joystick forward
+      await stand(k, 4.4); s = await rmState();
+      check(s.set.near[k] < 0.3 && (await castleHots()) === 0, `castle ${k + 1} is not shown from ${s.castleDist[k]} m (it only appears near: ${s.set.near[k]})`);
+      await ev(p, () => window.__eldom.dev.roamPush(0, 1, 1100)); await wait(500);
+    } else {
+      if (thorough && i === 1) { await stand(k, 6); check((await castleHots()) === 0, 'from 6 m away the second castle cannot be touched'); }
+      await stand(k, 3.0);
+    }
+    s = await rmState();
+    await seeHot('Un castillo de papel'); const before = (await rmState()).open;
+    check(s.set.near[k] > 0.3 && (await castleHots()) >= 1, `castle ${k + 1}: near (${s.castleDist[k]} m), it shows itself`);
+    if (i === 0) { const cap = await p.locator('#cap-hint').innerText(); check(/castillo de papel/i.test(cap), `a castle that shows itself is said on screen: "${cap}"`); }
+    if (thorough && i === 0) await shot('room8-03-castle');
+    await clickHot(p, 'Un castillo de papel'); s = await until((x) => x.open.split(',').filter(Boolean).length === i + 1, 6000); await wait(400);
+    check(s.open.split(',').filter(Boolean).length === i + 1 && s.open !== before && s.visual.v.open[k] === 1 && s.visual.v.slot[k] === i, `castle ${k + 1} unfolded: it lies down as stretch ${i + 1} of the road (open "${s.open}")`);
+    s = await until((x) => x.stage === (i === 2 ? 2 : 1), 3000);
+    if (i === 0 && thorough) await shot('room8-04-first-sheet');
+    if (thorough && i === 1) { // a reload in the middle keeps what was unfolded
+      await reload(); s = await rmState();
+      check(s.open === '0,1' && s.visual.v.open.join('') === '110' && s.steps === 3 && s.phase === 'castles', `a reload keeps the steps (${s.steps}) and the castles unfolded (open "${s.open}")`);
+    }
+  }
+  s = await rmState();
+  check(s.stage === 2 && s.phase === 'glass' && s.visual.v.glass === 1 && /vaso de agua tiembla/i.test(await p.locator('#cap-hint').innerText()), `the third castle: the road reaches the centre and the glass shows (stage ${s.stage}): "${await p.locator('#cap-hint').innerText()}"`);
+
+  // 3. the glass
+  await ev(p, () => window.__eldom.dev.roamTo(0, 6.4, Math.PI)); await wait(900);
+  if (thorough) await hintLadder(2, /APOYAR EL VASO[\s\S]*LA OLA SE RETIRA/, 'stage 2');
+  await tapHot('El vaso de agua'); s = await until((x) => x.view === 'vaso' && x.panel, 8000); await wait(900);
+  check(s.acts.some((a) => a.act === 'apoyar') && s.acts.some((a) => a.act === 'esperar') && /tiembla/.test(s.status), `the glass: "${s.status}"`);
+  if (thorough) await shot('room8-05-glass');
+  if (thorough) { // a wave that breaks: not now (just after a wave starts to break, so the whole 1.6 s window is still ahead)
+    s = await until((x) => x.wave === 'rompe' && x.waveS < 0.45, 9000); await wait(150);
+    check(/LA OLA ROMPE/.test(await act('apoyar').innerText()), 'the button names the phase: LA OLA ROMPE');
+    await act('apoyar').click(); await wait(250); s = await rmState();
+    check(!s.placed && s.tries >= 1 && /no calman/.test(s.status) && s.visual.v.down === 0, `setting it down while the wave breaks: "${s.status}"`);
+    s = await until((x) => x.wave === 'retira' && x.waveS < 2.1, 9000); await wait(150);
+    check(/LA OLA SE RETIRA/.test(await act('apoyar').innerText()) && (await act('apoyar').getAttribute('data-ok')) === '1', 'the button names the phase: LA OLA SE RETIRA');
+    await act('apoyar').click();
+  } else {
+    await act('esperar').click(); // (the other way: let the room wait for the wave to pull back)
+  }
+  s = await until((x) => x.placed && !x.busy, 8000); await wait(500); s = await rmState();
+  check(s.placed && s.stage === 3 && s.phase === 'finale' && s.visual.v.down === 1 && s.visual.v.wave === 0 && s.acts.some((a) => a.act === 'perdoname') && s.acts.some((a) => a.act === 'no-perdones'), `the glass is set down: "${s.status}"`);
+  if (thorough) await shot('room8-06-finale');
+
+  // 4. the last word
+  if (thorough) {
+    await toWide(); await hintLadder(3, /NO ME PERDONES/, 'stage 3');
+    await tapHot('El vaso, apoyado'); await until((x) => x.view === 'vaso' && x.panel, 8000); await wait(900);
+    const tries = (await rmState()).tries;
+    await act('perdoname').click(); s = await until((x) => x.visual.v.grow === 1, 3000);
+    check(!s.done && s.tries === tries + 1 && s.visual.v.grow === 1 && s.visual.v.calm === 0 && /crecen/.test(s.status), `PERDONAME: the ripples grow, nothing is solved ("${s.status}")`);
+    s = await until((x) => x.visual.v.grow === 0, 6000);
+    check(s.visual.v.grow === 0 && !s.done, 'the growing ripples settle on their own');
+  }
+  await act('no-perdones').click();
+  await p.waitForFunction(() => window.__eldom.state().room.done, null, { timeout: 20000 });
+  s = await rmState();
+  if (thorough) { await wait(2400); await shot('room8-07-calm'); }
+  return rmState();
+}
+
+/**
  * What is particular to each room's walkthrough (the `room` and `trials` scenarios read it; a floor with a room in ROOMS needs an entry):
  *   floor, chapter, minSegments (a sanity floor for the chalk lines), play(p, {check, shot, thorough}) → the room's state at the end,
  *   built(set) (what the set reports about itself), hots (labels on screen on arrival), afterSolve(state), solvedRoom(state) (after a
@@ -758,6 +915,21 @@ const ROOM_WALKS = {
       await ev(p, () => window.__eldom.ui.roomTap('rm-ramal-0-i')); await wait(800); // the first fork, the right turn (left)
     },
     midOK: (s) => s.forks === 1 && s.found === 0 && s.visual.v.forks === 1 && s.held === 0, midMsg: 'a reload keeps the first turn that was taken (and nothing else)',
+  },
+  'no-me-perdones': {
+    floor: 8, chapter: 'cap-7', minSegments: 700, play: playVacio,
+    built: (set) => set.strokes > 300 && set.castles.length === 3 && set.bands >= 4,
+    tierBuilt: (set) => set.castles.length === 3 && set.bands >= 4,
+    hots: [/^Una estrella chiquita/],
+    afterSolve: (s) => s.visual.v.calm === 1 && s.placed,
+    solvedRoom: (s) => s.visual.v.calm === 1 && s.visual.v.down === 1 && s.visual.v.open.every((x) => x === 1) && s.visual.v.far === 1 && s.placed,
+    solvedHot: /quieto/,
+    replayHot: 'El vaso', replayView: 'vaso',
+    freshRoom: (s) => s.visual.v.calm === 0 && s.visual.v.open.every((x) => x === 0) && s.visual.v.glass === 0 && s.steps === 0,
+    async midWalk(p) {
+      await ev(p, () => window.__eldom.ui.roomTap('rm-estrella')); await wait(1900); // (one step toward the star, walked)
+    },
+    midOK: (s) => s.steps === 1 && s.visual.v.steps === 1 && s.open === '' && s.stage === 0, midMsg: 'a reload keeps the first step toward the star (and nothing else)',
   },
 };
 
@@ -2259,6 +2431,17 @@ const SCENARIOS = {
     s = await st();
     const inBoard4 = await ev(p, ([x, z, w]) => { const c = Math.cos(w.ry), sn = Math.sin(w.ry), lx = (x - w.x) * c - (z - w.z) * sn, lz = (x - w.x) * sn + (z - w.z) * c; return Math.abs(lx) < w.hw && Math.abs(lz) < w.hd; }, [s.cam.x, s.cam.z, board4]);
     check(!inBoard4 && Math.hypot(s.cam.x - board4.x, s.cam.z - board4.z) > 1.8, `floor 4: walking straight at the board stops the visitor outside it (${Math.hypot(s.cam.x - board4.x, s.cam.z - board4.z).toFixed(2)} m from its centre)`);
+    // floor 8 is a room too (a void of water: no board; the visitor walks over the ripples and only the glass at the centre is solid)
+    await ev(p, () => window.__eldom.dev.arrive(8)); await waitFloor(p, 8); await wait(2200);
+    const rs8 = await ev(p, () => window.__eldom.state().roam.solids), glass8 = rs8.find((x) => x.kind === 'circle');
+    check(!!glass8 && !rs8.some((x) => x.kind === 'box'), `floor 8: only the glass at the centre is solid (${rs8.map((x) => x.kind).join(', ')})`);
+    await ev(p, () => window.__eldom.dev.roamTo(0, 5.2, Math.PI)); await ev(p, () => window.__eldom.dev.roamPush(0, 1, 1500));
+    s = await st();
+    check(s.cam.z > 6.2 && Math.abs(s.cam.x) < 0.3, `floor 8: the ripples are walked over freely (from z 5.2 to ${s.cam.z.toFixed(2)})`);
+    await ev(p, ([x, z]) => window.__eldom.dev.roamTo(x, z - 4.5, Math.PI), [glass8.x, glass8.z]);
+    await ev(p, () => window.__eldom.dev.roamPush(0, 1, 4800));
+    s = await st();
+    check(Math.hypot(s.cam.x - glass8.x, s.cam.z - glass8.z) > 0.9 && s.cam.z < glass8.z, `floor 8: walking straight at the glass stops the visitor outside it (${Math.hypot(s.cam.x - glass8.x, s.cam.z - glass8.z).toFixed(2)} m from it)`);
     // the edge of the world: a long walk away stops at the rim
     await ev(p, () => window.__eldom.dev.roamTo(0, 6, Math.PI));
     await ev(p, () => window.__eldom.dev.roamPush(0, 1, 9000));

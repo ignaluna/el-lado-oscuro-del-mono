@@ -122,33 +122,11 @@ const ELODM_KINDS = {
     };
   },
 
-  // 8 — No me perdones: paper castles floating in a void; a glass of water that trembles
-  void(F, ctx) {
-    const { THREE } = ctx, { pos: o, s } = elementSpot(F, ctx);
-    const paper = F.lineMat([0.92, 0.92, 0.95], 0.75);
-    const castles = [-0.34, 0, 0.34].map((x, i) => {
-      const g = new THREE.Group(); F.group.add(g);
-      const l = F.line([[-0.1, 0], [-0.1, 0.16], [-0.04, 0.24], [0, 0.16], [0.04, 0.24], [0.1, 0.16], [0.1, 0], [-0.1, 0]].map(([a, b]) => F.V3(a * s, b * s, 0)), paper, false);
-      F.group.remove(l); g.add(l);
-      g.position.set(o.x + x * s, o.y + (0.12 - Math.abs(x) * 0.3) * s, o.z + i * 0.05 * s);
-      return g;
-    });
-    const path = [0, 1, 2, 3].map((i) => shape(F, { x: o.x, y: o.y - 0.42 * s, z: o.z - (0.25 - i * 0.22) * s }, s, [[-0.09, 0], [0.09, 0], [0.09, 0.001], [-0.09, 0.001]], F.lineMat([0.92, 0.92, 0.95], 0)));
-    const glass = new THREE.Group(); F.group.add(glass);
-    const gl = F.line([[-0.06, 0], [-0.07, 0.18], [0.07, 0.18], [0.06, 0], [-0.06, 0]].map(([a, b]) => F.V3(a * s, b * s, 0)), F.lineMat([0.86, 0.9, 1], 0.85), false);
-    const wl = F.line([[-0.065, 0.12], [0.065, 0.12]].map(([a, b]) => F.V3(a * s, b * s, 0)), F.lineMat(F.accent, 0.9), false);
-    for (const l of [gl, wl]) { F.group.remove(l); glass.add(l); }
-    glass.position.set(o.x, o.y - 0.36 * s, o.z + 0.5 * s);
-    const dust = F.particles(140, { mode: 2, box: [s, s * 0.8, s], radius: s * 0.7, origin: F.V3(o.x, o.y, o.z + 0.3 * s), size: 9, alpha: 0.3, speed: 0.05, tint: [0.75, 0.78, 0.9] });
-    F.light(F.V3(o.x, o.y, o.z - 1), 0.5, s * 5);
-    return (dt, t) => {
-      const tr = world.trial, flat = Math.max(tr.solved, tr.progress);
-      dust.u.uPhase.value += dt * dust.speed * 4;
-      castles.forEach((g, i) => { g.scale.y = Math.max(0.05, 1 - flat * 1.2 + i * 0.1 * flat); g.rotation.z = Math.sin(t * 0.5 + i) * 0.05; });
-      path.forEach((l, i) => { l.material.opacity = flat > i / 4 ? 0.7 : 0; });
-      const shake = (1 - tr.solved) * (0.6 + 0.4 * Math.sin(t * 0.9)) * 0.012 * s;
-      glass.position.x = o.x + Math.sin(t * 31) * shake; wl.rotation.z = Math.sin(t * 23) * 0.12 * (1 - tr.solved);
-    };
+  // 8 — No me perdones: the cover, walkable, ripples on dark water with a star and three paper castles in the void. Its art is a room
+  // (49-r3d-room-8-no-me-perdones.js) built beside the floor; the floor itself only keeps a faint light.
+  void(F) {
+    F.light(F.V3(F.A.x, 2.4, F.A.z - 1), 0.35, 8);
+    return () => {};
   },
 
   // 9 — Portales: a big tree whose roots reach the neighbourhood; a portal opens in the trunk
