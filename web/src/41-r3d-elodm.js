@@ -60,22 +60,11 @@ const ELODM_KINDS = {
     return () => {};
   },
 
-  // 5 — Explotar: a letter under pressure, wrapped in dark threads (what was inherited without choosing)
-  letter(F, ctx) {
-    const { THREE } = ctx, { pos: o, s } = elementSpot(F, ctx);
-    shape(F, o, s, [[-0.3, -0.4], [0.3, -0.4], [0.3, 0.4], [-0.3, 0.4]], F.lineMat([0.94, 0.9, 0.82], 0.8));
-    for (let i = 0; i < 8; i++) shape(F, o, s, [[-0.22, 0.3 - i * 0.08], [0.22 - (i % 3) * 0.06, 0.3 - i * 0.08]], F.lineMat([0.94, 0.9, 0.82], 0.35), false);
-    const threads = Array.from({ length: 5 }, (_, i) => {
-      const pts = []; for (let k = 0; k <= 40; k++) { const a = (k / 40) * TAU * 1.5 + i; pts.push([Math.cos(a) * (0.32 + 0.06 * Math.sin(a * 3 + i)), Math.sin(a * 0.9 + i) * 0.45]); }
-      return shape(F, o, s, pts, F.lineMat(F.accent, 0.55), false, 0.05);
-    });
-    const steam = F.particles(140, { mode: 0, box: [s * 0.6, s * 1.4, s * 0.3], origin: F.V3(o.x, o.y + s * 0.2, o.z), size: 12, alpha: 0, speed: 0.2, tint: [0.95, 0.92, 0.86], soft: 1 });
-    F.light(F.V3(o.x, o.y, o.z - 1), 0.7, s * 5);
-    return (dt, t) => {
-      const tr = world.trial;
-      threads.forEach((l, i) => { l.material.opacity = 0.55 * (1 - tr.solved); l.rotation.z = Math.sin(t * 0.6 + i) * 0.04 * (1 - tr.solved); const pulse = 1 + 0.03 * Math.sin(t * 3 + i) * (1 - tr.solved); l.scale.set(pulse, pulse, 1); });
-      steam.u.uPhase.value += dt * steam.speed * 4; steam.u.uAlpha.value = 0.55 * tr.solved;
-    };
+  // 5 — Explotar: the cover, walkable, a monkey walking on tiles with a DNA strand behind him. Its art is a room
+  // (49-r3d-room-5-explotar.js) built beside the floor; the floor itself only keeps a faint light.
+  letter(F) {
+    F.light(F.V3(F.A.x, 2.4, F.A.z - 1), 0.25, 8);
+    return () => {};
   },
 
   // 6 — Pato: a duck on the water beside a house that is built in turns

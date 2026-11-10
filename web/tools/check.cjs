@@ -987,6 +987,159 @@ async function playPortales(p, { check, shot, thorough = false }) {
 }
 
 /**
+ * Plays floor 5's room (the walking monkey and the strand) with real clicks: the six rungs (three on the helix of the picture, three beyond its
+ * edge that show only near: NO HEREDAR on the pain, CONSERVAR on what is kept), the three notes that carry the unsaid words (walked to), the song
+ * sung at the headphones in the letter's order, and the slow SEGUIR CAMINANDO. `thorough` adds saved states that must be rejected, wrong choices
+ * on the rungs, things touched out of turn, the hint ladder of every stage, a wrong song (the notes scatter back) and the visitor's walk to the far
+ * rungs and the notes. Returns the room's state at the end.
+ */
+async function playExplotar(p, { check, shot, thorough = false }) {
+  const FLOOR = 5, KEY = 'eldom.room.explotar.v1';
+  const WORDS = ['el puño cerrado', 'la fuerza', 'tus ojos duros', 'tu manera de seguir viva', 'ese silencio', 'un pedazo tuyo en mí'], KEEP = [false, true, false, true, false, true];
+  const NOTES = ['te', 'amo', 'abuela'];
+  const rmState = async () => (await state(p)).room;
+  const until = async (pred, ms = 15000) => { const t0 = Date.now(); let s; for (;;) { s = await rmState(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(120); } };
+  const act = (name) => p.locator(`#rm-acts [data-act="${name}"]`).first();
+  /** The camera has stopped (a close look gives way to the room over a second or more: a hotspot is looked for only once it is back). */
+  const settle = async () => { let last = null; for (let n = 0; n < 40; n++) { const c = (await state(p)).cam, key = [c.x, c.y, c.z, c.yaw, c.pitch, c.fov].map((v) => v.toFixed(3)).join(); if (key === last) return; last = key; await wait(250); } };
+  const tapHot = async (label) => { await settle(); await turnTo(p, label); await clickHot(p, label); };
+  const reload = async () => {
+    await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
+    await ev(p, () => window.__eldom.dev.released()); await ev(p, (f) => window.__eldom.dev.arrive(f), FLOOR); await waitFloor(p, FLOOR); await wait(2600);
+  };
+  const hintLadder = async (stage, rx, msg) => {
+    await p.locator('#rm-hint').click(); await wait(200); let s = await rmState(); const h1 = s.status;
+    check(h1.length > 20 && s.more && s.stage === stage, `${msg}: hint 1 "${h1}"`);
+    await p.locator('#rm-more').click(); await wait(200); const h2 = (await rmState()).status;
+    await p.locator('#rm-more').click(); await wait(200); s = await rmState();
+    check(h2 !== h1 && s.status !== h2 && rx.test(s.status) && !s.more, `${msg}: hint 3 gives the whole answer ("${s.status}") and there is no fourth`);
+    if (await p.locator('#rm-close').isVisible()) { await p.locator('#rm-close').click(); await wait(300); }
+  };
+  /** Stands the visitor `d` metres in front of a world point (on the side the visitor arrived from), facing it. */
+  const standAt = async (wx, wz, d) => { const x = wx, z = wz - d; await ev(p, ([x, z, y]) => window.__eldom.dev.roamTo(x, z, y), [x, z, Math.atan2(-(wx - x), -(wz - z))]); await wait(900); };
+  /** On a phone the line said when something shows itself ("cerca tuyo…") sits over the middle of the screen for a few seconds: a tap waits for it to go. */
+  const hintGone = async () => { await wait(700); await p.waitForFunction(() => { const e = document.querySelector('#cap-hint'); return !e || e.hidden || !e.textContent.trim(); }, null, { timeout: 9000 }).catch(() => {}); };
+  const home = async () => { await ev(p, () => window.__eldom.dev.roamTo(0, 2.7, Math.PI)); await wait(600); };
+  const rungHot = (k) => `Un peldaño de la hebra: «${WORDS[k]}»`;
+  const rungHots = () => p.locator('.hot:not([hidden])[aria-label^="Un peldaño de la hebra"]').count();
+  const noteHots = () => p.locator('.hot:not([hidden])[aria-label^="Una nota que dice"]').count();
+  const ids = (str) => str.split(',').filter(Boolean);
+  /** Goes to rung k (the far ones by walking there), looks at it and settles it the right way. */
+  const settleRung = async (k, { wrongFirst = false, shotName = '' } = {}) => {
+    if (k >= 3) { await settle(); const set = (await rmState()).set; await standAt(set.rungAt[k].x, set.rungAt[k].z, 2.4); await hintGone(); }
+    await tapHot(rungHot(k)); let s = await until((x) => x.view === `peldano-${k}` && x.panel, 8000); await wait(900);
+    check(s.acts.some((a) => a.act === 'no-heredar') && s.acts.some((a) => a.act === 'conservar') && s.status.includes(WORDS[k]), `rung ${k + 1}: «${WORDS[k]}» with NO HEREDAR and CONSERVAR ("${s.status}")`);
+    if (shotName) await shot(shotName);
+    if (wrongFirst) { // the wrong choice changes nothing and counts a try
+      const t0 = s.tries; await act(KEEP[k] ? 'no-heredar' : 'conservar').click(); s = await until((x) => x.tries === t0 + 1, 3000);
+      check(s.tries === t0 + 1 && !ids(s.rungs).includes(String(k)) && s.visual.v.rung[k] === 0, `rung ${k + 1}: ${KEEP[k] ? 'NO HEREDAR on a keeper' : 'CONSERVAR on a pain'} changes nothing and counts a try ("${s.status}")`);
+      if (KEEP[k]) { s = await until((x) => x.visual.v.fray === 1 && x.visual.v.shake[k] === 1, 1500); check(s.visual.v.fray === 1 && s.visual.v.shake[k] === 1, 'letting go of a keeper frays the strand again and the rung shakes'); s = await until((x) => x.visual.v.fray === 0, 4000); check(s.visual.v.fray === 0 && s.visual.v.shake[k] === 0, 'the strand settles again by itself'); }
+    }
+    const n0 = ids((await rmState()).rungs).length;
+    await act(KEEP[k] ? 'conservar' : 'no-heredar').click(); s = await until((x) => ids(x.rungs).length === n0 + 1, 4000); await wait(400);
+    check(ids(s.rungs).includes(String(k)) && s.visual.v.rung[k] === 1, `rung ${k + 1}: ${KEEP[k] ? 'CONSERVAR keeps it' : 'NO HEREDAR turns it into dashes'} ("${s.status}")`);
+    await until((x) => x.view === 'wide', 6000);
+  };
+  const collect = async (k, shotName = '') => {
+    const set = (await rmState()).set, n = set.noteAt[k];
+    await settle(); await standAt(n.x, n.z, 2.2);
+    await hintGone(); await turnTo(p, `Una nota que dice «${NOTES[k]}»`);
+    check((await noteHots()) >= 1, `note «${NOTES[k]}»: near, it shows itself`);
+    if (shotName) await shot(shotName);
+    const n0 = ids((await rmState()).notes).length;
+    await clickHot(p, `Una nota que dice «${NOTES[k]}»`); const s = await until((x) => ids(x.notes).length === n0 + 1, 4000);
+    check(ids(s.notes).includes(String(k)) && s.visual.v.note[k] === 1, `note «${NOTES[k]}» is yours ("${await p.locator('#cap-hint').innerText()}")`);
+  };
+  let s = await rmState();
+
+  if (thorough) {
+    // a saved state that makes no sense is rejected and what is valid is kept
+    const plant = async (raw) => { await ev(p, ([k, r]) => localStorage.setItem(k, typeof r === 'string' ? r : JSON.stringify(r)), [KEY, raw]); await reload(); return rmState(); };
+    s = await plant({ v: 1, stage: 3, rungs: [0, 1, 2, 3, 4, 9], notes: [0, 1, 2], sung: ['te', 'amo', 'abuela'], done: true });
+    check(!s.done && s.rungs === '0,1,2,3,4' && s.notes === '' && s.sung === '' && s.phase === 'strand' && s.stage === 0, `a rung that does not exist: the valid prefix is kept, nothing after it (rungs "${s.rungs}")`);
+    s = await plant({ v: 1, rungs: [0, 1, 1, 3], notes: [0] });
+    check(s.rungs === '0,1' && s.notes === '' && s.phase === 'strand', `a rung settled twice: the valid prefix is kept (rungs "${s.rungs}")`);
+    s = await plant({ v: 1, rungs: [0, 1, 2], notes: [0, 1, 2], sung: ['te'], done: true });
+    check(!s.done && s.rungs === '0,1,2' && s.notes === '' && s.sung === '', 'notes taken before the strand was settled: refused');
+    s = await plant({ v: 1, rungs: [5, 4, 3, 2, 1, 0], notes: [2, 2, 0], sung: ['te'], done: true });
+    check(s.rungs === '5,4,3,2,1,0' && s.notes === '2' && s.sung === '' && !s.done && s.phase === 'notes' && s.stage === 1, `a note taken twice: the valid prefix is kept (notes "${s.notes}"); the song needs the three`);
+    s = await plant({ v: 1, rungs: [0, 1, 2, 3, 4, 5], notes: [1, 0, 2], sung: ['amo', 'te'], done: true });
+    check(!s.done && s.sung === '' && s.phase === 'song' && s.stage === 2, 'a song out of the letter\'s order: refused, nothing sung');
+    s = await plant({ v: 1, rungs: [0, 1, 2, 3, 4, 5], notes: [1, 0, 2], sung: ['te', 'abuela'], done: true });
+    check(!s.done && s.sung === 'te' && s.phase === 'song', `a song that goes wrong after "te": only the valid prefix is kept (sung "${s.sung}")`);
+    s = await plant({ v: 1, rungs: [0, 1, 2, 3, 4, 5], notes: [0, 1, 2], sung: ['te', 'amo', 'abuela'] });
+    check(!s.done && s.phase === 'finale' && s.stage === 3 && s.visual.v.song === 1 && s.visual.v.done === 0, 'a state play can reach is kept as it is (the song sung, the last step still to come)');
+    s = await plant({ v: 2, rungs: [0, 1, 2, 3, 4, 5] });
+    check(s.stage === 0 && s.rungs === '', 'a saved state of another version: a fresh room');
+    s = await plant('esto no es json{');
+    check(!s.done && s.stage === 0 && s.rungs === '', 'an unreadable saved state: a fresh room');
+    await ev(p, () => window.__eldom.dev.roomReset()); await wait(600);
+    s = await rmState();
+  }
+  check(s.here && s.view === 'wide' && s.stage === 0 && s.phase === 'strand' && s.rungs === '' && s.visual.v.rung.every((x) => x === 0), `the room: standing in it, stage ${s.stage}, six open rungs`);
+  check((await rungHots()) === 3 && (await noteHots()) === 0, 'from the arrival spot three rungs can be touched (the helix of the picture); the far ones and the notes show only near');
+  // nothing can be done before its turn
+  for (const id of ['rm-peldano-3', 'rm-nota-0', 'rm-auriculares', 'rm-mono']) await ev(p, (i) => window.__eldom.ui.roomTap(i), id);
+  await wait(400); s = await rmState();
+  check(s.view === 'wide' && s.stage === 0 && s.rungs === '' && s.notes === '' && s.sung === '' && !s.done, 'a far rung, a note, the headphones and the walker cannot be used before their turn');
+
+  // 1. the strand
+  if (thorough) await hintLadder(0, /«el puño cerrado»[\s\S]*«la fuerza»/, 'stage 0');
+  for (const k of [0, 1, 2]) await settleRung(k, { wrongFirst: thorough && k < 2, shotName: thorough && k === 0 ? 'room5-02-rung' : '' });
+  s = await rmState();
+  check(s.rungs === '0,1,2' && s.phase === 'strand' && (await rungHots()) === 0, 'the three rungs of the picture are settled; the others are beyond it');
+  if (thorough) { await settle(); await home(); check((await rungHots()) === 0, 'the far rungs cannot be touched from the arrival spot'); await shot('room5-03-strand'); }
+  for (const k of [3, 4, 5]) {
+    if (thorough && k === 3) { const set = (await rmState()).set; await standAt(set.rungAt[k].x, set.rungAt[k].z, 6.6); const d = (await rmState()).set.rungDist[k]; check((await rungHots()) === 0 && d > 4.2, `rung 4 is not shown from 6.6 m away (${d} m)`); }
+    await settleRung(k, { wrongFirst: thorough && k === 3, shotName: thorough && k === 3 ? 'room5-04-far-rung' : '' });
+  }
+  s = await until((x) => x.stage === 1, 4000);
+  check(ids(s.rungs).length === 6 && s.phase === 'notes' && s.visual.v.strand === 1 && s.visual.v.rung.every((x) => x === 1), 'the six rungs are settled: the strand is whole and the notes are next');
+  if (thorough) await shot('room5-05-strand-done');
+
+  // 2. the notes
+  if (thorough) await hintLadder(1, /«te», «amo» y «abuela»/, 'stage 1');
+  if (thorough) { await settle(); await home(); check((await noteHots()) === 0, 'from the arrival spot no note can be touched'); await ev(p, () => window.__eldom.ui.roomTap('rm-auriculares')); await wait(300); check((await rmState()).view === 'wide', 'the headphones cannot be used before the three words are taken'); }
+  for (const k of [0, 1, 2]) await collect(k, thorough && k === 0 ? 'room5-06-note' : '');
+  s = await until((x) => x.stage === 2, 3000);
+  check(s.phase === 'song' && ids(s.notes).length === 3 && /auriculares/i.test(await p.locator('#cap-hint').innerText()), `the three words are yours: "${await p.locator('#cap-hint').innerText()}"`);
+
+  // 3. the song
+  await settle(); await home();
+  if (thorough) await hintLadder(2, /TE, después AMO, después ABUELA/, 'stage 2');
+  await tapHot('Los auriculares'); s = await until((x) => x.view === 'cantar' && x.panel, 8000); await wait(900);
+  check(NOTES.every((w) => s.acts.some((a) => a.act === `cantar-${w}`)) && /tres palabras/.test(s.status), `the headphones: the three words to sing ("${s.status}")`);
+  if (thorough) { // out of order: the notes scatter back
+    const t0 = s.tries; await act('cantar-te').click(); await until((x) => x.sung === 'te', 3000); await act('cantar-abuela').click(); s = await until((x) => x.tries === t0 + 1, 3000);
+    check(s.tries === t0 + 1 && s.sung === '' && s.notes === '' && s.phase === 'notes' && s.stage === 1 && /orden de la carta/.test(s.status), `«abuela» before «amo»: the notes scatter back ("${s.status}")`);
+    await shot('room5-07-scatter');
+    s = await until((x) => x.view === 'wide', 6000); await wait(500);
+    for (const k of [1, 2, 0]) await collect(k); // (they are taken again, in another order)
+    await settle(); await home();
+    await tapHot('Los auriculares'); s = await until((x) => x.view === 'cantar' && x.panel, 8000); await wait(900);
+  }
+  for (const [i, w] of NOTES.entries()) { await act(`cantar-${w}`).click(); s = await until((x) => ids(x.sung).length === i + 1, 3000); }
+  check(s.sung === 'te,amo,abuela' && s.stage === 3 && s.phase === 'finale' && s.visual.v.song === 1, `«te», «amo», «abuela»: the song sounds in the letter's order ("${s.status}")`);
+  if (thorough) await shot('room5-08-song');
+  s = await until((x) => x.view === 'wide', 8000); await wait(1200);
+
+  // 4. the walk
+  if (thorough) await hintLadder(3, /SEGUIR CAMINANDO/, 'stage 3');
+  await tapHot('El mono que camina'); s = await until((x) => x.view === 'camino' && x.panel, 8000); await wait(900);
+  check(s.acts.some((a) => a.act === 'caminar') && /seguir caminando/i.test(s.status), `the walker: a slow hold ("${s.status}")`);
+  if (thorough) { // a hold that is interrupted does nothing
+    await act('caminar').click(); await wait(1200); check(/SEGUIR CAMINANDO · \d/.test(await act('caminar').innerText()), 'the hold shows its count');
+    await act('volver').click(); await wait(1500); s = await rmState(); check(!s.done && s.visual.v.done === 0, 'leaving interrupts the hold: nothing happens');
+    await tapHot('El mono que camina'); await until((x) => x.view === 'camino' && x.panel, 8000); await wait(900);
+  }
+  await act('caminar').click();
+  if (thorough) { s = await until((x) => x.visual.v.done === 1, 9000); await wait(1500); await shot('room5-09-step'); check(s.visual.v.step === 1 && !s.done, 'the hold runs out: his step lands, the strand ahead dissolves and the drop falls (the chapter is a moment away)'); }
+  await p.waitForFunction(() => window.__eldom.state().room.done, null, { timeout: 25000 });
+  if (thorough) { await wait(2200); await shot('room5-10-solved'); }
+  return rmState();
+}
+
+/**
  * What is particular to each room's walkthrough (the `room` and `trials` scenarios read it; a floor with a room in ROOMS needs an entry):
  *   floor, chapter, minSegments (a sanity floor for the chalk lines), play(p, {check, shot, thorough}) → the room's state at the end,
  *   built(set) (what the set reports about itself), hots (labels on screen on arrival), afterSolve(state), solvedRoom(state) (after a
@@ -1087,6 +1240,22 @@ const ROOM_WALKS = {
       await p.locator('#rm-acts [data-act="perro"]').click(); await wait(400);
     },
     midOK: (s) => s.roots === 'perro,,,' && s.visual.v.at.join(',') === '0,-1,-1,-1' && s.stage === 0, midMsg: 'a reload keeps the thing left in the first root (and nothing else)',
+  },
+  'explotar': {
+    floor: 5, chapter: 'cap-6', minSegments: 8000, play: playExplotar,
+    built: (set) => set.contours > 9000 && set.rungs === 6 && set.notes === 3 && set.hummers >= 4,
+    tierBuilt: (set) => set.rungs === 6 && set.notes === 3,
+    hots: [/^Un peldaño de la hebra/],
+    afterSolve: (s) => s.visual.v.done === 1 && s.visual.v.step === 1,
+    solvedRoom: (s) => s.visual.v.done === 1 && s.visual.v.rung.every((x) => x === 1) && s.visual.v.note.every((x) => x === 1) && s.visual.v.song === 1,
+    solvedHot: /de no heredar la misma tristeza/,
+    replayHot: 'El mono siguió caminando', replayView: 'camino',
+    freshRoom: (s) => s.visual.v.done === 0 && s.visual.v.rung.every((x) => x === 0) && s.visual.v.note.every((x) => x === 0) && s.rungs === '',
+    async midWalk(p) {
+      await ev(p, () => window.__eldom.ui.roomTap('rm-peldano-0')); await wait(1500);
+      await p.locator('#rm-acts [data-act="no-heredar"]').click(); await wait(400);
+    },
+    midOK: (s) => s.rungs === '0' && s.visual.v.rung[0] === 1 && s.stage === 0, midMsg: 'a reload keeps the rung that was let go (and nothing else)',
   },
 };
 
