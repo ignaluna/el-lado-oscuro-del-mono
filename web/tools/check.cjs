@@ -750,6 +750,17 @@ async function playVacio(p, { check, shot, thorough = false }) {
     await ev(p, () => window.__eldom.dev.roomReset()); await wait(600);
     s = await rmState();
   }
+  if (thorough) { // only real walking toward the star counts: a teleport and a walk to the side are nothing, a walk forward is a step
+    await ev(p, () => window.__eldom.dev.roamTo(0, 6.4, Math.PI)); await wait(1300); s = await rmState();
+    check(s.steps === 0, `a teleport of 3.7 m is not walking (steps ${s.steps})`);
+    await ev(p, () => window.__eldom.dev.roamTo(0, 2.7, Math.PI)); await wait(300);
+    await ev(p, () => window.__eldom.dev.roamPush(1, 0, 2600)); await wait(1200); s = await rmState(); const side = (await state(p)).cam;
+    check(s.steps === 0 && Math.abs(side.x) > 1.5, `walking to the side is not walking toward the star (steps ${s.steps}, ${Math.abs(side.x).toFixed(1)} m sideways)`);
+    await ev(p, () => window.__eldom.dev.roamTo(0, 2.7, Math.PI)); await wait(300);
+    await ev(p, () => window.__eldom.dev.roamPush(0, 1, 2800)); s = await until((x) => x.steps >= 1, 4000); const fwd = (await state(p)).cam;
+    check(s.steps >= 1 && fwd.z > 3.9, `walking forward with the joystick advances the star step (steps ${s.steps}, ${(fwd.z - 2.7).toFixed(1)} m walked)`);
+    await ev(p, () => window.__eldom.dev.roomReset()); await wait(400); await reload(); s = await rmState();
+  }
   check(s.here && s.view === 'wide' && s.stage === 0 && s.steps === 0 && s.open === '' && s.set.near.every((x) => x === 0), `the room: standing in it, stage ${s.stage}, the star ahead, no castle in sight`);
   check((await castleHots()) === 0, 'the castles show only when the visitor is near: none can be touched from the arrival spot');
   // nothing can be done before its turn
@@ -2578,6 +2589,8 @@ const SCENARIOS = {
     const inBoard4 = await ev(p, ([x, z, w]) => { const c = Math.cos(w.ry), sn = Math.sin(w.ry), lx = (x - w.x) * c - (z - w.z) * sn, lz = (x - w.x) * sn + (z - w.z) * c; return Math.abs(lx) < w.hw && Math.abs(lz) < w.hd; }, [s.cam.x, s.cam.z, board4]);
     check(!inBoard4 && Math.hypot(s.cam.x - board4.x, s.cam.z - board4.z) > 1.8, `floor 4: walking straight at the board stops the visitor outside it (${Math.hypot(s.cam.x - board4.x, s.cam.z - board4.z).toFixed(2)} m from its centre)`);
     // floor 8 is a room too (a void of water: no board; the visitor walks over the ripples and only the glass at the centre is solid)
+    const KEY8 = 'eldom.room.no-me-perdones.v1', planted8 = JSON.stringify({ v: 1, stage: 1, steps: 3, open: [], placed: false, done: false, tries: 0, hints: 0 }); // (the star is already left behind: walking here must not move the saved progress)
+    await ev(p, ([k, v]) => localStorage.setItem(k, v), [KEY8, planted8]);
     await ev(p, () => window.__eldom.dev.arrive(8)); await waitFloor(p, 8); await wait(2200);
     const rs8 = await ev(p, () => window.__eldom.state().roam.solids), glass8 = rs8.find((x) => x.kind === 'circle');
     check(!!glass8 && !rs8.some((x) => x.kind === 'box'), `floor 8: only the glass at the centre is solid (${rs8.map((x) => x.kind).join(', ')})`);
@@ -2587,6 +2600,7 @@ const SCENARIOS = {
     await ev(p, ([x, z]) => window.__eldom.dev.roamTo(x, z - 4.5, Math.PI), [glass8.x, glass8.z]);
     await ev(p, () => window.__eldom.dev.roamPush(0, 1, 4800));
     s = await st();
+    check(await ev(p, (k) => localStorage.getItem(k), KEY8) === planted8, 'floor 8: the roam walk leaves the saved progress of the room as it was (nothing counted as a step toward the star)');
     check(Math.hypot(s.cam.x - glass8.x, s.cam.z - glass8.z) > 0.9 && s.cam.z < glass8.z, `floor 8: walking straight at the glass stops the visitor outside it (${Math.hypot(s.cam.x - glass8.x, s.cam.z - glass8.z).toFixed(2)} m from it)`);
     // the edge of the world: a long walk away stops at the rim
     await ev(p, () => window.__eldom.dev.roamTo(0, 6, Math.PI));

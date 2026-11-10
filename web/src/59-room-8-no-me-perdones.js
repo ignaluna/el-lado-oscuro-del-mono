@@ -15,6 +15,7 @@ ROOMS['no-me-perdones'] = {
   clue: 'esos castillos de papel que llamé felicidad eran excusas para no detenerme, para no sentir.\nY vos llegaste a decirme, sin palabras, que no hay meta, que solo hay camino.',
   done: 'Pedirte que no me perdones es un gesto de amor.',
   stepM: 1.2, // metres walked toward the star that count as one step
+  maxStep: 2.4, // the most (m) a visitor can plausibly walk between two looks of the walker (450 ms, even under load): a bigger jump is a teleport and counts for nothing
   holdNear: 3.4, // how close (m) a castle shows itself to the walker (announced)
   reach: 4.8, // how close (m) a castle must be to be unfolded
   hints: [
@@ -95,6 +96,12 @@ ROOMS['no-me-perdones'] = {
   onSolved(s) { s.steps = 3; s.open = [0, 1, 2]; s.placed = true; world.room.v = this.vOf(s); },
   debug(s) { return { steps: s.steps, open: s.open.join(','), placed: s.placed, phase: this.phase(s), wave: this.glassPhase(), waveS: this.glassPhase() ? +npWave(world.room.v.t0).s.toFixed(2) : null, castleDist: NP_CASTLES.map((_, k) => +this.castleDist(k).toFixed(2)) }; },
   glassPhase() { const v = world.room.v; return v && v.t0 ? npWave(v.t0).phase : null; },
+  /** The metres a move of (dx, dz) went toward the star (straight ahead of the centre): only the forward part of a plausible walking step counts; sideways, backwards and teleports (a jump bigger than a step) count for nothing. */
+  towardStar(dx, dz) {
+    if (Math.hypot(dx, dz) > this.maxStep) return 0;
+    const L = Math.hypot(world.cam.x, NP_ZC) || 1;
+    return Math.max(0, (dx * -world.cam.x + dz * NP_ZC) / L);
+  },
   /** Where the walker stands from a castle (m). */
   castleDist(k) { const w = npWorld(NP_CASTLES[k].x, NP_CASTLES[k].z); return Math.hypot(world.cam.x - w.x, world.cam.z - w.z); },
   /** What the set shows for a state (its targets). */
@@ -111,18 +118,18 @@ ROOMS['no-me-perdones'] = {
   /** The room's walker: counts the metres walked toward the star as steps, and says when a castle shows itself (a screen reader hears it too). */
   onArrive(room) {
     this.heard = [false, false, false];
-    this.walked = 0; this.lastZ = null;
+    this.walked = 0; this.last = null;
     const tick = () => {
       if (!room.id || room.def() !== this) return; // (the floor was left: a new arrival starts its own)
       const s = room.s;
       if (s && room.here() && !room.busy && !App.overlay) {
         if (this.starOn(s)) { // every stepM metres walked toward the star (free walking, forward) is one step, as a tap on it is
-          if (this.lastZ !== null && Roam.scene() === 'floor') this.walked += Math.max(0, world.cam.z - this.lastZ);
+          if (this.last && Roam.scene() === 'floor') this.walked += this.towardStar(world.cam.x - this.last.x, world.cam.z - this.last.z);
           if (this.walked >= this.stepM) { this.walked -= this.stepM; this.advance(room, s.steps + 1); }
         }
         else if (this.phase(s) === 'castles') for (let k = 0; k < 3; k++) if (!s.open.includes(k) && !this.heard[k] && this.castleDist(k) < this.holdNear) { this.heard[k] = true; hint(this.lines.near, 4200); live(this.lines.near); break; }
       }
-      this.lastZ = world.cam.z;
+      this.last = { x: world.cam.x, z: world.cam.z };
       room.later(tick, 450);
     };
     room.later(tick, 450);
@@ -172,7 +179,7 @@ ROOMS['no-me-perdones'] = {
       build(el) {
         room.btn(el, 'PERDONAME', 'perdoname', () => {
           s.tries++; room.save(); Sound.buzz(); room.flash(0.5);
-          const v = world.room.v; v.grow = 1; room.later(() => { if (world.room.v) world.room.v.grow = 0; }, 2800); // (a pulse: the ripples grow and settle)
+          const v = world.room.v; v.grow = 1; if (d.growT) clearTimeout(d.growT); d.growT = room.later(() => { if (world.room.v) world.room.v.grow = 0; d.growT = 0; }, 2800); // (a pulse: the ripples grow and settle; one timer, so a second tap restarts the same 2.8 s instead of racing the first)
           room.say(d.lines.grow); live(d.lines.grow);
         }, { wide: true });
         room.btn(el, 'NO ME PERDONES', 'no-perdones', () => { room.flash(0.5); room.solve(); }, { wide: true });
@@ -201,7 +208,7 @@ ROOMS['no-me-perdones'] = {
       await c.to(cam, { x: nx, z: nz }, rm(0.9), Ease.inOutSine);
       if (R && R.ripple) R.ripple(cam.x, cam.z - 0.3, 0.16);
       this.advance(room, s.steps + 1);
-      this.lastZ = world.cam.z; // (the metres of this step are not walked again by the watcher)
+      this.last = { x: world.cam.x, z: world.cam.z }; // (the metres of this step are not walked again by the watcher)
     });
   },
   /** A castle that is near, unfolded: it lies down on the water as the next stretch of road. */
