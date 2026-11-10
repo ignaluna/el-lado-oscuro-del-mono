@@ -129,31 +129,11 @@ const ELODM_KINDS = {
     return () => {};
   },
 
-  // 9 — Portales: a big tree whose roots reach the neighbourhood; a portal opens in the trunk
-  tree(F, ctx) {
-    const { THREE } = ctx, { pos: o, s } = elementSpot(F, ctx, 0.42);
-    const bark = F.lineMat([0.8, 0.86, 0.72], 0.8);
-    shape(F, o, s, [[-0.08, -0.55], [-0.06, 0.05], [0.06, 0.05], [0.08, -0.55]], bark, false);
-    const rnd = mulberry32(9);
-    const branch = (x, y, a, len, d) => {
-      if (d === 0) return;
-      const x2 = x + Math.cos(a) * len, y2 = y + Math.sin(a) * len;
-      shape(F, o, s, [[x, y], [x2, y2]], F.lineMat([0.8, 0.86, 0.72], 0.35 + d * 0.12), false);
-      branch(x2, y2, a + 0.45 + rnd() * 0.2, len * 0.72, d - 1); branch(x2, y2, a - 0.45 - rnd() * 0.2, len * 0.72, d - 1);
-    };
-    branch(0, 0.05, Math.PI / 2, 0.18, 5);
-    const roots = [-0.5, -0.25, 0.25, 0.5].map((x) => shape(F, o, s, [[x * 0.15, -0.55], [x * 0.6, -0.6], [x, -0.62]], F.lineMat(F.accent, 0.25), false));
-    const portal = F.mesh(new THREE.RingGeometry(s * 0.05, s * 0.065, 40), F.basic([0.95, 0.95, 1], 0, { side: THREE.DoubleSide }), o.x, o.y - 0.3 * s, o.z - 0.03 * s);
-    portal.scale.y = 1.6;
-    const leaves = F.particles(160, { mode: 1, box: [s * 0.9, s * 0.8, s * 0.4], origin: F.V3(o.x, o.y - s * 0.2, o.z), size: 9, alpha: 0.35, speed: 0.06, tint: [0.7, 0.85, 0.6] });
-    F.light(F.V3(o.x, o.y + s * 0.3, o.z - 1), 0.7, s * 6);
-    return (dt, t) => {
-      const tr = world.trial;
-      leaves.u.uPhase.value += dt * leaves.speed * 4;
-      roots.forEach((l, i) => { l.material.opacity = 0.2 + 0.7 * (tr.progress * roots.length > i ? 1 : 0) + 0.1 * Math.sin(t * 2 + i); });
-      portal.material.opacity = tr.solved * (0.7 + 0.2 * Math.sin(t * 2));
-      const k = 1 + tr.solved * (0.4 + 0.05 * Math.sin(t * 1.5)); portal.scale.set(k, 1.6 * k, 1);
-    };
+  // 9 — Portales: the cover, walkable, a great tree around a vortex with a treehouse, a ladder and a small figure in a glow. Its art is a room
+  // (49-r3d-room-9-portales.js) built beside the floor; the floor itself only keeps a faint light.
+  tree(F) {
+    F.light(F.V3(F.A.x, 2.4, F.A.z - 1), 0.15, 8);
+    return () => {};
   },
 };
 Object.assign(FLOOR_KINDS, ELODM_KINDS);

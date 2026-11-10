@@ -846,6 +846,136 @@ async function playVacio(p, { check, shot, thorough = false }) {
 }
 
 /**
+ * Plays floor 9's room (the great tree) with real clicks: the four roots (PERRO, GUITARRA, VECINOS and RISA left in them, one each), the
+ * ladder to the treehouse and the look out of its round window, the three spirals turned the way the sparkles said, and the step into the
+ * glow, which crosses the portal and comes back to the same place facing the figure. `thorough` adds saved states that must be rejected,
+ * the decoys (a root pulls back), a thing left twice, the hint ladder of every stage, a wrong spiral, things touched out of turn, and the
+ * visitor's place after the crossing. Returns the room's state at the end.
+ */
+async function playPortales(p, { check, shot, thorough = false }) {
+  const FLOOR = 9, KEY = 'eldom.room.portales.v1', WHERE = ['a la izquierda, lejos', 'a la izquierda, con laberintos', 'a la derecha, cerca', 'a la derecha, lejos'];
+  const rmState = async () => (await state(p)).room;
+  const until = async (pred, ms = 15000) => { const t0 = Date.now(); let s; for (;;) { s = await rmState(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(120); } };
+  const act = (name) => p.locator(`#rm-acts [data-act="${name}"]`).first();
+  /** The camera has stopped (a close look gives way to the room over a second or more: a hotspot is looked for only once it is back). */
+  const settle = async () => { let last = null; for (let n = 0; n < 40; n++) { const c = (await state(p)).cam, key = [c.x, c.y, c.z, c.yaw, c.pitch, c.fov].map((v) => v.toFixed(3)).join(); if (key === last) return; last = key; await wait(250); } };
+  const tapHot = async (label) => { await settle(); await turnTo(p, label); await clickHot(p, label); };
+  const toWide = async () => { while ((await rmState()).view !== 'wide') { await p.keyboard.press('Escape'); await wait(1300); } };
+  const reload = async () => {
+    await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
+    await ev(p, () => window.__eldom.dev.released()); await ev(p, (f) => window.__eldom.dev.arrive(f), FLOOR); await waitFloor(p, FLOOR); await wait(2600);
+  };
+  const hintLadder = async (stage, rx, msg) => {
+    await p.locator('#rm-hint').click(); await wait(200); let s = await rmState(); const h1 = s.status;
+    check(h1.length > 20 && s.more && s.stage === stage, `${msg}: hint 1 "${h1}"`);
+    await p.locator('#rm-more').click(); await wait(200); const h2 = (await rmState()).status;
+    await p.locator('#rm-more').click(); await wait(200); s = await rmState();
+    check(h2 !== h1 && s.status !== h2 && rx.test(s.status) && !s.more, `${msg}: hint 3 gives the whole answer ("${s.status}") and there is no fourth`);
+    if (await p.locator('#rm-close').isVisible()) { await p.locator('#rm-close').click(); await wait(300); }
+  };
+  let s = await rmState();
+
+  if (thorough) {
+    // a saved state that makes no sense is rejected and what is valid is kept
+    const plant = async (raw) => { await ev(p, ([k, r]) => localStorage.setItem(k, typeof r === 'string' ? r : JSON.stringify(r)), [KEY, raw]); await reload(); return rmState(); };
+    s = await plant({ v: 1, stage: 3, roots: ['perro', 'escenario', 'guitarra', 'luces'], seen: true, spin: [-1, 1, -1], done: true });
+    check(!s.done && s.roots === 'perro,,guitarra,' && !s.seen && s.spin === '0,0,0' && s.phase === 'roots' && s.stage === 0, `decoys are not things a root can hold: dropped, and nothing after the roots is kept (roots "${s.roots}")`);
+    s = await plant({ v: 1, roots: ['perro', 'perro', 'guitarra', 'vecinos'], seen: true });
+    check(s.roots === 'perro,,guitarra,vecinos' && !s.seen && s.phase === 'roots', `the same thing in two roots: the second is dropped (roots "${s.roots}")`);
+    s = await plant({ v: 1, roots: ['perro', 'guitarra', 'vecinos', 'risa'], seen: false, spin: [-1, 1, -1], done: true });
+    check(!s.done && s.spin === '0,0,0' && s.phase === 'window' && s.stage === 1, 'spirals turned and "done" without having looked out of the window: refused');
+    s = await plant({ v: 1, roots: ['perro', 'guitarra', 'vecinos', 'risa'], seen: true, spin: [2, 0, 7], done: true });
+    check(!s.done && s.spin === '0,0,0' && s.phase === 'spirals' && s.stage === 2, 'a spin that is not left or right: the spirals start still');
+    s = await plant({ v: 1, roots: ['perro', 'guitarra', 'vecinos', 'risa'], seen: true, spin: [1, 1, -1], done: true });
+    check(!s.done && s.spin === '1,1,-1' && s.phase === 'spirals' && s.visual.v.open === 0, '"done" with a spiral turned the wrong way: refused, the spins that play can reach are kept');
+    s = await plant({ v: 1, roots: ['risa', 'vecinos', 'guitarra', 'perro'], seen: true, spin: [-1, 1, -1] });
+    check(!s.done && s.phase === 'finale' && s.stage === 3 && s.visual.v.open === 1 && s.roots === 'risa,vecinos,guitarra,perro', 'a state play can reach is kept as it is (the vortex open, the crossing still to come)');
+    s = await plant({ v: 2, roots: ['perro', 'guitarra', 'vecinos', 'risa'], seen: true });
+    check(s.stage === 0 && s.roots === ',,,', 'a saved state of another version: a fresh room');
+    s = await plant('esto no es json{');
+    check(!s.done && s.stage === 0 && s.roots === ',,,', 'an unreadable saved state: a fresh room');
+    await ev(p, () => window.__eldom.dev.roomReset()); await wait(600);
+    s = await rmState();
+  }
+  check(s.here && s.view === 'wide' && s.stage === 0 && s.phase === 'roots' && s.roots === ',,,' && s.visual.v.at.every((x) => x === -1), `the room: standing in it, stage ${s.stage}, four empty roots`);
+  // nothing can be done before its turn
+  for (const id of ['rm-escalera', 'rm-espiral-0', 'rm-espiral-1', 'rm-resplandor', 'rm-portal']) await ev(p, (i) => window.__eldom.ui.roomTap(i), id);
+  await wait(400); s = await rmState();
+  check(s.view === 'wide' && s.stage === 0 && !s.seen && s.spin === '0,0,0' && !s.done, 'the ladder, the spirals and the glow cannot be used before the roots have their things');
+
+  // 1. the four roots
+  if (thorough) await hintLadder(0, /PERRO, GUITARRA, VECINOS y RISA/, 'stage 0');
+  const LEAVE = ['perro', 'guitarra', 'vecinos', 'risa'], NAME = { perro: 'ladrido de un perro', guitarra: 'eco suave de una guitarra', vecinos: 'vecinos que se saludan', risa: 'risa compartida' };
+  for (let k = 0; k < 4; k++) {
+    await tapHot(`Una raíz del árbol, ${WHERE[k]}`); s = await until((x) => x.view === `raiz-${k}` && x.panel, 8000); await wait(900);
+    check(['perro', 'guitarra', 'vecinos', 'risa', 'escenario', 'luces', 'publico'].every((a) => s.acts.some((b) => b.act === a)) && /¿Qué dejás/.test(s.status), `root ${k + 1}: the seven things are offered ("${s.status}")`);
+    if (thorough && k === 0) { // the decoys: the root pulls back
+      await shot('room9-02-root');
+      for (const [i, d] of ['escenario', 'luces', 'publico'].entries()) {
+        await act(d).click(); s = await until((x) => x.visual.v.pull[0] === 1, 3000);
+        check(s.tries === i + 1 && s.roots === ',,,' && s.visual.v.pull[0] === 1 && /no necesito escenarios, ni luces, ni público/.test(s.status), `${d.toUpperCase()}: the root pulls back ("${s.status}", tries ${s.tries})`);
+      }
+      s = await until((x) => x.visual.v.pull[0] === 0, 4000);
+      check(s.visual.v.pull[0] === 0 && s.roots === ',,,' && s.view === 'raiz-0', 'the root comes back by itself (one pulse, whatever the number of tries)');
+    }
+    if (thorough && k === 1) { // a thing that is already in another root
+      await act('perro').click(); await wait(300); s = await rmState();
+      check(s.roots === 'perro,,,' && /ya lo dejaste en otra raíz/i.test(s.status), `the same thing in a second root: "${s.status}"`);
+    }
+    await act(LEAVE[k]).click(); s = await until((x) => x.left === k + 1, 4000); await wait(400);
+    check(s.left === k + 1 && s.roots.split(',')[k] === LEAVE[k] && s.visual.v.at[k] === k && new RegExp(NAME[LEAVE[k]]).test(s.status) && s.stage === (k < 3 ? 0 : 1), `root ${k + 1}: ${LEAVE[k].toUpperCase()} stays ("${s.status}")`);
+    if (k === 3) { const cap = (await rmState()).status; check(/casa del árbol/.test(cap), `the fourth root: "${cap}"`); }
+    s = await until((x) => x.view === 'wide', 6000);
+    if (thorough && k === 0) await shot('room9-03-first-root');
+  }
+  await wait(600); s = await rmState();
+  check(s.phase === 'window' && s.stage === 1 && s.visual.v.at.join('') === '0123' && !(await p.locator('.hot:not([hidden])[aria-label^="Una raíz del árbol"]').count()), 'the four roots have their things: the roots are no longer places to go');
+
+  // 2. the treehouse
+  if (thorough) await hintLadder(1, /ASOMARSE POR LA VENTANA/, 'stage 1');
+  await tapHot('Una escalera que sube'); s = await until((x) => x.view === 'casa' && x.panel, 8000); await wait(900);
+  check(s.acts.some((a) => a.act === 'asomarse') && /ventana redonda/.test(s.status) && !s.seen, `the ladder: up in the treehouse ("${s.status}")`);
+  if (thorough) { await ev(p, () => window.__eldom.ui.roomTap('rm-espiral-0')); await wait(300); s = await rmState(); check(s.view === 'casa' && s.spin === '0,0,0', 'a spiral cannot be turned before looking out of the window'); }
+  await act('asomarse').click(); s = await until((x) => x.seen && x.stage === 2, 4000); await wait(1500); s = await rmState();
+  check(s.seen && s.phase === 'spirals' && s.visual.v.seen === 1 && /plateada en la del tronco izquierdo[\s\S]*dorada en la del centro[\s\S]*plateada en la del tronco derecho/.test(s.status) && s.set.look > 0.5, `through the window: the answer is on screen too ("${s.status}"; the sparkles are shown: ${s.set.look})`);
+  if (thorough) await shot('room9-04-window');
+  await act('bajar').click(); s = await until((x) => x.view === 'wide', 5000);
+  check(s.view === 'wide' && s.stage === 2, 'back down the ladder');
+
+  // 3. the spirals
+  if (thorough) await hintLadder(2, /tronco izquierdo hacia la izquierda, la del centro hacia la derecha/, 'stage 2');
+  const SP = ['La espiral del tronco izquierdo', 'La espiral del centro', 'La espiral del tronco derecho'], RIGHT = ['izquierda', 'derecha', 'izquierda'];
+  for (let k = 0; k < 3; k++) {
+    await tapHot(SP[k]); s = await until((x) => x.view === `espiral-${k}` && x.panel, 8000); await wait(900);
+    check(s.acts.some((a) => a.act === 'derecha') && s.acts.some((a) => a.act === 'izquierda') && /está quieta/.test(s.status), `${SP[k]}: still, with both ways offered ("${s.status}")`);
+    if (thorough && k === 2) { // the right and the wrong way: all three set but one wrong, the vortex stays shut
+      const t0 = (await rmState()).tries; await act('derecha').click(); s = await until((x) => x.spin === '-1,1,1', 3000);
+      check(s.spin === '-1,1,1' && s.tries === t0 + 1 && /no se abre/.test(s.status) && s.visual.v.open === 0 && s.phase === 'spirals', `three spirals set, one the wrong way: "${s.status}"`);
+      await shot('room9-05-wrong-spin');
+    }
+    await act(RIGHT[k]).click(); s = await until((x) => x.spin.split(',')[k] === (RIGHT[k] === 'derecha' ? '1' : '-1'), 3000); await wait(300);
+    if (k < 2) { check(!s.done && s.phase === 'spirals' && s.visual.v.spin[k] === (RIGHT[k] === 'derecha' ? 1 : -1), `${SP[k]} turns to the ${RIGHT[k]} ("${s.status}")`); await toWide(); }
+  }
+  s = await until((x) => x.phase === 'finale', 4000);
+  check(s.stage === 3 && s.visual.v.open === 1 && s.spin === '-1,1,-1' && /se abre/.test(s.status), `the vortex opens ("${s.status}")`);
+  s = await until((x) => x.view === 'wide', 8000); await wait(1200);
+
+  // 4. the glow
+  if (thorough) { await hintLadder(3, /resplandor del chico/, 'stage 3'); await shot('room9-06-open'); }
+  check(!(await p.locator('.hot:not([hidden])[aria-label^="La espiral"]').count()), 'the spirals are no longer places to go once the vortex is open');
+  const before = await state(p), fg0 = before.room.set.figure;
+  await tapHot('Un chico parado en un resplandor');
+  if (thorough) { s = await until((x) => x.visual.cross > 0.5, 6000); check(s.visual.cross > 0.5 && !s.done, 'stepping into the glow: the world goes white (the camera crosses the portal)'); await shot('room9-07-crossing'); }
+  await p.waitForFunction(() => window.__eldom.state().room.done, null, { timeout: 25000 });
+  const after = await state(p);
+  const cam = after.cam, dxy = Math.hypot(cam.x - before.cam.x, cam.z - before.cam.z), want = Math.atan2(-(fg0.x - cam.x), -(fg0.z - cam.z));
+  let dyaw = (cam.yaw - want) % (2 * Math.PI); if (dyaw > Math.PI) dyaw -= 2 * Math.PI; if (dyaw < -Math.PI) dyaw += 2 * Math.PI;
+  check(dxy < 0.3 && Math.abs(dyaw) < 0.2, `the camera comes back to the same place (${dxy.toFixed(2)} m from where it stood) facing the figure (${Math.abs(dyaw).toFixed(2)} rad off)`);
+  if (thorough) { await wait(2200); await shot('room9-08-back'); }
+  return rmState();
+}
+
+/**
  * What is particular to each room's walkthrough (the `room` and `trials` scenarios read it; a floor with a room in ROOMS needs an entry):
  *   floor, chapter, minSegments (a sanity floor for the chalk lines), play(p, {check, shot, thorough}) → the room's state at the end,
  *   built(set) (what the set reports about itself), hots (labels on screen on arrival), afterSolve(state), solvedRoom(state) (after a
@@ -930,6 +1060,22 @@ const ROOM_WALKS = {
       await ev(p, () => window.__eldom.ui.roomTap('rm-estrella')); await wait(1900); // (one step toward the star, walked)
     },
     midOK: (s) => s.steps === 1 && s.visual.v.steps === 1 && s.open === '' && s.stage === 0, midMsg: 'a reload keeps the first step toward the star (and nothing else)',
+  },
+  'portales': {
+    floor: 9, chapter: 'cap-9', minSegments: 5000, play: playPortales,
+    built: (set) => set.contours > 15000 && set.roots === 4 && set.spirals === 3 && set.ribbons > 300,
+    tierBuilt: (set) => set.roots === 4 && set.spirals === 3,
+    hots: [/^Una raíz del árbol/],
+    afterSolve: (s) => s.visual.v.done === 1 && s.visual.v.open === 1,
+    solvedRoom: (s) => s.visual.v.done === 1 && s.visual.v.open === 1 && s.visual.v.at.join('') === '0123' && s.visual.v.spin.join(',') === '-1,1,-1',
+    solvedHot: /vuelta a vos/,
+    replayHot: 'El portal', replayView: 'portal',
+    freshRoom: (s) => s.visual.v.done === 0 && s.visual.v.open === 0 && s.visual.v.seen === 0 && s.visual.v.at.every((x) => x === -1) && s.roots === ',,,',
+    async midWalk(p) {
+      await ev(p, () => window.__eldom.ui.roomTap('rm-raiz-0')); await wait(1500);
+      await p.locator('#rm-acts [data-act="perro"]').click(); await wait(400);
+    },
+    midOK: (s) => s.roots === 'perro,,,' && s.visual.v.at.join(',') === '0,-1,-1,-1' && s.stage === 0, midMsg: 'a reload keeps the thing left in the first root (and nothing else)',
   },
 };
 
