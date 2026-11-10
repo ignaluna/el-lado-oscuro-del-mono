@@ -1,11 +1,11 @@
-# Feature: cover rooms for floors 2, 3, 4, 8 and 9
+# Feature: cover rooms for floors 2 to 9
 
 Locator: `web/odd/tasks/cover-rooms.md` · Engram mirror: `odd/cover-rooms/tasks`
 Branch: `feat/cover-rooms`, stacked on `feat/en-una-room` (PR #10, open)
 
 ## Objective
 
-User request (2026-11-09): build the other levels the way floor 1 "En una" was built. Each floor
+User request (2026-11-09, extended 2026-11-10 with the covers of floors 5, 6 and 7): build the other levels the way floor 1 "En una" was built. Each floor
 becomes a walkable 3D room that draws its song's cover art as faithfully as possible (it should
 look like the 3D version of the drawing), with an escape-room challenge based on the drawing and
 its book chapter. Solving still gives the chapter exactly as today.
@@ -18,14 +18,17 @@ wall it was photographed on). Implementers must open them with their Read tool:
 | 2 | Qué te está pasando (`que-te-esta-pasando`) | cap-2 | `C:\Users\ignal\AppData\Local\Temp\claude\dc13f129e1763973\0eac0aa8-0668-4002-8daf-f59480b8c6b2\images\2.jpg` | the system |
 | 3 | El lado oscuro del mono (`el-lado-oscuro-del-mono`) | cap-3 | `...\images\6.jpg` | the dark side of the mono |
 | 4 | Qué carajo (`que-carajo`) | cap-4 | `...\images\3.jpg` | taking life with both hands |
+| 5 | Explotar (`explotar`) | cap-6 | `web/shots/covers/5-explotar.jpg` | the inherited strand |
+| 6 | Un poco más cediendo (`pato`) | cap-5 | `web/shots/covers/6-pato.jpg` | ceding and asking |
+| 7 | Casi perdido (`casi-perdido`) | cap-8 | `web/shots/covers/7-casi-perdido.jpg` | the embers |
 | 8 | No me perdones (`no-me-perdones`) | cap-7 | `...\images\5.jpg` | the void |
 | 9 | Portales (`portales`) | cap-9 | `...\images\4.jpg` | portals |
 
 (`...` = `C:\Users\ignal\AppData\Local\Temp\claude\dc13f129e1763973\0eac0aa8-0668-4002-8daf-f59480b8c6b2`.)
 Temp folders get wiped, so local copies live in `web/shots/covers/<floor>-<id>.jpg` (gitignored,
 not published): `1-en-una`, `2-que-te-esta-pasando`, `3-el-lado-oscuro-del-mono`, `4-que-carajo`,
-`8-no-me-perdones`, `9-portales`. Use these paths.
-Floors 5, 6 and 7 have no cover yet and keep their plates.
+`5-explotar`, `6-pato`, `7-casi-perdido`, `8-no-me-perdones`, `9-portales`. Use these paths.
+Floors 5, 6 and 7 got their covers on 2026-11-10 (`5-explotar`, `6-pato`, `7-casi-perdido`).
 
 ## Shared rules
 
@@ -162,6 +165,64 @@ laughter; "los portales no desaparecen. Se transforman."
 4. **Finale.** Step into the glow. The camera crosses the portal and comes back to the same place,
    facing the small figure: "siempre te llevan de vuelta a vos."
 
+### Floor 5 — "La hebra" (Explotar)
+
+**Drawing:**
+- A monkey walks to the right on a tiled floor in perspective, wearing headphones (with a glitter disc on the ear cup) and sunglasses, and blowing music notes from his mouth.
+- A DNA double helix runs behind him. On the left it frays into a brush-like bundle of hatching; in the middle it is whole; on the right it turns into dashes and fades out.
+- A drop drips from the helix and falls.
+- Small squiggles and notes float in the air on both sides, and there are a few white smudges on the floor.
+
+**Chapter (cap-6, "Carta a mi abuela Eva"):** inherited pain ("todo lo que heredé sin elegir", "amar con el puño cerrado", "tus ojos duros, cargando el mandato"); regret ("de no haberte dicho te amo cuando todavía podía hacerlo"); "te canto para que me perdones. O quizás para perdonarme a mí"; "De no heredar la misma tristeza."
+
+**Puzzle:**
+1. **The strand.** Six rungs of the helix carry words from the letter, and some sit beyond the monkey, so you have to walk.
+   - Three rungs are the inherited pain, such as the closed fist, the hard eyes and the mandate, and the silence.
+   - Three are what is worth keeping, taken from the letter, for example "un pedazo tuyo en mí".
+   - NO HEREDAR on a pain rung turns it into the cover's dashes. NO HEREDAR on a keeper makes the strand fray again, like the brush end, and the rung comes back.
+2. **The notes.** Notes and squiggles float around the room. Three of them carry the unsaid words; the rest only hum. Walk to collect the three; each one is announced.
+3. **The song.** At the headphones, sing the collected words in order with buttons. The order is the letter's line: "te amo" (plus "abuela", if three notes are used). A wrong order makes the notes scatter back.
+4. **Finale.** Hold SEGUIR CAMINANDO slowly. The monkey's step lands, the strand ahead dissolves into dashes, and the drop falls into the floor: "De no heredar la misma tristeza."
+
+### Floor 6 — "Un poco más cediendo" (Pato)
+
+**Drawing:**
+- A smug duck with half-closed eyes, smoking a cigarette. A heart curls in the smoke.
+- One wing on his hip carries a glitter ring. He has a dark round belly, glitter suspenders, crossed legs and fluffy slippers.
+- A slanted line (a bench) and five white filled speech bubbles float around him.
+
+**Chapter (cap-5):** the Pato's voice at six in the morning ("estoy ciego", everyone wants something); "Amar es perder un poco de uno mismo para encontrarse en otro"; love as a decision and a construction, not half-oranges; peace built "de a dos, en silencio, cediendo, y pidiendo" / "Un poco más cediendo"; "pollerudo"; "Ella. Nuestra casa, nuestro fuego."; closing: "el amor, cuando es real, te devuelve a vos mismo, pero mejor."
+
+**Puzzle:**
+1. **The voices.** The five bubbles hang around the duck, and some sit behind him, so you have to walk around. Up close, each one says one of the Pato's lines aloud. Answer with one of two buttons:
+   - the chapter's reply (love as a choice, building, peace), or
+   - the Pato's own logic (winning, being right, business).
+
+   The chapter's reply empties the bubble, and it drops as a brick at the duck's feet.
+2. **Ceder y pedir.** Lay the five bricks of the house, drawn in the same chalk. The duck's eyelids are the mood: half-closed means CEDER, open means PEDIR, and the mood is also announced. The sequence has three CEDER and two PEDIR, which is literally "un poco más cediendo". A wrong choice only leaves the brick unset.
+3. **The ring.** Touching the ring makes the Pato say "pollerudo". Only accepting it, with the chapter's "entonces sí, soy un pollerudo", lays the roof.
+4. **Finale.** The heart in the smoke drifts into the house and lights its fire: "Nuestra casa, nuestro fuego." The duck's eyes open.
+
+**Checks note:** the roam, rotate-hint and tier-measure checks use floor 6 as a world with no room. Once every floor has a room, add a dev-only way to build a floor's world without its room set (a dev flag or URL parameter, never reachable by visitors) and move those checks onto it. This goes in its own refactor commit.
+
+### Floor 7 — "Las brasas" (Casi perdido)
+
+**Drawing:**
+- A monkey bust with long white fur strokes. He holds a hand on his temple, his eyes are half-closed, and he has a calm half smile.
+- Tall flames rise from his head in white, gold glitter and silver glitter.
+- Three asterisk sparkles shaped like loading spinners: two on the left, one on the right.
+
+**Chapter (cap-8):** "Hoy estoy triste. Y no está mal."; fired while writing the album, guilt about not producing; a system "confundiendo propósito con productividad"; "Yo quiero vivir de verdad. Tomar unos mates. Sentarme frente al fuego del hogar y mirar cómo se apagan las brasas."; girlfriend, Rita, music with friends; closing: "decidir qué merece nuestra atención."
+
+**Puzzle:**
+1. **The thoughts in the flames.** Ten thoughts rise in the flames on his head, the 2D plate's cards.
+   - Five belong to the fire: producir, la culpa de no estar produciendo, el rendimiento, correr detrás del objetivo, estar distraído.
+   - Five are the quiet life: unos mates, pasear con Rita, hacer música con amigos, abrazar a mi novia, volver a la naturaleza de las cosas.
+
+   For each one, choose DEJAR QUE ARDA or BAJARLO A MI LADO; a wrong choice sends it back up. The quiet-life things land at three spots around the room as small chalk objects: a mate, Rita's leash, a guitar.
+2. **The spinners.** The three spinners are the attention the system asks for, and each hangs over one of those spots. Walk to each one and decide what gets the attention: the spinner (it keeps spinning) or the thing below it. Choosing the thing stops the spinner, and it becomes a still star.
+3. **Finale.** Hold MIRAR LAS BRASAS slowly, using the existing semantics. The flames burn down to embers, the gold glitter falls, and the hand leaves the temple: "Hoy estoy triste. Y no está mal." Then comes the closing line.
+
 ## TDD
 
 Mode: off (no project or session TDD configuration). Runner: `node web/tools/check.cjs`.
@@ -176,6 +237,10 @@ checks across several files. Writers run one at a time.
 - [x] C4 Floor 4 room, element `manos` (route: delegated writer; commits: 4771e4b "fix(web): keep a solved scream room solved after reload" and "feat(web): draw the Qué carajo cover as the two hands room")
 - [x] C8 Floor 8 room, element `vacio` (route: delegated writer; commits: b148155 "fix(web): reject unreachable saved states in the two hands room", a3d58fe "fix(web): turn until a click can land on the hotspot in the room checks", 41d313d "refactor(web): let a room start its own timer when the visitor arrives" and "feat(web): draw the No me perdones cover as the void room")
 - [x] C9 Floor 9 room, element `arbol` kept (route: delegated writer; commit: "feat(web): draw the Portales cover as the great tree room")
+- [ ] C5 Floor 5 room, element `dolor-heredado` kept
+- [ ] C6 Floor 6 room, with a dev-only roomless world for the roam and tier checks
+- [ ] C7 Floor 7 room
+- [ ] CY Fidelity pass on every room against its cover (user request 2026-11-09: once all floors are done, rework the drawings so they look more like the real ones)
 - [ ] CX Full check run and `RECORRIDO.md`
 
 ## Acceptance (per floor)
@@ -251,3 +316,4 @@ checks across several files. Writers run one at a time.
   - Screenshots (not tracked): `web/shots/room-9-desktop.png`, `web/shots/room-9-mobile.png`.
   - Not verified: a real phone, real screen-reader speech, frame rate on a real GPU, `--scenario all`; no shared framework file changed, so the all-floors `room` run was not repeated.
   - Contract notes for floors 5, 6 and 7: a tone-heavy cover is better as a contour texture on a ray-aligned relief than as thinned strokes (the scripts: luminance, blur, marching squares at five levels, RDP, variable-length text); hotspots that are close together on screen must be small, because a later hotspot covering the centre of an earlier one makes `turnTo` sweep away (the failure showed as the camera turned to the floor); after a close look the camera takes over a second to return, so a check must wait for it to stop before looking for a hotspot (`settle` in `playPortales`); a custom per-room value the set must read outside `world.room.v` (`world.room.cross`) has to be reset in `visual()`; anything shown in front of the camera should be placed on the way to the thing the close look aims at, so it lands in the free part of the screen.
+- 2026-11-10: the user added covers for floors 5, 6 and 7; their designs are above and tasks C5, C6, C7 and CY were added. Covers saved as `web/shots/covers/5-explotar.jpg`, `6-pato.jpg`, `7-casi-perdido.jpg`.
