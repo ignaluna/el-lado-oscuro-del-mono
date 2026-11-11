@@ -2548,6 +2548,17 @@ const SCENARIOS = {
       await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.clearBook(); window.__eldom.dev.roomReset(); });
       await ev(p, () => window.__eldom.dev.released());
       await ev(p, (f) => window.__eldom.dev.arrive(f), n); await waitFloor(p, n); await wait(2600);
+      // the line said on arrival: it never covers the floor's row of buttons or the corner player, and it is whole inside the screen
+      const cap = await ev(p, () => {
+        const e = document.querySelector('#cap-hint');
+        if (!e || e.hidden) return null;
+        const box = (x) => { const r = x.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; };
+        const hit = (a, b) => a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b - 0.5 && a.b > b.t + 0.5;
+        const c = box(e), over = [];
+        for (const x of document.querySelectorAll('#floor-actions button, .portal, #sound, #dev')) { if (x.hidden || !x.getClientRects().length) continue; if (hit(c, box(x))) over.push((x.id || x.className) + ' ' + JSON.stringify(box(x))); }
+        return { over, box: c, text: e.textContent, inView: c.l >= 0 && c.r <= innerWidth && c.t >= 0 && c.b <= innerHeight, clipped: e.scrollHeight > e.clientHeight + 1 };
+      });
+      check(!!cap && cap.over.length === 0 && cap.inView && !cap.clipped, `${n}: the arrival line clears the buttons and the player and is whole (${cap ? JSON.stringify({ over: cap.over, box: cap.box, inView: cap.inView, clipped: cap.clipped }) : 'not shown'})`);
       let s = await rmState();
       check(s.here && s.id === id && s.set && s.set.segments > W.minSegments && W.built(s.set), `${n}: the cover is built in the world: ${s.set && s.set.segments} chalk lines (${JSON.stringify(s.set)})`);
       check(((await state(p)).portal || {}).dock === 'compact' || p.viewportSize().width < 640, `${n}: the official player waits in the corner (the room is the floor)`);

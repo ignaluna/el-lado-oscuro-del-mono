@@ -120,14 +120,31 @@ function syncUI() {
 function setPhase(p) { world.phase = p; if (p !== 'cabin') SpNotice.close(); syncUI(); }
 const ROOM_HOTS = [...new Set(Object.values(ROOMS).flatMap((d) => Object.keys(d.hots)))]; // every room's hotspots (each shows only in its own room)
 const LEVEL_HOTS = ['lv-wall', 'lv-stones', 'lv-painting', 'lv-hatch', 'lv-box', 'lv-dial-0', 'lv-dial-1', 'lv-dial-2', 'lv-latch', 'lv-object'];
-let hintTimer = 0;
+let hintTimer = 0, hintPlacer = 0, hintPadded = false;
+/**
+ * Keeps the line clear of what shares the bottom of the screen. On a wide screen the floor's row of buttons sits at the bottom left
+ * and the corner player at the right: the line rises above the row and keeps to the left of the player (a long line wraps, it is
+ * never cut). On a phone the player waits at the bottom (the row is at the top): the line sits just above it.
+ */
+function placeHint(again) {
+  const caps = $('#captions'), port = PlayerPortal.current, W = window.innerWidth, H = window.innerHeight;
+  const box = (el) => { if (!el || el.hidden) return null; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? r : null; };
+  let bottom = 0, right = 0;
+  const row = box($('#floor-actions')), pr = port && box(port.el);
+  if (again && !row) return; // (off a floor the lobby lays its own captions out)
+  if (row && row.top > H / 2) bottom = H - row.top + 6;
+  if (pr) { if (W < 640) bottom = Math.max(bottom, H - pr.top + 8); else if (row && pr.left > W * 0.4) right = W - pr.left + 12; }
+  caps.style.bottom = bottom ? `${Math.round(bottom)}px` : '';
+  if (right || hintPadded) caps.style.paddingRight = right ? `${Math.round(right)}px` : ''; // (the lobby's own layout may use it when no row is up)
+  hintPadded = !!right;
+}
 function hint(text, ms = 2600) {
-  const el = $('#cap-hint'), caps = $('#captions'), port = PlayerPortal.current;
-  // on a phone the player waits at the bottom: the line sits just above it
-  caps.style.bottom = port && window.innerWidth < 640 ? `${Math.round(window.innerHeight - port.el.getBoundingClientRect().top + 8)}px` : '';
+  const el = $('#cap-hint'), caps = $('#captions');
   el.textContent = text; el.hidden = false; live(text);
+  placeHint();
+  clearInterval(hintPlacer); hintPlacer = setInterval(() => placeHint(true), 250); // (the player may open, dock or fold while the line is up)
   clearTimeout(hintTimer);
-  hintTimer = setTimeout(() => { el.hidden = true; caps.style.bottom = ''; }, ms);
+  hintTimer = setTimeout(() => { el.hidden = true; clearInterval(hintPlacer); caps.style.bottom = ''; if (hintPadded) caps.style.paddingRight = ''; hintPadded = false; }, ms);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════
