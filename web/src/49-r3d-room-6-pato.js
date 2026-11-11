@@ -23,8 +23,8 @@
 const PK = { H: 1.6, cx: 550, BOT: 980, Z0: 5.5, ARR: 2.7 };
 /** Where the visitor stands when a floor opens is the eye; the duck is Z0 metres ahead of it. */
 const PK_SET = { x: 0, y: 1.6, z: PK.ARR + PK.Z0 };
-/** The lens depends on the screen: a wide one keeps the duck in full at 1150 cover px of focal length, a phone's narrow view at 1500. The set's z never changes. */
-function pkLens(a) { return coverLens(PK, a, { f: 1150, row: 640, sx: 0.42, sy: 0.5 }, { f: 1500, row: 640, sx: 0.5, sy: 0.5 }); }
+/** The lens depends on the screen: a wide one keeps the whole drawing between the title and the two-line arrival line at 1450 cover px of focal length, a phone's narrow view at 1500. The set's z never changes. */
+function pkLens(a) { return coverLens(PK, a, { f: 1450, row: 585, sx: 0.42, sy: 0.5 }, { f: 1500, row: 640, sx: 0.5, sy: 0.5 }); }
 /**
  * The five bubbles, each with the Pato's line, the chapter's reply and the Pato's own logic. px, py: where the bubble is on the cover (the middle of its white);
  * Z: how far from the eye it hangs (the duck is at 5.5: 7 and 8 are behind him, 4.4 to 5 in front of his plane, to the sides); hull: its outline in PK_BUBBLES.
