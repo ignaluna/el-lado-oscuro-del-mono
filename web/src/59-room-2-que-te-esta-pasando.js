@@ -10,11 +10,12 @@
 // The words keep the book's own: clue and done are verbatim chapter text; the hints are new prose.
 ROOMS['que-te-esta-pasando'] = {
   water: PLAIN_WATER, // the cover is plain black paper: no reflection, engraved rows, floor light, glints or horizon in the arrival view (see PLAIN_WATER)
-  aim: { x: 0, y: 2.4, z: 9.2, sx: 0.42, sy: 0.47 },
+  /** The camera looks at a row of the cover (the set's lens depends on the screen); the set's z never changes. */
+  get aim() { const L = syLens(aspectNow()); return { x: SY_SET.x, y: SY.H + ((L.yh - L.row) * SY.Z0) / L.f, z: SY_SET.z, sx: L.sx, sy: L.sy }; },
   intro: 'Todos los caminos van al mismo hueco. Nos obligan a llenarlo.',
   clue: 'Nos obligan a llenarlo. Con plata, con éxito, con amor, con sustancias.\nPero no se llena.\nSe habita.',
   done: 'Ahí, de a poco, volvés.',
-  order: ['sustancias', 'amor', 'plata', 'exito'], // the wire's order (the set draws it: SISTEMA_WIRE.nodes)
+  order: ['sustancias', 'amor', 'plata', 'exito'], // the wire's order (the set draws it: SA_WIRE, in the art file)
   feeds: ['plata', 'exito', 'amor', 'sustancias'], // the order of the set's world.room.v.cut
   names: { plata: 'plata', exito: 'éxito', amor: 'amor', sustancias: 'sustancias' },
   hints: [

@@ -1503,8 +1503,8 @@ const ROOM_WALKS = {
     midOK: (s) => s.spokes === '10100000' && s.visual.spokes === '10100000', midMsg: 'a reload keeps the spokes that were set',
   },
   'que-te-esta-pasando': {
-    floor: 2, chapter: 'cap-2', minSegments: 1500, play: playSistema,
-    built: (set) => set.wire === 'sustancias,amor,plata,exito' && set.windows > 150,
+    floor: 2, chapter: 'cap-2', minSegments: 8000, play: playSistema,
+    built: (set) => set.wire === 'sustancias,amor,plata,exito' && set.contours > 8000 && set.gold > 40 && set.silver > 30 && set.pills === 4,
     tierBuilt: (set) => !!set.wire,
     hots: [/^El hueco/, /^Un laberinto/, /^Un edificio/, /^Un cohete/, /^Una nube/, /^Cápsulas/],
     afterSolve: (s) => s.visual.v.quiet > 0.98 && s.visual.v.solved === 1,
