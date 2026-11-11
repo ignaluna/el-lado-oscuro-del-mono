@@ -3,9 +3,9 @@
 // (marching squares), and every contour simplified (about a pixel). The gold glitter (saturated amber) and the silver glitter (pale champagne grains between the flames) were
 // segmented apart from the white paint and taken out of the tones, and each got its own contours: its outline and its brighter facets. Each group is a list of closed loops, nested ones are
 // holes (even-odd), in rectified cover pixels (the paper is 1100 square), as half-pixel integers: "n x0 y0 dx dy dx dy …", every number a variable-length code of 5 bits per character
-// (the characters A-Z a-z 0-9 + - : 0-31 end a number, 32-63 continue it), deltas zig-zagged. Decoded by cpDecode(): [{ l: group, pts: [[x, y] …], a: area }].
+// (the characters A-Z a-z 0-9 + - : 0-31 end a number, 32-63 continue it), deltas zig-zagged. Decoded by cpDecode() (decodeTones, 49-r3d-room-0-tones.js): [{ l: group, pts: [[x, y] …], a: area }].
 // Groups 0-4 are the white and grey tones (CP_FILL is the grey of each), 5-7 the gold (its outline, its brighter and its brightest facets) and 8-9 the silver (outline, facets).
-const CP_FILL = [53,98,142,184,214];
+const CP_FILL = [77,142,206,255,255];
 const CP_TONE = [
   [
     'EnpBzDBKKCCJEhnB4EFKMEEJEkpBiFBOOAANEunBvFDKKEGLEnqBxFFKGIKNE8Y4FDKKGCJ81B+tB+FPGZuBN6BD6BPyBd2BGGoBCGLICHQD6DHMzCUXSG2DFsBV8BEMTMZAjBLJGDaOKLWBYUsBCW',
@@ -416,21 +416,7 @@ const CP_TONE = [
     'BzZRSTLFCOyBIEWFEOXBLSKMLGBMHDFGGUJIdIQEHKNCAUNBOSOGDELFFEKOHEDOKKKHGOcBTPKJCfOHKVMJCTQBAPUADJGHLHKBBLMRHTLHaLJFJR',
   ].join(''),
 ];
-function cpDecode() {
-  const AL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-', out = [];
-  CP_TONE.forEach((s, l) => {
-    let i = 0;
-    const num = () => { let v = 0, sh = 0, c; do { c = AL.indexOf(s[i++]); v += (c & 31) * 2 ** sh; sh += 5; } while (c >= 32); return v; };
-    const zg = () => { const v = num(); return v & 1 ? -(v + 1) / 2 : v / 2; };
-    while (i < s.length) {
-      const n = num(), pts = [[num() / 2, num() / 2]];
-      for (let k = 1; k < n; k++) { const p = pts[k - 1]; pts.push([p[0] + zg() / 2, p[1] + zg() / 2]); }
-      let a = 0; for (let k = 0; k < n; k++) { const p = pts[k], q = pts[(k + 1) % n]; a += p[0] * q[1] - q[0] * p[1]; }
-      out.push({ l, pts, a: Math.abs(a) / 2 });
-    }
-  });
-  return out;
-}
+function cpDecode() { return decodeTones(CP_TONE); }
 /** The brightest grains of the gold and of the silver glitter: [x, y, brightness 0-255] in rectified cover pixels (where the sparkles twinkle and, at the end, where the gold falls from). */
 const CP_GOLD_PTS = [[714,436,248],[519,358,243],[387,435,238],[668,235,237],[721,328,237],[694,447,236],[720,340,232],[577,238,231],[521,392,229],[576,316,228],[624,353,226],[496,259,225],[561,419,220],[577,285,219],[720,322,218],[494,291,216],[538,393,216],[634,364,215],[650,296,207],[507,380,207],[403,400,207],[668,241,204],[549,321,204],[403,371,204],[713,413,204],[670,183,200],[721,433,200],[503,372,199],[704,394,197],[382,398,197],[577,244,194],[537,405,194],[636,167,193],[628,358,193],[503,239,192],[521,369,192],[568,399,192],[601,404,190],[650,303,189],[388,400,189],[531,409,189],[388,417,189],[396,423,189],[698,432,188],[641,383,187],[586,384,187],[388,426,186],[629,369,184],[638,372,184],[565,246,183],[599,378,183],[642,357,182],[532,201,181],[490,277,181],[501,270,180],[573,295,180],[586,295,180],[671,195,179],[535,220,179],[508,231,179],[518,238,179],[535,194,177],[499,233,177],[551,328,177],[647,386,177],[712,333,176],[716,404,176],[615,414,176],[639,306,175],[514,374,175],[703,435,175],[535,214,174],[519,231,174],[505,250,174],[598,357,174],[579,230,173],[699,380,173],[712,359,172],[530,367,172],[691,455,172],[567,215,171],[531,393,171],[590,396,171],[679,142,170],[605,185,170],[541,197,170],[671,221,170],[706,406,170],[534,418,170],[539,184,169],[389,389,168],[617,394,167],[580,268,166],[529,329,166],[595,390,166],[491,256,165],[551,299,165],[599,365,165],[585,201,164],[414,384,164],[620,363,163],[599,394,163],[564,259,161],[523,352,160],[636,292,159],[688,150,157],[524,227,157],[574,272,157],[588,213,156],[579,258,156],[675,176,155],[676,213,154],[701,353,153],[659,287,152],[411,394,152],[682,162,151],[630,404,149],[667,177,148],[637,395,142],[574,222,136]];
 const CP_SIL_PTS = [[739,432,255],[429,360,254],[703,197,253],[733,421,253],[541,293,252],[452,345,252],[574,371,252],[447,352,248],[487,354,243],[492,374,243],[492,345,229],[501,338,228],[707,183,227],[679,238,227],[514,323,226],[583,375,226],[519,317,225],[568,370,224],[692,242,221],[523,313,221],[439,353,221],[724,411,221],[738,315,219],[722,177,218],[516,338,217],[689,252,214],[468,332,214],[716,200,213],[494,352,211],[600,238,210],[460,344,210],[457,389,210],[432,341,209],[453,364,207],[461,402,207],[437,332,205],[420,352,205],[429,384,203],[443,401,203],[438,369,202],[446,389,202],[723,458,202],[541,303,201],[727,437,200],[503,372,199],[500,382,199],[709,168,198],[739,413,198],[738,440,198],[509,336,197],[466,346,197],[444,377,197],[473,325,196],[440,340,195],[423,366,195],[448,330,193],[461,354,193],[436,362,193],[743,330,192],[477,353,191],[591,208,190],[669,269,190],[450,323,190],[526,320,189],[733,330,189],[723,378,189],[728,443,189],[447,382,188],[435,385,186],[440,391,186],[455,356,184],[727,374,183],[740,335,181],[424,395,181],[469,319,180],[717,474,180],[506,348,176],[745,315,175],[591,235,172],[743,323,170],[596,214,169],[601,226,164],[462,363,153],[724,345,147],[421,388,137]];

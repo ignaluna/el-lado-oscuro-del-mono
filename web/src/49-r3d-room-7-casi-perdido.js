@@ -6,7 +6,8 @@
 //   sparks and droplets around. Three loading-spinner asterisks (two on the left, one on the right) and some round dots and smudges on the right.
 //   The paper in the photo is a black sheet in a plastic sleeve on a blanket (turned, keystoned), so the tones were traced from a rectified copy
 //   (49-r3d-room-7-casi-perdido-art.js): the white and grey tones as contours at five levels, the gold glitter and the silver glitter segmented
-//   apart (colour) and drawn on their own layers, warm and cool, with sparkle points on their brightest grains.
+//   apart (colour) and drawn on their own layers, warm and cool, with sparkle points on their brightest grains (the shared tone helpers,
+//   49-r3d-room-0-tones.js, decode and paint them).
 //   The visitor arrives at the eye that sees the cover (1.6 m high) and every point stands where it projects onto the cover's own pixels from there.
 //   Layers share that eye and each one sits at the depth that suits it; the cover's pixels are split among them with soft masks that add up to one,
 //   so from the arrival spot the sum is the cover and walking in opens it up:
@@ -18,12 +19,14 @@
 //     · chalk ribbons for what is told and what moves: the thought that rises from the flames, the mate, Rita's leash and the guitar, rings, embers.
 //   world.room.v holds the targets (the controller, 59-room-7-…, sets them whole); every value is damped here, so nothing needs a sequence.
 // ═══════════════════════════════════════════════════════════════════════════════════════════
-/** The eye that sees the cover: H its height (m), cx the column straight ahead, FR the cover row where the fringe ends (it stands 0.15 m above the floor), Z0 how far (m) the drawing's plane is from the eye. */
-const CP = { H: 1.6, cx: 560, FR: 1005, Z0: 5.5, ARR: 2.7 };
+/** The eye that sees the cover: H its height (m), cx the column straight ahead, BOT the cover row where the fringe ends (it stands 0.15 m above the floor), Z0 how far (m) the drawing's plane is from the eye, ARR where the visitor arrives (z). */
+const CP = { H: 1.6, cx: 560, BOT: 1005, Z0: 5.5, ARR: 2.7 };
 /** Where the visitor stands when a floor opens is the eye; the drawing is Z0 metres ahead of it. */
 const CP_SET = { x: 0, y: 1.6, z: CP.ARR + CP.Z0 };
 /** The lens depends on the screen: a wide one fits the whole bust at 1300 cover px of focal length, a phone's narrow view at 1600. The set's z never changes. */
-function cpLens(a) { const wide = a >= 1.1, f = wide ? 1300 : 1600; return { wide, f, yh: CP.FR - ((CP.H - 0.15) * f) / CP.Z0 }; }
+function cpLens(a) { return coverLens(CP, a, { f: 1300, row: 520, sx: 0.42, sy: 0.5 }, { f: 1600, row: 520, sx: 0.5, sy: 0.5 }); }
+/** A polygon of a disc (cover pixels): the tight cut that holds one spinner. */
+const cpDisc = (cx, cy, r, n = 28) => Array.from({ length: n }, (_, i) => [cx + r * Math.cos((i / n) * TAU), cy + r * Math.sin((i / n) * TAU)]);
 /**
  * The ten thoughts that rise in the flames (the 2D plate's cards, in its order): five belong to the fire, five are the quiet life. A quiet thought
  * lands at one of the three spots (spot: 0 the mate, 1 Rita's leash, 2 the guitar); `land` is where it comes down, said aloud.
@@ -69,8 +72,7 @@ ROOM_SETS['casi-perdido'] = function buildCasiPerdido(ctx, kit, track) {
   const lines = (rib, o = {}) => { segTotal += rib.count; const L = kit.lines(rib, o); L.core.layers.set(1); return L; }; // (layer 1: not mirrored by the water: the cover has no reflection)
   const mp = (Z) => Z / f; // metres per cover pixel at depth Z
 
-  // ---- the cover's pixels → the set (x to the viewer's right, y up, z toward the visitor; the drawing's plane at z = 0) ----
-  const P = (px, py, Z = V.Z0) => [((px - V.cx) * Z) / f, V.H + ((yh - py) * Z) / f, V.Z0 - Z];
+  // ---- how far each layer stands from the eye (the cover's pixels → the set, the tones painted into textures and the grid meshes are the shared helpers of 49-r3d-room-0-tones.js) ----
   const bump = (px, py, cx, cy, rx, ry) => Math.exp(-(((px - cx) / rx) ** 2 + ((py - cy) / ry) ** 2));
   /** How far the body is from its plane: the head and face forward, the chest and the shoulders a little. */
   const Zb = (px, py) => V.Z0 - 0.7 * bump(px, py, 545, 560, 150, 170) - 0.45 * bump(px, py, 540, 850, 260, 170) - 0.2 * bump(px, py, 330, 740, 100, 80);
@@ -79,66 +81,12 @@ ROOM_SETS['casi-perdido'] = function buildCasiPerdido(ctx, kit, track) {
   const ZF = V.Z0 - 0.35; // the flames stand a little in front of the head's top
 
   // ───────────────────────────── the tones: the photo's own contours, painted into textures ─────────────────────────────
-  const loops = cpDecode().filter((lp) => lp.a >= (lite ? (lp.l < 5 ? 40 : 18) : 0));
-  loops.forEach((lp) => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const p of lp.pts) { a = Math.min(a, p[0]); b = Math.min(b, p[1]); c = Math.max(c, p[0]); d = Math.max(d, p[1]); } lp.bb = [a, b, c, d]; });
-  const tonePts = loops.reduce((n, lp) => n + lp.pts.length, 0);
-  const TS = lite ? 1.05 : 1.7; // texture pixels per cover pixel
-  const GAIN = 1.45;
-  const pathOf = (pts) => { const p = new Path2D(); pts.forEach((q, i) => (i ? p.lineTo(q[0], q[1]) : p.moveTo(q[0], q[1]))); p.closePath(); return p; };
-  const GREY = { 5: 150, 6: 215, 7: 255, 8: 88, 9: 225 }; // (the grey each glitter group is painted with: its layer's tint makes it gold or silver)
-  const tones = (c, r, groups, gain) => {
-    for (const l of groups) {
-      const path = new Path2D(); let any = false;
-      for (const lp of loops) {
-        if (lp.l !== l || lp.bb[2] < r[0] || lp.bb[0] > r[2] || lp.bb[3] < r[1] || lp.bb[1] > r[3]) continue;
-        lp.pts.forEach((p, i) => (i ? path.lineTo(p[0], p[1]) : path.moveTo(p[0], p[1]))); path.closePath(); any = true;
-      }
-      if (!any) continue;
-      const g = Math.min(255, Math.round(l < 5 ? CP_FILL[l] * gain : GREY[l])); c.fillStyle = `rgb(${g},${g},${g})`; c.fill(path, 'evenodd');
-      if (l < 5) { c.strokeStyle = c.fillStyle; c.lineWidth = lite ? 1.1 : 0.9; c.lineJoin = 'round'; c.stroke(path); } // (the cover's strokes are a little bolder than their traced edges)
-    }
-  };
-  /** A soft mask (alpha) over a rectangle of the cover: polygons filled and blurred (blur in cover px). */
-  const maskOf = (w, hh, r, polys, blur, ts) => {
-    const m = document.createElement('canvas'); m.width = w; m.height = hh; const c = m.getContext('2d');
-    if (blur && 'filter' in c) c.filter = `blur(${(blur * ts).toFixed(1)}px)`;
-    c.scale(w / (r[2] - r[0]), hh / (r[3] - r[1])); c.translate(-r[0], -r[1]); c.fillStyle = '#fff';
-    for (const p of polys) c.fill(pathOf(p));
-    return m;
-  };
-  const FLAME_M = [CP_FLAME_POLY], HAND_M = [CP_HAND_POLY], HULL_M = [CP_HULL_POLY];
-  /**
-   * A texture painted from the tones inside a rectangle of the cover. groups: which levels; masks: [['in'|'out', polygons, blur], …] applied in order (the layers'
-   * weights add up to one, so each stroke is drawn once in all); clip: a rectangle kept; ts scales the resolution. A soft glow is added around every bright band.
-   */
-  const region = (r, o = {}) => { const ts = TS * (o.ts || 1); return ctx.canvasTex(Math.max(4, Math.round((r[2] - r[0]) * ts)), Math.max(4, Math.round((r[3] - r[1]) * ts)), (c, w, hh) => {
-    const wc = document.createElement('canvas'); wc.width = w; wc.height = hh; const k = wc.getContext('2d');
-    k.save(); k.scale(w / (r[2] - r[0]), hh / (r[3] - r[1])); k.translate(-r[0], -r[1]);
-    if (o.clip) { k.beginPath(); k.rect(...o.clip); k.clip(); }
-    tones(k, r, o.groups || [0, 1, 2, 3, 4], o.gain || GAIN);
-    k.restore();
-    for (const [mode, polys, blur] of o.masks || []) { k.globalCompositeOperation = mode === 'in' ? 'destination-in' : 'destination-out'; k.drawImage(maskOf(w, hh, r, polys, blur, ts), 0, 0); }
-    c.fillStyle = '#000'; c.fillRect(0, 0, w, hh); c.drawImage(wc, 0, 0);
-    if ('filter' in c) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = o.glow ?? 0.15; c.filter = `blur(${((2.6 * ts) / 1.7).toFixed(1)}px)`; c.drawImage(c.canvas, 0, 0); c.restore(); } // a soft glow around every bright band
-  }); };
-  const mat = (tex, tint = [0.96, 0.95, 0.98]) => { const u = { uTex: { value: tex }, uAlpha: { value: 1 }, uReveal: { value: 1 }, uTint: { value: V3(...tint) } }; return { u, m: ctx.glowMat(TEXT_FRAG, u) }; };
-  /** A grid mesh over a cover rectangle whose every vertex sits on its pixel's ray at a depth `Zf(px, py)` (relative to `origin`, a point of the set); returns its geometry data. */
-  const gridMesh = (r, nx, ny, Zf, tex, host = root, origin = [0, 0, 0], tint) => {
-    const n = (nx + 1) * (ny + 1), base = new Float32Array(n * 3), uv = new Float32Array(n * 2), idx = [], pxy = new Float32Array(n * 2);
-    for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) {
-      const px = r[0] + ((r[2] - r[0]) * i) / nx, py = r[1] + ((r[3] - r[1]) * j) / ny, k = j * (nx + 1) + i, p = P(px, py, Zf(px, py));
-      base.set([p[0] - origin[0], p[1] - origin[1], p[2] - origin[2]], k * 3); pxy[k * 2] = px; pxy[k * 2 + 1] = py; uv[k * 2] = i / nx; uv[k * 2 + 1] = 1 - j / ny;
-    }
-    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const a = j * (nx + 1) + i, b = a + 1, c2 = a + nx + 1, d = c2 + 1; idx.push(a, c2, b, b, c2, d); }
-    const geo = ctx.keep(new THREE.BufferGeometry()), attr = new THREE.BufferAttribute(new Float32Array(base), 3);
-    geo.setAttribute('position', attr); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geo.setIndex(idx);
-    const M = mat(tex, tint), mesh = new THREE.Mesh(geo, M.m); mesh.frustumCulled = false; mesh.layers.set(1); host.add(mesh); // (layer 1: not mirrored by the water: the cover has no reflection)
-    return { mesh, attr, base, pxy, u: M.u, nx, ny, r, n };
-  };
+  const { P, tonePts, region, mat, gridMesh, glitterRows } = coverTones(ctx, { V, lens: { f, yh }, decode: cpDecode, fill: CP_FILL, grey: { 5: 150, 6: 215, 7: 255, 8: 88, 9: 225 }, ts: [1.05, 1.7], root, rnd }); // (the greys: what each glitter group is painted with, its layer's tint makes it gold or silver)
+  const FLAME_M = [CP_FLAME_POLY], HAND_M = [CP_HAND_POLY], HULL_M = [CP_HULL_POLY], SPIN_M = CP_SPOTS.map((sp) => cpDisc(sp.px, sp.py, sp.r2 * 1.3));
 
   // the body: a relief below the flames, without the hand (the weights: flames, then hand, then the rest)
   const BODY_R = [205, 420, 905, 1030];
-  const body = gridMesh(BODY_R, lite ? 30 : 46, lite ? 34 : 52, Zb, region(BODY_R, { masks: [['out', FLAME_M, 14], ['out', HAND_M, 12], ['in', HULL_M, 5]] }));
+  const body = gridMesh(BODY_R, lite ? 30 : 46, lite ? 34 : 52, Zb, region(BODY_R, { masks: [['out', FLAME_M, 14], ['out', HAND_M, 12], ['out', SPIN_M, 2], ['in', HULL_M, 5]] }));
   // the hand and forearm: a relief of its own that hinges about the elbow
   const HAND_R = [628, 415, 892, 890];
   const pivotZ = Zh(CP_PIVOT[0], CP_PIVOT[1]), pivot = P(CP_PIVOT[0], CP_PIVOT[1], pivotZ), handHost = grp(root, pivot[0], pivot[1], pivot[2]);
@@ -155,7 +103,7 @@ ROOM_SETS['casi-perdido'] = function buildCasiPerdido(ctx, kit, track) {
   // the spinners: each its own texture, spinning about its centre at its own depth
   const spinners = CP_SPOTS.map((sp, k) => {
     const r = [sp.px - sp.half, sp.py - sp.half, sp.px + sp.half, sp.py + sp.half], c = P(sp.px, sp.py, sp.Z), host = grp(root, c[0], c[1], c[2]);
-    const geo = ctx.keep(new THREE.PlaneGeometry(2 * sp.half * mp(sp.Z), 2 * sp.half * mp(sp.Z))), M = mat(region(r, { clip: r, ts: lite ? 1.1 : 1.6, glow: 0.2 }));
+    const geo = ctx.keep(new THREE.PlaneGeometry(2 * sp.half * mp(sp.Z), 2 * sp.half * mp(sp.Z))), M = mat(region(r, { ts: lite ? 1.1 : 1.6, glow: 0.2, masks: [['in', [SPIN_M[k]], 0.8]] }));
     const m = new THREE.Mesh(geo, M.m); m.frustumCulled = false; m.layers.set(1); host.add(m);
     return { sp, k, host, m, u: M.u, home: c, r, spin: 0 };
   });
@@ -245,14 +193,13 @@ ROOM_SETS['casi-perdido'] = function buildCasiPerdido(ctx, kit, track) {
   });
 
   // ───────────────────────────── glitter: sparkle points on the brightest grains, twinkling; the gold falls at the end ─────────────────────────────
-  const glitterRows = (pts, size, tintK) => pts.map(([x, y, b]) => { const p = P(x, y, ZF - 0.1 * tintK); return [p[0], p[1], p[2], size * (0.7 + rnd() * 0.8), 0.45 + 0.55 * (b / 255), rnd(), 0]; });
   const goldPts = CP_GOLD_PTS.filter((_, i) => !lite || i % 2 === 0), silPts = CP_SIL_PTS.filter((_, i) => !lite || i % 2 === 0);
-  const goldG = kit.points(glitterRows(goldPts, 0.05, 1), { shape: 3, twinkle: 0.95, tint: [1.2, 0.9, 0.42] });
-  const silG = kit.points(glitterRows(silPts, 0.045, 0.5), { shape: 3, twinkle: 0.95, tint: [0.9, 0.97, 1.1] });
+  const goldG = kit.points(glitterRows(goldPts, 0.05, ZF - 0.1), { shape: 3, twinkle: 0.95, tint: [1.2, 0.9, 0.42] });
+  const silG = kit.points(glitterRows(silPts, 0.045, ZF - 0.05), { shape: 3, twinkle: 0.95, tint: [0.9, 0.97, 1.1] });
   root.add(goldG.obj); root.add(silG.obj);
   const goldBase = Float32Array.from(goldG.pos), silBase = Float32Array.from(silG.pos);
   // the gold that falls (the same grains, drifting down and fading), and the sparks that drift up from the flames
-  const fallG = kit.points(glitterRows(goldPts, 0.05, 1).map((r, i) => [r[0], r[1], r[2], r[3], r[4], r[5], 0]), { mode: 1, rise: [0, -3.2, 0], speed: 0.42, spread: 0.2, shape: 3, tint: [1.2, 0.9, 0.42], alpha: 0 });
+  const fallG = kit.points(glitterRows(goldPts, 0.05, ZF - 0.1).map((r, i) => [r[0], r[1], r[2], r[3], r[4], r[5], 0]), { mode: 1, rise: [0, -3.2, 0], speed: 0.42, spread: 0.2, shape: 3, tint: [1.2, 0.9, 0.42], alpha: 0 });
   root.add(fallG.obj);
   const sparks = kit.points(Array.from({ length: lite ? 12 : 26 }, () => { const px = 400 + rnd() * 380, py = 120 + rnd() * 260, p = P(px, py, ZF + 0.1); return [p[0], p[1], p[2], 0.02 + rnd() * 0.025, 0.45 + rnd() * 0.45, rnd(), 0]; }), { mode: 1, rise: [0.03, 0.55, 0], speed: 0.14, spread: 0.1, tint: [1.15, 0.8, 0.45] });
   root.add(sparks.obj);
@@ -299,13 +246,7 @@ ROOM_SETS['casi-perdido'] = function buildCasiPerdido(ctx, kit, track) {
     brasas: { t: () => [FLAME_C[0], FLAME_C[1] - 0.1, FLAME_C[2]], w: 3.2, h: 3.0, up: 0 },
     ...Object.fromEntries(CP_SPOTS.map((sp, k) => ['giro-' + k, { t: () => [spinners[k].home[0], (spinners[k].home[1] + 0.5) / 2, spinners[k].home[2]], w: 2.6, h: Math.max(2.4, spinners[k].home[1] + 0.9), up: 0 }])),
   };
-  function aim(camL, tgtL, sx, sy, fov, a) {
-    root.updateMatrixWorld();
-    const cw = root.localToWorld(V3(...camL)), tw = root.localToWorld(V3(...tgtL));
-    const dx = tw.x - cw.x, dy = tw.y - cw.y, dz = tw.z - cw.z, tanV = Math.tan((fov * Math.PI) / 360), tanH = tanV * a;
-    return { x: cw.x, y: cw.y, z: cw.z, fov, yaw: Math.atan2(-dx, -dz) - Math.atan((0.5 - sx) * 2 * tanH), pitch: Math.atan2(dy, Math.hypot(dx, dz)) - Math.atan((0.5 - sy) * 2 * tanV) };
-  }
-  const fit = (w, h, fw, fh, fov, a) => { const tv = 2 * Math.tan((fov * Math.PI) / 360); return Math.max(h / (fh * tv), w / (fw * tv * a)); };
+  const aim = (camL, tgtL, sx, sy, fov, a) => coverAim(root, V3, camL, tgtL, sx, sy, fov, a), fit = coverFit;
   function pose(view, a, free) {
     const L = LOOK[view]; if (!L) return null;
     const fr = free || { x0: 0.3, y0: 0.1, x1: 0.95, y1: 0.55 }, sx = (fr.x0 + fr.x1) / 2, sy = (fr.y0 + fr.y1) / 2, fw = (fr.x1 - fr.x0) * 0.9, fh = (fr.y1 - fr.y0) * 0.86, phone = a < 0.8, fov = phone ? 56 : 44;
