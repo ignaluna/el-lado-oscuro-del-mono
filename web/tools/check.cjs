@@ -1535,8 +1535,8 @@ const ROOM_WALKS = {
     midOK: (s) => s.noticed === 'calor' && s.visual.v.sign[0] === 1 && s.visual.v.tag === 1, midMsg: 'a reload keeps the sign that was noticed (the heat) and nothing else',
   },
   'que-carajo': {
-    floor: 4, chapter: 'cap-4', minSegments: 1800, play: playCarajo,
-    built: (set) => set.strokes > 600 && set.route === 'IDDID' && set.things === 5 && set.drops === 3,
+    floor: 4, chapter: 'cap-4', minSegments: 6000, play: playCarajo,
+    built: (set) => set.contours > 3000 && set.route === 'IDDID' && set.things === 5 && set.drops === 3,
     tierBuilt: (set) => set.route === 'IDDID' && set.things === 5,
     hots: [/^La palma de la mano izquierda/, /^Las dos manos/, /^Las tres gotas/, /^Un ramal de las marcas de arrastre, hacia la izquierda/, /^Un ramal de las marcas de arrastre, hacia la derecha/],
     afterSolve: (s) => s.visual.v.calm === 1 && s.held === 5,

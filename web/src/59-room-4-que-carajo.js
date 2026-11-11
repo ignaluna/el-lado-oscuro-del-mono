@@ -11,7 +11,8 @@
 // The words keep the book's own: clue and done are verbatim chapter text; the hints are new prose.
 ROOMS['que-carajo'] = {
   water: PLAIN_WATER, // the cover is plain black paper: no reflection, engraved rows, floor light, glints or horizon in the arrival view (see PLAIN_WATER)
-  aim: { x: 0, y: 2.4, z: 10.2, sx: 0.42, sy: 0.47 },
+  /** The camera looks at a row of the cover (the set's lens depends on the screen); the set's z never changes. */
+  get aim() { const L = qcLens(aspectNow()); return { x: QC_SET.x, y: QC.H + ((L.yh - L.row) * QC.Z0) / L.f, z: QC_SET.z, sx: L.sx, sy: L.sy }; },
   intro: 'Dos manos levantadas y tres gotas. En el piso, marcas de algo arrastrado.',
   clue: 'Pero pesa distinto cuando lo miro de cerca, cuando lo sostengo con las dos manos en vez de arrastrarlo por la vida.',
   done: 'No quiero vivir buscando el sentido. Quiero detenerme a sentirlo.',

@@ -1,28 +1,48 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════
 // FLOOR 4 · «¿QUÉ CARAJO?»  (the cover, as two raised hands: white chalk on black)
-//   The drawing is two furry-wristed hands held up with the palms forward, every finger, crease and strand of fur white on the
-//   black paper, and three drops falling: one from each wrist and one between them. "11:11" in a corner. The strokes are the
-//   photo's own (traced once, see 49-r3d-room-4-que-carajo-hands.js), laid out in the cover's pixels on a relief board that leans
-//   back toward the visitor (like floors 2 and 3), the hands standing a little off the paper.
-//   In front of the board, on the water, a backpack's drag marks cross the floor and fork five times (the left palm's line says how
-//   to turn); at the end of each right turn lies something inherited, drawn in chalk standing on the water. Each fork is a pair of
-//   chalk arrows on posts. world.room.v holds the targets (the controller, 59-room-4-…, sets them whole); every value is damped
-//   here, so nothing needs a sequence and nothing is left half done.
+//   The drawing is two furry-wristed hands held up with the palms forward, every finger, crease and strand of fur white on the black paper, and three drops:
+//   one from each wrist and one between them. "11:11" in a corner. The cover has no gold or silver. The photo is a black paper taped on an orange graffiti
+//   heart, so the tones were traced from a rectified copy (49-r3d-room-4-que-carajo-art.js): the white and grey tones as contours at five levels, painted
+//   into textures (the shared tone helpers, 49-r3d-room-0-tones.js).
+//   The visitor arrives at the eye that sees the cover (1.6 m high) and every point stands where it projects onto the cover's own pixels from there. Layers share
+//   that eye and each one sits at the depth that suits it; the cover's pixels are split among them with soft masks that add up to one, so from the arrival spot
+//   the sum is the cover, seen frontally, and walking in opens it up:
+//     · each hand is a layer of its own that turns about its wrist (they lean toward each other with every thing held) and breathes; the left palm's creases
+//       are cut from it (they are the line that is looked at, and brighten when it was),
+//     · the three drops are cut from the tones along their own outlines, and a copy of each falls from it,
+//     · "11:11" is a small patch behind them.
+//   In front of the drawing, on the water, a backpack's drag marks cross the floor and fork five times (the left palm's line says how to turn); at the end of
+//   each right turn lies something inherited, drawn in chalk standing on the water. Each fork is a pair of chalk arrows on posts. world.room.v holds the
+//   targets (the controller, 59-room-4-…, sets them whole); every value is damped here, so nothing needs a sequence and nothing is left half done.
 // ═══════════════════════════════════════════════════════════════════════════════════════════
-/** Local frame (metres): +x to the viewer's right, +z toward the visitor, y up. The board leans back by `tilt`. */
-const QC_SET = { x: 0, z: 10.2, yc: 2.4, K: 0.0092, tilt: (58 * Math.PI) / 180, o: [465, 860] };
+/** The eye that sees the cover: H its height (m), cx the column straight ahead, Z0 how far (m) the drawing's plane is from the eye (the drag marks and the things lie in between), ARR where the visitor arrives (z), BOT the cover row that stands 0.15 m above the floor. */
+const QC = { H: 1.6, cx: 500, Z0: 7.5, ARR: 2.7, BOT: 985 };
+/** Where the visitor stands when a floor opens is the eye; the drawing is Z0 metres ahead of it. */
+const QC_SET = { x: 0, z: QC.ARR + QC.Z0 };
+/** The lens depends on the screen: a wide one fits the whole paper at 1300 cover px of focal length, a phone's narrow view at 1850. The set's z never changes. */
+function qcLens(a) { return coverLens(QC, a, { f: 1300, row: 520, sx: 0.42, sy: 0.48 }, { f: 1850, row: 560, sx: 0.5, sy: 0.46 }); }
+/** The cover's regions (rectified cover pixels, the paper is 1000 square): the two hands (a little beyond their outlines), the left palm inside its outline, the three drops (the cover's own outlines). */
+const QC_POLY = {
+  HL: [[288, 659], [289, 503], [294, 409], [301, 370], [310, 345], [342, 310], [350, 303], [377, 295], [379, 295], [394, 300], [401, 305], [471, 417], [474, 425], [489, 630], [488, 633], [422, 688], [372, 710], [291, 695], [289, 695]],
+  HR: [[490, 495], [491, 488], [529, 356], [532, 348], [569, 327], [574, 324], [579, 324], [605, 329], [614, 333], [658, 373], [664, 380], [672, 397], [746, 699], [713, 729], [645, 781], [638, 785], [633, 784], [627, 779], [590, 720], [504, 565], [497, 549], [493, 523]],
+  PALM: [[312, 436], [408, 432], [412, 470], [398, 505], [372, 530], [330, 545], [310, 525], [305, 480]],
+  DROPS: [[[366, 643], [359, 676], [357, 700.5], [357.5, 705], [360.5, 711.5], [365, 713.5], [369.5, 714], [374, 712.5], [378, 709], [381, 703], [382, 695], [369.5, 652], [366, 648]], [[477.5, 566.5], [475.5, 570.5], [472, 588.5], [470, 623], [474, 635], [477, 637], [482, 638], [487, 637], [490, 632.5], [492.5, 624.5], [492, 615], [482.5, 583.5], [480, 568]], [[625, 684], [630, 688], [636, 700], [642, 720], [648, 742], [650, 756], [646, 768], [638, 777], [632, 779], [625, 776], [620, 764], [619, 748], [620, 730], [622, 710], [623, 694]]],
+};
+/** The cover rectangle that holds "11:11". */
+const QC_SIG = [888, 950, 990, 992];
+/** Cover pixels the hotspots and the close looks aim at (and how much each look shows, metres). */
+const QC_PX = {
+  palma: [365, 490], manos: [610, 495], gotas: [481, 606],
+  looks: { palma: { at: [365, 485], w: 0.9, h: 1.1 }, manos: { at: [515, 520], w: 2.6, h: 2.3 }, gotas: { at: [500, 660], w: 1.7, h: 1.2 } },
+};
+/** The wrists, where each hand turns, and the fingertips (the left hand's four fingers and thumb, the right hand's four and thumb), lit one pair per thing held. */
+const QC_PIV = [[378, 639], [621, 633]];
+const QC_TIPS = { L: [[321, 349], [346, 317], [376, 307], [396, 314], [460, 422]], R: [[545, 358], [574, 337], [602, 341], [643, 377], [507, 490]] };
 /** The way to turn at each of the five forks (the visitor's left and right, facing the board), as the left palm's line goes: I izquierda, D derecha. */
 const QC_ROUTE = ['I', 'D', 'D', 'I', 'D'];
 /** The five inherited things, in the order the chapter names them. */
 const QC_THINGS = ['Las bolsitas de residuo que vendía papá', 'Las zapatillas que compartían mi vieja y mi tía', 'La espada de Pepe', 'Los ñoquis de Eva', 'Los vinos de Rolando'];
-/** Cover pixels the hotspots and the close looks aim at (and how much each look shows, metres). */
-const QC_PX = {
-  palma: [352, 815], manos: [540, 800], gotas: [441, 897],
-  looks: { palma: { at: [352, 808], w: 1.5, h: 1.75 }, manos: { at: [466, 835], w: 3.5, h: 2.9 }, gotas: { at: [456, 948], w: 2.6, h: 1.9 } },
-};
-/** The fingertips (the left hand's four fingers and thumb, the right hand's four and thumb), lit one pair per thing held. */
-const QC_TIPS = { L: [[317, 712], [335, 688], [357, 680], [372, 685], [422, 763]], R: [[484, 714], [505, 698], [526, 700], [557, 726], [458, 812]] };
-/** Where the drag marks fork: station k, and where the right turn at it goes (one step of 0.8 m to the side, 0.32 m toward the board). */
+/** Where the drag marks fork: station k, and where the right turn at it goes (one step of 0.8 m to the side, 0.32 m toward the drawing). */
 const QC_STN = (() => { const s = [[0, 3.5]]; QC_ROUTE.forEach((r, k) => s.push([s[k][0] + (r === 'I' ? -0.8 : 0.8), s[k][1] - 0.32])); return s; })();
 
 /** The chalk drawings of the five things, as pieces of [points, closed] in a unit square (u across, v up from -1 to 1). */
@@ -49,89 +69,50 @@ function qcIcon(k) {
 }
 
 ROOM_SETS['que-carajo'] = function buildCarajo(ctx, kit, track) {
-  const { THREE, V3 } = ctx, RU = kit.RU, S = QC_SET, lite = ctx.lite, K = S.K, sT = Math.sin(S.tilt), cT = Math.cos(S.tilt);
-  const rnd = mulberry32(44);
+  const { THREE, V3 } = ctx, RU = kit.RU, lite = ctx.lite, V = QC, Z0 = QC.Z0, POLY = QC_POLY;
+  const { wide, f, yh } = qcLens(ctx.W / Math.max(1, ctx.H));
   const root = new THREE.Group();
-  root.position.set(S.x, 0, S.z);
-  root.rotation.y = Math.atan2(-S.x, 2.7 - S.z); // the front (+z local) faces the place where the visitor stands
+  root.position.set(QC_SET.x, 0, QC_SET.z);
+  root.rotation.y = Math.PI; // the front (+z local) faces the arrival spot
   const grp = (parent = root, x = 0, y = 0, z = 0) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
-  const W3w = 4.2, W2 = 3.0, W1 = 2.0, W0 = 1.4, WC = (lite ? [1.2, 1.5, 2.2, 3.2] : [1.7, 2.3, 3.4, 4.8]); // line widths (CSS px); WC[class], by the thickness of the stroke in the photo (thinner on the lite tier: a phone draws the hands small)
+  const W2 = 3.0, W1 = 2.0, W0 = 1.4; // chalk line widths (CSS px) of the drag marks and the arrows
   let segTotal = 0;
   const lines = (rib, o = {}) => { segTotal += rib.count; return kit.lines(rib, o); };
 
-  // ---- the board: cover pixels (x right, y down) → the set's metres; h lifts a point off the board ----
-  const P = (px, py, h = 0) => { const X = (px - S.o[0]) * K, Y = -(py - S.o[1]) * K; return [X, S.yc + Y * sT + h * cT, -Y * cT + h * sT]; };
-  const NN = [0, cT, sT]; // out of the drawing, toward the visitor
-  const NNv = V3(...NN);
-  const pen = (seed) => {
-    const R = kit.ribbons(seed);
-    return {
-      R,
-      seg: (a, b, w = W1, al = 1, h = 0) => R.seg(P(a[0], a[1], h), P(b[0], b[1], h), w, al),
-      poly: (pts, w = W1, al = 1, closed = false, h = 0) => R.poly(pts.map((q) => P(q[0], q[1], h)), w, al, closed),
-    };
-  };
-  const dots = []; // sprite rows: [x, y, z, size, alpha, seed, kind]
-  const dot = (x, y, h, sz, al = 0.9) => { const p = P(x, y, h); dots.push([p[0], p[1], p[2], sz, al, rnd(), 0]); };
+  // ---- how far each layer is from the eye (each layer is a flat sheet on the cover's rays): the hands stand a little forward of the paper, the drops with them ----
+  const ZH = Z0 - 0.5, ZD = Z0 - 0.3, ZMV = Z0 - 0.7, ZSIG = Z0 + 0.3, mpp = (Z) => Z / f; // (mpp: metres per cover pixel at depth Z)
 
-  // ───────────────────────────── the paper: its edge, a dent and a speck (it does not move) ─────────────────────────────
-  const C = pen(7);
-  C.poly([[72, 462], [816, 443], [803, 1180], [92, 1190]], 1.6, 0.35, true);
-  dot(455, 527, 0, 0.03, 0.7); dot(726, 969, 0, 0.022, 0.8);
-  const paperL = lines(C.R, { glow: true }); root.add(paperL.obj);
+  // ───────────────────────────── the tones: the photo's own contours, painted into textures ─────────────────────────────
+  const { P, tonePts, region, gridMesh } = coverTones(ctx, { V, lens: { f, yh }, decode: qaDecode, fill: QA_FILL, ts: [1.2, 2.0], root, rnd: mulberry32(44) });
+  const BM = 1.2; // blur of a cut-out's soft edge (cover px)
+  segTotal += tonePts; // (every contour edge is a chalk line of the drawing)
 
-  // ───────────────────────────── the hands (traced): outline and fingers, palm lines, fur ─────────────────────────────
-  const strokes = qcDecode();
-  const inPalm = (st) => { const xs = st.pts.map((p) => p[0]), ys = st.pts.map((p) => p[1]), cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2; return st.g === 0 && cx > 318 && cx < 392 && cy > 770 && cy < 872; };
-  const hands = [0, 1].map((g) => ({ heavy: pen(10 + g), fine: pen(12 + g), palm: pen(14 + g) }));
-  let drawn = 0;
-  strokes.forEach((st, i) => {
-    if (lite && st.c === 0 && i % 3) return; // the lite tier draws a third of the hairlines
-    const h = hands[st.g], to = st.c >= 2 ? h.heavy : inPalm(st) ? h.palm : h.fine;
-    to.poly(st.pts, WC[st.c], st.c === 0 ? 0.8 : 1, false, st.c >= 2 ? 0.06 : 0.025);
-    drawn++;
+  // ───────────────────────────── the hands: each turns about its wrist; the left palm's creases are a patch of their own ─────────────────────────────
+  const handHost = [0, 1].map((g) => { const p = P(QC_PIV[g][0], QC_PIV[g][1], ZH); return { host: grp(root, p[0], p[1], p[2]), p }; });
+  const HANDS = [POLY.HL, POLY.HR], handMesh = HANDS.map((poly, g) => {
+    const R = boxOf(poly, 6), masks = [['in', [poly], BM], ['out', POLY.DROPS, BM]];
+    if (g === 0) masks.push(['out', [POLY.PALM], 3]);
+    return gridMesh(R, 2, 2, ZH, region(R, { masks }), handHost[g].host, handHost[g].p);
   });
-  const PIV = [[365, 925], [545, 915]]; // the wrists: where each hand turns
-  const handHost = [0, 1].map((g) => { const p = P(PIV[g][0], PIV[g][1], 0); return { host: grp(root, p[0], p[1], p[2]), p }; });
-  const handL = hands.map((h, g) => {
-    const L = { heavy: lines(h.heavy.R, { glow: true }), fine: lines(h.fine.R, { glow: true }), palm: h.palm.R.count ? lines(h.palm.R, { glow: true }) : { obj: new THREE.Group(), set() {} } }; // (only the left palm's creases are set apart: they are the line that is looked at)
-    for (const l of Object.values(L)) { l.obj.position.set(-handHost[g].p[0], -handHost[g].p[1], -handHost[g].p[2]); handHost[g].host.add(l.obj); }
-    return L;
+  const PM_R = boxOf(POLY.PALM, 8);
+  const palm = gridMesh(PM_R, 1, 1, ZH, region(PM_R, { ts: 1.4, masks: [['in', [POLY.PALM], 3]] }), handHost[0].host, handHost[0].p);
+  // ───────────────────────────── the three drops: cut along their own outlines, and a copy of each that falls ─────────────────────────────
+  const dropM = [], ghostM = [], ghostHost = [];
+  POLY.DROPS.forEach((poly) => {
+    const R = boxOf(poly, 5), tex = region(R, { ts: 1.5, masks: [['in', [poly], BM]] });
+    dropM.push(gridMesh(R, 1, 1, ZD, tex));
+    const h = grp(root); ghostHost.push(h); ghostM.push(gridMesh(R, 1, 1, ZD - 0.02, tex, h));
   });
-
-  // ───────────────────────────── the three drops: outlines filled with chalk, and a copy of each that falls ─────────────────────────────
-  const dropPolys = qcDrops(), dropL = [], ghostL = [], ghostHost = [], dropBase = [];
-  const fillHatch = (R2, poly, step, w) => { // horizontal chalk strokes across a polygon (a drop drawn solid)
-    const ys = poly.map((q) => q[1]), y0 = Math.min(...ys), y1 = Math.max(...ys);
-    for (let y = y0 + step; y < y1 - 0.6; y += step) {
-      const xs = []; for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length]; if ((a[1] <= y && b[1] > y) || (b[1] <= y && a[1] > y)) xs.push(a[0] + ((y - a[1]) / (b[1] - a[1])) * (b[0] - a[0])); }
-      if (xs.length >= 2) R2.seg([Math.min(...xs) + 0.5, y], [Math.max(...xs) - 0.5, y], w, 1);
-    }
-  };
-  dropPolys.forEach((poly, i) => {
-    const A = pen(20 + i), G = pen(30 + i);
-    A.poly(poly, W2, 1, true, 0.04); fillHatch({ seg: (a, b, w, al) => A.seg(a, b, w, al, 0.04) }, poly, lite ? 2.4 : 1.7, W2 + 0.4);
-    G.poly(poly, W1, 0.9, true, 0.03); fillHatch({ seg: (a, b, w, al) => G.seg(a, b, w, al, 0.03) }, poly, 3.2, W1);
-    const bx = poly.reduce((s, q) => s + q[0], 0) / poly.length, by = Math.min(...poly.map((q) => q[1]));
-    dropBase.push([bx, by]);
-    dropL.push(lines(A.R, { glow: true })); root.add(dropL[i].obj);
-    const gl = lines(G.R, { glow: true }), host = grp(root); host.add(gl.obj); ghostL.push(gl); ghostHost.push(host);
-  });
-  const dropGlint = kit.points(dropPolys.map((poly, i) => { const q = P(dropBase[i][0], dropBase[i][1] + (Math.max(...poly.map((r) => r[1])) - dropBase[i][1]) * 0.62, 0.07); return [q[0], q[1], q[2], 0.22, 0.7, i * 0.31, 0]; }), { shape: 3, twinkle: 0.95, tint: [0.95, 0.96, 1] });
-  root.add(dropGlint.obj);
+  // "11:11", behind the drawing
+  const SG = gridMesh(QC_SIG, 1, 1, ZSIG, region(QC_SIG, { ts: 1.8, glow: 0.25 }));
 
   // ───────────────────────────── the hand's marks: the left palm's line (five glints that zigzag down it), the fingertips ─────────────────────────────
-  const mapRows = QC_ROUTE.map((r, k) => { const q = P(352 + (r === 'I' ? -15 : 15), 787 + k * 17, 0.09); return [q[0], q[1], q[2], 0.2, 0, k * 0.21, 0]; });
+  const mapRows = QC_ROUTE.map((r, k) => { const q = P(366 + (r === 'I' ? -20 : 20), 452 + k * 23, ZMV); return [q[0], q[1], q[2], 0.17, 0, k * 0.21, 0]; });
   const mapPts = kit.points(mapRows, { shape: 3, twinkle: 0.7, tint: [1, 0.9, 0.62] }); root.add(mapPts.obj);
-  const tipRows = (list) => list.map(([x, y], k) => { const q = P(x, y, 0.09); return [q[0], q[1], q[2], 0.34, 0, k * 0.17, 0]; });
+  const tipRows = (list) => list.map(([x, y], k) => { const q = P(x, y, ZMV); return [q[0], q[1], q[2], 0.3, 0, k * 0.17, 0]; });
   const tipPts = [kit.points(tipRows(QC_TIPS.L), { shape: 3, twinkle: 0.8, tint: [1, 0.93, 0.7] }), kit.points(tipRows(QC_TIPS.R), { shape: 3, twinkle: 0.8, tint: [1, 0.93, 0.7] })];
   tipPts.forEach((tp, g) => handHost[g].host.add(tp.obj)); // (they travel with the hand that closes)
   tipPts.forEach((tp, g) => { for (let k = 0; k < 5; k++) { tp.pos[k * 3] -= handHost[g].p[0]; tp.pos[k * 3 + 1] -= handHost[g].p[1]; tp.pos[k * 3 + 2] -= handHost[g].p[2]; } tp.geo.attributes.position.needsUpdate = true; });
-
-  // ───────────────────────────── 11:11 ─────────────────────────────
-  const sig = kit.plane(ctx.canvasTex(256, 96, (c, w, hh) => { c.fillStyle = '#000'; c.fillRect(0, 0, w, hh); c.font = FONT_DISPLAY(66, '', 500); c.textAlign = 'center'; c.textBaseline = 'middle'; c.shadowColor = 'rgba(255,255,255,.5)'; c.shadowBlur = 10; c.fillStyle = '#fff'; c.fillText('11:11', w / 2, hh / 2 + 4); }), 0.55, 0.2, { alpha: 0.8 });
-  sig.mesh.position.set(...P(783, 1158, 0.01)); sig.mesh.rotation.x = S.tilt - Math.PI / 2; root.add(sig.mesh);
-  const splat = kit.points(dots, { shape: 0, twinkle: 0.3, tint: [0.93, 0.9, 0.82] }); root.add(splat.obj);
 
   // ───────────────────────────── the drag marks on the water, and the forks ─────────────────────────────
   const FY = 0.03; // the water
@@ -180,27 +161,21 @@ ROOM_SETS['que-carajo'] = function buildCarajo(ctx, kit, track) {
   // ───────────────────────────── hotspots (world positions) and what the visitor bumps into ─────────────────────────────
   root.updateMatrixWorld(true);
   const W3 = (p) => root.localToWorld(V3(p[0], p[1], p[2]));
-  ctx.anchors['rm-palma'] = { pos: W3(P(QC_PX.palma[0], QC_PX.palma[1], 0.1)), w: 0.95, h: 1.5 };
-  ctx.anchors['rm-manos'] = { pos: W3(P(QC_PX.manos[0], QC_PX.manos[1], 0.1)), w: 1.2, h: 1.5 };
-  ctx.anchors['rm-gotas'] = { pos: W3(P(QC_PX.gotas[0], QC_PX.gotas[1], 0.05)), w: 0.8, h: 1.0 };
+  const anchorSpec = { 'rm-palma': [QC_PX.palma, ZH, 0.75, 0.9], 'rm-manos': [QC_PX.manos, ZH, 0.75, 0.9], 'rm-gotas': [QC_PX.gotas, ZD, 0.45, 0.62] }; // (metres: they scale with the focal length on a phone; the palms' centres are 1.4 m apart)
+  for (const [id, [at, Z, w, hh]] of Object.entries(anchorSpec)) ctx.anchors[id] = { pos: W3(P(at[0], at[1], Z)), w, h: hh };
   tickAt.forEach((t, k) => { ctx.anchors[`rm-ramal-${k}-i`] = { pos: W3(t.c < 0 ? t.d : t.i), w: 0.6, h: 0.8 }; ctx.anchors[`rm-ramal-${k}-d`] = { pos: W3(t.c < 0 ? t.i : t.d), w: 0.6, h: 0.8 }; });
   QC_ROUTE.forEach((_, k) => { ctx.anchors[`rm-cosa-${k}`] = { pos: W3([QC_STN[k + 1][0], 1.0, QC_STN[k + 1][1]]), w: 0.9, h: 1.1 }; });
   const solids = [(() => { const p = W3([0, 0, -0.15]); return { kind: 'box', x: p.x, z: p.z, hw: 3.5, hd: 1.8, ry: root.rotation.y }; })()];
 
-  // ───────────────────────────── camera poses: straight in front of the part of the board that is looked at ─────────────────────────────
-  function aim(camL, tgtL, sx, sy, fov, a) {
-    root.updateMatrixWorld();
-    const cw = root.localToWorld(V3(...camL)), tw = root.localToWorld(V3(...tgtL));
-    const dx = tw.x - cw.x, dy = tw.y - cw.y, dz = tw.z - cw.z, tanV = Math.tan((fov * Math.PI) / 360), tanH = tanV * a;
-    return { x: cw.x, y: cw.y, z: cw.z, fov, yaw: Math.atan2(-dx, -dz) - Math.atan((0.5 - sx) * 2 * tanH), pitch: Math.atan2(dy, Math.hypot(dx, dz)) - Math.atan((0.5 - sy) * 2 * tanV) };
-  }
-  const fit = (w, h, fw, fh, fov, a) => { const tv = 2 * Math.tan((fov * Math.PI) / 360); return Math.max(h / (fh * tv), w / (fw * tv * a)); };
+  // ───────────────────────────── camera poses: straight in front of the part of the drawing that is looked at ─────────────────────────────
+  const aim = (camL, tgtL, sx, sy, fov, a) => coverAim(root, V3, camL, tgtL, sx, sy, fov, a);
+  const fit = coverFit;
   function pose(view, a, free) {
     const look = QC_PX.looks[view];
     if (!look) return null;
-    const f = free || { x0: 0.3, y0: 0.1, x1: 0.95, y1: 0.55 }, sx = (f.x0 + f.x1) / 2, sy = (f.y0 + f.y1) / 2, fw = (f.x1 - f.x0) * 0.9, fh = (f.y1 - f.y0) * 0.86, phone = a < 0.8, fov = phone ? 56 : 44;
-    const c = P(look.at[0], look.at[1], 0.1), d = fit(look.w, look.h, fw, fh, fov, a);
-    return aim([c[0] + NN[0] * d, c[1] + NN[1] * d, c[2] + NN[2] * d], c, sx, sy, fov, a);
+    const fr = free || { x0: 0.3, y0: 0.1, x1: 0.95, y1: 0.55 }, sx = (fr.x0 + fr.x1) / 2, sy = (fr.y0 + fr.y1) / 2, fw = (fr.x1 - fr.x0) * 0.9, fh = (fr.y1 - fr.y0) * 0.86, phone = a < 0.8, fov = phone ? 56 : 44;
+    const t = P(look.at[0], look.at[1], ZH), d = fit(look.w, look.h, fw, fh, fov, a);
+    return aim([t[0], t[1] + 0.05, t[2] + d * 0.97], t, sx, sy, fov, a);
   }
 
   // ───────────────────────────── every frame ─────────────────────────────
@@ -208,7 +183,7 @@ ROOM_SETS['que-carajo'] = function buildCarajo(ctx, kit, track) {
   const N = QC_ROUTE.length, zeros = () => Array(N).fill(0);
   const D = { leg: zeros(), fork: zeros(), thing: zeros(), tip: zeros(), curl: zeros(), seen: 0, slow: 0, calm: 0, grip: 0 };
   const st = { T: 0, init: false, drip: [0.1, 0.45, 0.8], tipShown: Array(N).fill(-1) };
-  const tmpV = V3(), tmpF = V3(), tmpU = V3(), spinQ = new THREE.Quaternion();
+  const tmpV = V3(), tmpF = V3(), tmpU = V3();
   const follow = (arr, tgt, rate, dt) => { for (let i = 0; i < arr.length; i++) arr[i] = damp(arr[i], tgt[i] || 0, rate, dt); };
   function update(dt, t) {
     const v = world.room.v || {}, ok = Array.isArray(v.curl), m = world.reduced ? 0 : 1, rate = world.reduced ? 9 : 3;
@@ -232,23 +207,23 @@ ROOM_SETS['que-carajo'] = function buildCarajo(ctx, kit, track) {
     const lean = Math.min(0.2, D.tip.reduce((s, x) => s + x, 0) * 0.026 + D.grip * 0.07) + 0.008 * Math.sin(T * 1.1) * m;
     for (let g = 0; g < 2; g++) {
       const h = handHost[g].host;
-      spinQ.setFromAxisAngle(NNv, g === 0 ? -lean : lean); h.quaternion.copy(spinQ);
+      h.rotation.z = g === 0 ? -lean : lean; // (about the axis toward the visitor: the hands lean toward each other)
       h.scale.setScalar(1 + (0.01 * Math.sin(T * 1.7 + g) + 0.02 * D.grip) * (m || 0.3));
-      handL[g].fine.set(0.78 + 0.16 * (0.5 + 0.5 * Math.sin(T * 2.3 + g * 2)) * m + 0.06 * D.grip); handL[g].heavy.set(0.95); handL[g].palm.set(0.85 + 0.15 * D.seen * (0.5 + 0.5 * Math.sin(T * 3)) * m);
+      handMesh[g].u.uAlpha.value = 0.94 + 0.06 * (0.5 + 0.5 * Math.sin(T * 2.3 + g * 2)) * m; // (the hair shimmers)
     }
-    paperL.set(0.85);
+    palm.u.uAlpha.value = 0.9 + 0.1 * D.seen * (0.5 + 0.5 * Math.sin(T * 3)) * m + 0.04 * D.seen;
     // the left palm's line: five glints that zigzag down it once it was looked at; the fingertips light as things are held
     const mp = mapPts.dat; for (let k = 0; k < N; k++) mp[k * 4 + 1] = D.seen * (0.55 + 0.45 * Math.sin(T * 2 + k)) * 0.9; mapPts.geo.attributes.aData.needsUpdate = true;
     for (let g = 0; g < 2; g++) { const td = tipPts[g].dat; for (let k = 0; k < N; k++) td[k * 4 + 1] = D.tip[k] * 0.95; tipPts[g].geo.attributes.aData.needsUpdate = true; }
     // the drops: the ones drawn stay; a copy of each falls from it, slower as the things are held, almost still when it is solved
     for (let i = 0; i < 3; i++) {
       const sp = 0.3 * (1 - 0.86 * D.slow) * (1 - 0.8 * D.calm); st.drip[i] = (st.drip[i] + dt * sp * m) % 1;
-      const p = m ? st.drip[i] : 0.45, dy = 34 + p * 120;
-      ghostHost[i].position.set(0, -dy * K * sT, dy * K * cT);
-      ghostL[i].set(Math.sin(p * Math.PI) * 0.6 * (1 - 0.5 * D.calm)); ghostHost[i].visible = true;
-      dropL[i].set(0.92 + 0.08 * Math.sin(T * 1.3 + i) * m);
+      const p = m ? st.drip[i] : 0.45, dy = 28 + p * 100; // (cover px the copy has fallen)
+      ghostHost[i].position.y = -dy * mpp(ZD); ghostHost[i].visible = true;
+      ghostM[i].u.uAlpha.value = Math.sin(p * Math.PI) * 0.6 * (1 - 0.5 * D.calm);
+      dropM[i].u.uAlpha.value = 0.96 + 0.04 * Math.sin(T * 1.3 + i) * m;
     }
-    dropGlint.set(0.7 + 0.3 * Math.sin(T * 1.9) * m); splat.set(0.85); sig.set(0.8);
+    SG.u.uAlpha.value = 0.9;
     // the drag marks: the way taken lights up, the fork to take pulses, the wrong way flashes while it is followed
     entryL.set(0.9);
     for (let k = 0; k < N; k++) {
@@ -264,7 +239,7 @@ ROOM_SETS['que-carajo'] = function buildCarajo(ctx, kit, track) {
       const cam = ctx.camera; cam.updateMatrixWorld();
       tmpF.set(0, 0, -1).applyQuaternion(cam.quaternion); tmpU.set(0, 1, 0).applyQuaternion(cam.quaternion);
       const md = tmpV.copy(cam.position).addScaledVector(tmpF, 0.62).addScaledVector(tmpU, 0.02);
-      const k1 = smooth(0, 0.45, pg), k3 = smooth(0.62, 1, pg), from = root.localToWorld(V3(...P(465, 880, 0.2))), icon = ctx.bookIconPoint ? ctx.bookIconPoint(0.62) : md.clone();
+      const k1 = smooth(0, 0.45, pg), k3 = smooth(0.62, 1, pg), from = root.localToWorld(V3(...P(500, 600, ZH - 0.2))), icon = ctx.bookIconPoint ? ctx.bookIconPoint(0.62) : md.clone();
       sheet.mesh.position.lerpVectors(from, md, k1).lerp(icon, k3);
       sheet.mesh.quaternion.copy(cam.quaternion); sheet.mesh.rotateZ(Math.sin(pg * 9) * 0.08 * (1 - k3));
       sheet.mesh.scale.setScalar(Math.max(0.001, k1 * (1 - 0.75 * k3) * 2.6));
@@ -272,10 +247,12 @@ ROOM_SETS['que-carajo'] = function buildCarajo(ctx, kit, track) {
     }
   }
 
+  const texSize = (g) => g.mesh.material.uniforms.uTex.value.image.width + 'x' + g.mesh.material.uniforms.uTex.value.image.height;
   return {
     root, update, pose,
     solids: () => solids,
     extra: [sheet.mesh],
-    info: () => ({ segments: segTotal, lite, strokes: drawn, route: QC_ROUTE.join(''), things: N, drops: dropPolys.length }),
+    info: () => ({ segments: segTotal, lite, contours: tonePts, ribbons: segTotal - tonePts, route: QC_ROUTE.join(''), things: N, drops: POLY.DROPS.length, wide, f, texture: [handMesh[0], handMesh[1], palm, dropM[0], dropM[2], SG].map(texSize).join(' + ') }),
   };
 };
+
