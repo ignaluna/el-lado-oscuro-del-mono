@@ -81,7 +81,7 @@ ROOM_SETS['casi-perdido'] = function buildCasiPerdido(ctx, kit, track) {
   const ZF = V.Z0 - 0.35; // the flames stand a little in front of the head's top
 
   // ───────────────────────────── the tones: the photo's own contours, painted into textures ─────────────────────────────
-  const { P, tonePts, region, mat, gridMesh, glitterRows } = coverTones(ctx, { V, lens: { f, yh }, decode: cpDecode, fill: CP_FILL, grey: { 5: 150, 6: 215, 7: 255, 8: 88, 9: 225 }, ts: [1.05, 1.7], root, rnd }); // (the greys: what each glitter group is painted with, its layer's tint makes it gold or silver)
+  const { P, tonePts, region, mat, gridMesh, glitterRows } = coverTones(ctx, { V, lens: { f, yh }, decode: cpDecode, fill: CP_FILL, grey: { 5: 118, 6: 176, 7: 245, 8: 70, 9: 180 }, ts: [1.05, 1.7], root, rnd }); // (the greys: what each glitter group is painted with, its layer's tint makes it gold or silver)
   const FLAME_M = [CP_FLAME_POLY], HAND_M = [CP_HAND_POLY], HULL_M = [CP_HULL_POLY], SPIN_M = CP_SPOTS.map((sp) => cpDisc(sp.px, sp.py, sp.r2 * 1.3));
 
   // the body: a relief below the flames, without the hand (the weights: flames, then hand, then the rest)
@@ -95,8 +95,8 @@ ROOM_SETS['casi-perdido'] = function buildCasiPerdido(ctx, kit, track) {
   const FL_R = [308, 46, 832, 520];
   const FNX = lite ? 22 : 34, FNY = lite ? 26 : 40;
   const flameW = gridMesh(FL_R, FNX, FNY, () => ZF, region(FL_R, { masks: [['in', FLAME_M, 14]] }));
-  const flameG = gridMesh(FL_R, FNX, FNY, () => ZF - 0.08, region(FL_R, { groups: [5, 6, 7], ts: 0.9, glow: 0.2 }), root, [0, 0, 0], [1.28, 0.93, 0.38]);
-  const flameS = gridMesh(FL_R, FNX, FNY, () => ZF - 0.04, region(FL_R, { groups: [8, 9], ts: 0.8, glow: 0.2 }), root, [0, 0, 0], [0.9, 0.95, 1.02]);
+  const flameG = gridMesh(FL_R, FNX, FNY, () => ZF - 0.08, region(FL_R, { groups: [5, 6, 7], ts: 0.9, glow: 0.2 }), root, [0, 0, 0], [1.3, 0.88, 0.34]);
+  const flameS = gridMesh(FL_R, FNX, FNY, () => ZF - 0.04, region(FL_R, { groups: [8, 9], ts: 0.8, glow: 0.2 }), root, [0, 0, 0], [1.05, 0.99, 0.86]); // (the silver glitter is pale champagne: warm grey grains)
   segTotal += tonePts; // (every contour edge is a chalk line of the drawing)
   const baseY = V.H + ((yh - CP_FB) * ZF) / f; // the flames' base, in the set's metres
 
@@ -194,8 +194,8 @@ ROOM_SETS['casi-perdido'] = function buildCasiPerdido(ctx, kit, track) {
 
   // ───────────────────────────── glitter: sparkle points on the brightest grains, twinkling; the gold falls at the end ─────────────────────────────
   const goldPts = CP_GOLD_PTS.filter((_, i) => !lite || i % 2 === 0), silPts = CP_SIL_PTS.filter((_, i) => !lite || i % 2 === 0);
-  const goldG = kit.points(glitterRows(goldPts, 0.05, ZF - 0.1), { shape: 3, twinkle: 0.95, tint: [1.2, 0.9, 0.42] });
-  const silG = kit.points(glitterRows(silPts, 0.045, ZF - 0.05), { shape: 3, twinkle: 0.95, tint: [0.9, 0.97, 1.1] });
+  const goldG = kit.points(glitterRows(goldPts, 0.05, ZF - 0.1), { shape: 3, twinkle: 0.95, tint: [1.25, 0.86, 0.36] });
+  const silG = kit.points(glitterRows(silPts, 0.045, ZF - 0.05), { shape: 3, twinkle: 0.95, tint: [1.05, 1.0, 0.9] });
   root.add(goldG.obj); root.add(silG.obj);
   const goldBase = Float32Array.from(goldG.pos), silBase = Float32Array.from(silG.pos);
   // the gold that falls (the same grains, drifting down and fading), and the sparks that drift up from the flames
@@ -335,7 +335,7 @@ ROOM_SETS['casi-perdido'] = function buildCasiPerdido(ctx, kit, track) {
     spinners.forEach((s, k) => {
       const still = D.spun[k], act = 1 - still;
       s.spin += dt * m * act * 1.5; s.host.rotation.z = -s.spin * 0.35 + 0.05 * Math.sin(T * 0.6 + k) * m * act;
-      s.u.uAlpha.value = (0.72 + 0.28 * still) * (0.95 + 0.05 * Math.sin(T * 1.4 + k) * m);
+      s.u.uAlpha.value = (0.88 + 0.12 * still) * (0.95 + 0.05 * Math.sin(T * 1.4 + k) * m);
       const ph = (T * 1.4 + k * 0.3) % 1;
       s.chase.forEach((L, i) => { const d = ((ph - i / 8) % 1 + 1) % 1, a = Math.pow(Math.max(0, 1 - d * 1.5), 1.6); L.set((m ? a : 0.35) * act * 0.95); });
       s.star.set(still * (0.55 + 0.25 * Math.sin(T * 1.8 + k) * m));

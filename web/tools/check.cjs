@@ -1617,7 +1617,7 @@ const ROOM_WALKS = {
   },
   'casi-perdido': {
     floor: 7, chapter: 'cap-8', minSegments: 8000, play: playCasiPerdido,
-    built: (set) => set.contours > 12000 && set.thoughts === 10 && set.spots === 3 && set.spinners === 3 && set.gold > 40 && set.silver > 30,
+    built: (set) => set.contours > 20000 && set.thoughts === 10 && set.spots === 3 && set.spinners === 3 && set.gold > 40 && set.silver > 30,
     tierBuilt: (set) => set.thoughts === 10 && set.spinners === 3,
     hots: [/^Un pensamiento sube por las llamas/],
     afterSolve: (s) => s.visual.v.fin === 1,
