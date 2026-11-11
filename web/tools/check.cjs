@@ -1566,7 +1566,7 @@ const ROOM_WALKS = {
   },
   'portales': {
     floor: 9, chapter: 'cap-9', minSegments: 5000, play: playPortales,
-    built: (set) => set.contours > 15000 && set.roots === 4 && set.spirals === 3 && set.ribbons > 300,
+    built: (set) => set.contours > 25000 && set.roots === 4 && set.spirals === 3 && set.ribbons > 300,
     tierBuilt: (set) => set.roots === 4 && set.spirals === 3,
     hots: [/^Una raíz del árbol/],
     afterSolve: (s) => s.visual.v.done === 1 && s.visual.v.open === 1,

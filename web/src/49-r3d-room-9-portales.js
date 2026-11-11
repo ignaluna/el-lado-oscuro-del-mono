@@ -18,7 +18,7 @@ const PT = { H: 1.6, cx: 450, GR: 958, BOT: 931, Z0: 6.6, ARR: 2.7 };
 /** Where the visitor stands when a floor opens is the eye; the set is Z0 metres ahead of it. */
 const PT_SET = { x: 0, z: PT.ARR + PT.Z0 };
 /** The lens depends on the screen: a wide screen fills the height at 1050 cover px of focal length aimed at the vortex's row, a phone's narrow view keeps the tree whole at 1320. The set's z never changes. */
-function ptLens(a) { return coverLens(PT, a, { f: 1050, row: 799, sx: 0.46, sy: 0.5 }, { f: 1320, row: 758, sx: 0.5, sy: 0.46 }); }
+function ptLens(a) { return coverLens(PT, a, { f: 1160, row: 810, sx: 0.46, sy: 0.5 }, { f: 1500, row: 909, sx: 0.5, sy: 0.46 }); }
 /** The four roots (cover pixels of where each one touches the ground), the things that can be left in them (the chapter's own) and the decoys. */
 const PT_ROOTS = [[165, 1030], [235, 1108], [545, 1062], [702, 1085]];
 const PT_THINGS = ['perro', 'guitarra', 'vecinos', 'risa'];
@@ -65,7 +65,7 @@ ROOM_SETS['portales'] = function buildPortales(ctx, kit, track) {
 
   // the relief: a grid whose every vertex sits on its pixel's ray, at the depth of the tree there
   const NX = lite ? 64 : 92, NY = lite ? 68 : 98, TREE_R = [60, 425, 790, 1185];
-  const tree = gridMesh(TREE_R, NX, NY, Zof, region(TREE_R, { glow: 0.3, masks: [['out', [GLOW_POLY], GLOW_BLUR]] }), root, [0, 0, 0], [0.9, 0.9, 0.95]);
+  const tree = gridMesh(TREE_R, NX, NY, Zof, region(TREE_R, { glow: 0.15, masks: [['out', [GLOW_POLY], GLOW_BLUR]] }), root);
   const bw = new Float32Array(tree.n), bdir = new Float32Array(tree.n * 2), live = []; // the vertices of the canopy, which breathe
   for (let k = 0; k < tree.n; k++) {
     const px = tree.pxy[k * 2], py = tree.pxy[k * 2 + 1];
@@ -74,7 +74,7 @@ ROOM_SETS['portales'] = function buildPortales(ctx, kit, track) {
   }
   const posAttr = tree.attr, basePos = tree.base, toneU = tree.u;
   // the figure and its glow: a standing cut-out at the depth of its feet
-  const Zf = ground(PT_GLOW.feet), glowU = gridMesh(GB, 10, 10, () => Zf, region(GB, { glow: 0.3, masks: [['in', [GLOW_POLY], GLOW_BLUR]] }), root, [0, 0, 0], [1.12, 1.12, 1.2]).u;
+  const Zf = ground(PT_GLOW.feet), glowU = gridMesh(GB, 10, 10, () => Zf, region(GB, { glow: 0.15, masks: [['in', [GLOW_POLY], GLOW_BLUR]] }), root, [0, 0, 0], [1.12, 1.12, 1.2]).u;
   segTotal += tonePts; // (every contour edge is a chalk line of the drawing)
 
   // ───────────────────────────── chalk helpers: spirals, stars, the glyphs of what is left in a root ─────────────────────────────
@@ -126,7 +126,7 @@ ROOM_SETS['portales'] = function buildPortales(ctx, kit, track) {
 
   // ───────────────────────────── the roots: a pulse where each one waits, and the glyph of what is left in it ─────────────────────────────
   const rootPos = PT_ROOTS.map(([px, py]) => P(px, py));
-  const rootPulse = kit.points(rootPos.map((p, i) => [p[0], p[1] + 0.12, p[2] + 0.05, 0.6, 0.8, i * 0.27, 0]), { shape: 2, twinkle: 0.4, tint: [0.9, 0.94, 1] }); root.add(rootPulse.obj);
+  const rootPulse = kit.points(rootPos.map((p, i) => [p[0], p[1] + 0.12, p[2] + 0.05, 0.45, 0.8, i * 0.27, 0]), { shape: 2, twinkle: 0.4, tint: [0.9, 0.94, 1] }); root.add(rootPulse.obj);
   const glyphs = PT_THINGS.map((_, k) => { const R = kit.ribbons(100 + k); glyph(R, k, WC[1]); const host = grp(root, 0, 0, 0), L = lines(R, { glow: true }); L.obj.scale.setScalar(0.62); host.add(L.obj); host.visible = false; return { host, L, at: -1 }; });
   const sparkAt = kit.points(rootPos.map((p, i) => [p[0], p[1] + 0.5, p[2] + 0.1, 0.16, 0.8, i * 0.3, 0]), { shape: 3, twinkle: 0.8, tint: [0.95, 0.96, 1] }); root.add(sparkAt.obj);
 
@@ -218,7 +218,7 @@ ROOM_SETS['portales'] = function buildPortales(ctx, kit, track) {
     st.vang[0] += 0.12 * m * dt; ladderTop.host.rotation.z = -Math.sin(T * 0.4) * 0.4 * m - D.open * T * 0.5 * ms; ladderTop.L.set(0.5 + 0.3 * D.open + 0.1 * Math.sin(T * 1.1) * m);
     curl.host.rotation.z = Math.sin(T * 0.6 + 1) * 0.35 * m; curl.L.set(0.5 + 0.12 * Math.sin(T * 1.2) * m);
     // the sparkles: they glint; the gold one and the silver one are the ones the window tells about
-    sparkles.forEach((sk, i) => { sk.L.set((0.9 + 0.25 * Math.sin(T * (2.1 + i) + i * 2) * m) * dim); sk.glit.set((0.7 + 0.3 * Math.sin(T * 2.6 + i * 3) * m) * dim); sk.host.rotation.z = Math.sin(T * 0.7 + i) * 0.08 * m; });
+    sparkles.forEach((sk, i) => { const k = i ? 0.55 : 1; /* (the cover's silver sparkle is a dim grey cross, the gold one a bright one) */ sk.L.set((0.9 + 0.25 * Math.sin(T * (2.1 + i) + i * 2) * m) * dim * k); sk.glit.set((0.7 + 0.3 * Math.sin(T * 2.6 + i * 3) * m) * dim * k); sk.host.rotation.z = Math.sin(T * 0.7 + i) * 0.08 * m; });
     smallStars.forEach((s, i) => s.L.set(0.7 + 0.3 * Math.sin(T * 2.3 + i * 1.7) * m)); starGlint.set(0.8);
     // the roots: a pulse where one waits, a steady shine where something was left, a retreat when a decoy was offered
     for (let k = 0; k < 4; k++) {
