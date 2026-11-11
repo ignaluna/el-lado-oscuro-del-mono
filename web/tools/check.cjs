@@ -1487,9 +1487,9 @@ async function playCasiPerdido(p, { check, shot, thorough = false }) {
  */
 const ROOM_WALKS = {
   'en-una': {
-    floor: 1, chapter: 'cap-1', minSegments: 1000, play: playEnUna,
-    built: (set) => set.codeDots === 83,
-    tierBuilt: (set) => set.codeDots === 83,
+    floor: 1, chapter: 'cap-1', minSegments: 6000, play: playEnUna,
+    built: (set) => set.codeDots === 83 && set.contours > 10000 && set.gold > 40 && set.silver > 30,
+    tierBuilt: (set) => set.codeDots === 83 && set.contours > 5000,
     hots: [/^La pantalla de la máquina/, /^Una taza de café/],
     afterSolve: (s) => s.visual.shut > 0.98,
     solvedRoom: (s) => s.visual.shut > 0.98 && s.visual.mono > 0.98,

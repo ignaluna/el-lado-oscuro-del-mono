@@ -9,7 +9,7 @@
 // The words keep the book's own: clue and done are verbatim chapter text; the hints are new prose.
 ROOMS['en-una'] = {
   water: PLAIN_WATER, // the cover is plain black paper: no reflection, engraved rows, floor light, glints or horizon in the arrival view (see PLAIN_WATER)
-  aim: { x: 0, y: 2.2, z: 10, sx: 0.42, sy: 0.4 },
+  get aim() { const L = euLens(aspectNow()); return { x: EU_SET.x, y: EU.H + ((L.yh - L.row) * EU.Z0) / L.f, z: EU_SET.z, sx: L.sx, sy: L.sy }; }, // (the cover's row that is aimed at, by aspect: the whole paper fits between the title and the arrival line)
   intro: 'La data baja desde arriba. La ilusión de elegir. El algoritmo ya está escrito.',
   clue: 'La data baja desde arriba. La ilusión de elegir.\nEl algoritmo ya está escrito.\nEl mono te observa desde adentro del vidrio.',
   done: 'Lo miraste de nuevo. Te acordaste de quién eras.',
