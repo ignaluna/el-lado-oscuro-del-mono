@@ -191,20 +191,52 @@ const hotPoint = (p, prefix) => ev(p, (l) => {
   return null;
 }, prefix);
 /**
- * Turns (the way a visitor does, with the keys) until a click can land on the hotspot: a sweep to the left in short steps while it is not on
- * screen, and a small nudge toward it once it shows half past an edge, so a phone's narrow view never leaves it stuck at the border.
+ * Waits for the page to draw two frames. The game moves the camera and places the hotspots once per frame (`frame()` in 60-director.js, with `dt`
+ * capped at 0.1 s), so what the DOM shows is the last frame's, and a frame under load (a release build on a phone-sized view in software GL) can
+ * take far longer than a key press.
+ */
+const frames = (p) => ev(p, () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+/** Waits until the camera has stopped (a close look or a walk takes over a second to settle) and the page has drawn it, so the hotspots shown are the ones where the camera ended. */
+const camRest = async (p) => {
+  let last = null;
+  for (let n = 0; n < 30; n++) {
+    await frames(p);
+    const c = (await state(p)).cam, key = [c.x, c.y, c.z, c.yaw, c.pitch, c.fov].map((v) => v.toFixed(3)).join();
+    if (key === last) return;
+    last = key; await wait(120);
+  }
+};
+/**
+ * Turns (the way a visitor does, with the keys) until a click can land on the hotspot: a sweep to the left in steps while it is not on screen, and a
+ * small nudge toward it once it shows half past an edge, so a phone's narrow view never leaves it stuck at the border.
+ * Root cause of the old intermittent "no click can land" misses of the release mobile runs: the sweep was forty wall-clock pulses of 70 to 170 ms, but the
+ * camera turns once per frame, so under load a pulse that starts and ends between two frames turns nothing, and a slow frame turns at most 1.9 x 0.1 rad;
+ * forty pulses could then fall short of a full turn and never reach a shard or a spinner behind the visitor. Now a step holds the key until the camera
+ * has really turned (measured on the camera's yaw), the sweep ends after two full turns, and a hotspot is accepted only after the camera has rested and
+ * the page has drawn it (so it is where a click will find it).
  */
 const turnTo = async (p, label) => {
-  const W = p.viewportSize().width;
-  for (let i = 0; i < 40 && !(await hotPoint(p, label)); i++) {
+  const W = p.viewportSize().width, t0 = Date.now();
+  let swept = 0;
+  while (swept < 4 * Math.PI && Date.now() - t0 < 120000) {
+    if (await hotPoint(p, label)) { await camRest(p); if (await hotPoint(p, label)) return; continue; }
     const x = await ev(p, (l) => { const b = [...document.querySelectorAll('.hot')].find((h) => !h.hidden && (h.getAttribute('aria-label') || '').startsWith(l)); if (!b) return null; const r = b.getBoundingClientRect(); return r.x + r.width / 2; }, label);
-    const key = x !== null && x > W - 8 ? 'e' : 'q';
-    await p.keyboard.down(key); await wait(x === null ? 170 : 70); await p.keyboard.up(key); await wait(x === null ? 260 : 200);
+    const key = x !== null && x > W - 8 ? 'e' : 'q', want = x === null ? 0.3 : 0.07, y0 = (await state(p)).cam.yaw;
+    let turned = 0;
+    await p.keyboard.down(key);
+    for (let n = 0; n < 40 && turned < want; n++) { await frames(p); turned = Math.abs((await state(p)).cam.yaw - y0); }
+    await p.keyboard.up(key);
+    swept += turned; await camRest(p);
   }
 };
 const clickHot = async (p, label) => {
   const t0 = Date.now();
-  for (;;) { const pt = await hotPoint(p, label); if (pt) { await p.mouse.click(pt[0], pt[1]); return; } if (Date.now() - t0 > 8000) break; await wait(150); }
+  for (let again = false; ;) {
+    const pt = await hotPoint(p, label); if (pt) { await p.mouse.click(pt[0], pt[1]); return; }
+    if (!again && Date.now() - t0 > 3000) { again = true; await turnTo(p, label); continue; } // (it moved off screen: look for it again, once)
+    if (Date.now() - t0 > 8000) break;
+    await wait(150);
+  }
   const why = await ev(p, (l) => [...document.querySelectorAll('.hot')].filter((b) => !b.hidden && (b.getAttribute('aria-label') || '').startsWith(l)).map((b) => { const r = b.getBoundingClientRect(), top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return { rect: [r.x, r.y, r.width, r.height].map(Math.round), view: [innerWidth, innerHeight], covered: top && top !== b && !b.contains(top) ? top.id || top.className || top.tagName : null }; }), label);
   throw new Error(`no click can land on "${label}" (turned and waited): ${JSON.stringify(why)}`);
 };
