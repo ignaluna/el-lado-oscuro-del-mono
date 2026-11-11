@@ -167,7 +167,7 @@ ROOM_SETS['que-te-esta-pasando'] = function buildSistema(ctx, kit, track) {
   const PL_R = boxOf(POLY.PL, 6);
   const plata = gridMesh(PL_R, 2, 2, ZPL, region(PL_R, { masks: [['in', [POLY.PL], BL]] }));
   const GOLD = [1.28, 0.93, 0.38];
-  const plataGold = gridMesh(PL_R, 2, 2, ZPL - 0.03, region(PL_R, { groups: [5, 6, 7], ts: 1.5, glow: 0.2, masks: [['in', [POLY.PL], BL]] }), root, [0, 0, 0], GOLD);
+  const plataGold = gridMesh(PL_R, 2, 2, ZPL - 0.03, region(PL_R, { groups: [5, 6, 7], ts: 1.1, glow: 0.2, masks: [['in', [POLY.PL], BL]] }), root, [0, 0, 0], GOLD);
   // the rocket and the computer; the ✓ is a patch of its own
   const RK_R = boxOf(POLY.RK, 6);
   const rocket = gridMesh(RK_R, 2, 2, ZRK, region(RK_R, { masks: [['in', [POLY.RK], BL], ['out', [POLY.CHECK], BM]] }));
@@ -176,7 +176,7 @@ ROOM_SETS['que-te-esta-pasando'] = function buildSistema(ctx, kit, track) {
   // the towers (without the smoke), with their gold windows
   const TW_R = boxOf(POLY.TW, 6);
   const towers = gridMesh(TW_R, 2, 2, ZTW, region(TW_R, { masks: [['in', [POLY.TW], BL], ['out', [POLY.RK], BL], ['out', POLY.SMOKE, BM]] }));
-  const towerGold = gridMesh(TW_R, 2, 2, ZTW - 0.03, region(TW_R, { groups: [5, 6, 7], ts: 1.5, glow: 0.2, masks: [['out', [POLY.PL], BL]] }), root, [0, 0, 0], GOLD);
+  const towerGold = gridMesh(TW_R, 2, 2, ZTW - 0.03, region(TW_R, { groups: [5, 6, 7], ts: 1.1, glow: 0.2, masks: [['out', [POLY.PL], BL]] }), root, [0, 0, 0], GOLD);
   // the smoke: one texture, two ghosts that cross-fade while they drift up (rising smoke), so the column is always whole
   const SM_R = boxOf(POLY.SMOKE.flat(), 4), smokeTex = region(SM_R, { ts: 1.3, masks: [['in', POLY.SMOKE, BM]] });
   const smokeHost = [grp(root), grp(root)], smoke = smokeHost.map((h) => gridMesh(SM_R, 1, 1, ZSM, smokeTex, h, [0, 0, 0], [0.99, 0.99, 1.0]));
