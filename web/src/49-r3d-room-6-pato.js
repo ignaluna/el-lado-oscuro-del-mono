@@ -6,14 +6,15 @@
 //   hatched scales, fluffy slippers and a slanted line (a bench) at his left. Five white filled speech bubbles float around him (top,
 //   right, a small one at the left, a big one lower left, one lower right), there are tiny dots in the sky and "11:11" at the corner.
 //   The paper in the photo is a black sheet in a plastic sleeve on a blanket (turned, keystoned, only part of it in the frame), so the
-//   tones were traced from a rectified copy (49-r3d-room-6-pato-art.js).
+//   tones were traced from a rectified copy (49-r3d-room-6-pato-art.js; the shared tone helpers, 49-r3d-room-0-tones.js, decode and paint them).
 //   The visitor arrives at the eye that sees the cover (1.6 m high) and every point stands where it projects onto the cover's own pixels
 //   from there. Layers share that eye, and each one sits at the depth that suits it:
+//     · the layers split the cover's pixels with soft masks that add up to one, so from the arrival spot their sum is the cover and no edge shows;
 //     · the duck: a standing relief cut out by his silhouette (head, belly, the hands forward, the rear leg back),
 //     · the ground: the bench lines and the floor under his slippers lie on the water's floor (their rows are real ground rows),
 //     · the sky: the tiny dots, a flat layer behind him,
 //     · the movers, cut from the same tones: the smoke (it curls), the heart in it (it pulses and, at the end, drifts to the house), the
-//       eyelid (it blinks, and opens) and the five bubbles, each at its own depth (some behind him, some to the sides),
+//       eyebrow (it stays) and eyelid (it blinks, and both give way to the open eye) and the five bubbles, each at its own depth (some behind him, some to the sides),
 //     · chalk ribbons for what is told and what moves: the open eye, the loose bricks, the house, the roof, its fire, rings and glitter.
 //   From the arrival spot the room is the cover; walking in, it opens up. world.room.v holds the targets (the controller, 59-room-6-…,
 //   sets them whole); every value is damped here, so nothing needs a sequence and nothing is left half done.
@@ -62,16 +63,19 @@ ROOM_SETS['pato'] = function buildPato(ctx, kit, track) {
   const Zm = (px, py) => V.Z0 - 0.55 * bump(px, py, 610, 330, 150, 130) - 0.55 * bump(px, py, 570, 690, 170, 140) - 0.4 * bump(px, py, 300, 590, 80, 100) - 0.3 * bump(px, py, 720, 670, 90, 80) - 0.25 * bump(px, py, 660, 960, 110, 60) + 0.3 * bump(px, py, 520, 900, 50, 100);
 
   // ───────────────────────────── the tones: the photo's own contours, painted into textures ─────────────────────────────
-  const { P, loops, tonePts, region, mat, gridMesh } = coverTones(ctx, { V, lens: { f, yh }, decode: pkDecode, fill: PK_FILL, ts: [1.05, 1.85], root, rnd });
+  const { P, tonePts, region, mat, gridMesh } = coverTones(ctx, { V, lens: { f, yh }, decode: pkDecode, fill: PK_FILL, ts: [1.05, 1.85], root, rnd });
   const Pm = (px, py) => P(px, py, Zm(px, py));
   const poly = ([x0, y0, x1, y1]) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]; // (a rectangle as a polygon)
   const bbOf = (pts, m = 3) => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const p of pts) { a = Math.min(a, p[0]); b = Math.min(b, p[1]); c = Math.max(c, p[0]); d = Math.max(d, p[1]); } return [Math.floor(a - m), Math.floor(b - m), Math.ceil(c + m), Math.ceil(d + m)]; };
   const SMOKE_P = [[100, 120], [440, 120], [440, 508], [340, 508], [340, 538], [100, 538]];
-  const HEART_R = [198, 295, 325, 410], EYE_R = [655, 282, 728, 350];
+  const HEART_R = [198, 295, 325, 410];
+  // his eye: the brow stays while the lid and what is under it blink (and the whole of it gives way to the open eye)
+  const BROW_P = [[664, 304], [666, 293], [678, 286], [695, 283], [712, 285], [721, 293], [717, 303], [708, 306], [695, 300], [680, 302], [670, 309]];
+  const LID_P = [[660, 326], [668, 320], [690, 315], [710, 309], [724, 306], [730, 311], [727, 320], [718, 326], [712, 332], [706, 340], [696, 345], [684, 345], [674, 338], [666, 334], [658, 332]];
   // The cover's pixels are split among the layers with soft masks that add up to one (a layer takes what the layers before it left): the five bubbles, the heart, the eyelid,
   // the smoke, the duck, and what is left is the ground below row 880 and the sky above it. A polygon's edge is blurred by the same amount wherever it is used.
-  const CUTS = [...PK_BUBBLES.map((p) => [p, 3]), [poly(HEART_R), 4], [poly(EYE_R), 2], [SMOKE_P, 4], [PK_DUCK, 6]];
-  const [BUB0, HEART_K, EYE_K, SMOKE_K, DUCK_K] = [0, 5, 6, 7, 8];
+  const CUTS = [...PK_BUBBLES.map((p) => [p, 3]), [poly(HEART_R), 4], [BROW_P, 2], [LID_P, 2], [SMOKE_P, 4], [PK_DUCK, 6]];
+  const [BUB0, HEART_K, BROW_K, EYE_K, SMOKE_K, DUCK_K] = [0, 5, 6, 7, 8, 9];
   const SPLIT_P = poly([30, 30, 1020, 880]), SPLIT_B = 10;
   /** The masks of layer k (k = CUTS.length: the left-overs, 'in' the sky or 'out' of it): everything before it is cut out and, for a layer of its own, its polygon is cut in; only the polygons that reach rect r count. */
   const cuts = (k, r, rest) => {
@@ -121,18 +125,16 @@ ROOM_SETS['pato'] = function buildPato(ctx, kit, track) {
     c.restore(); tex.needsUpdate = true; return tex;
   };
   const bubbles = PK_VOICES.map((v, k) => {
-    const hull = PK_BUBBLES[k], bb = bbOf(hull, 2);
-    // the white of the bubble: the loops of the lightest levels inside the hull give its measure and its outline
-    const inside = loops.filter((lp) => lp.l >= 2 && lp.a > 250 && lp.bb[0] >= bb[0] && lp.bb[2] <= bb[2] && lp.bb[1] >= bb[1] && lp.bb[3] <= bb[3]).sort((a, b) => b.a - a.a)[0];
-    const w2 = { ...v, bw: inside ? inside.bb[2] - inside.bb[0] : 100, bh: inside ? inside.bb[3] - inside.bb[1] : 60 };
-    if (inside) { w2.px = (inside.bb[0] + inside.bb[2]) / 2; w2.py = (inside.bb[1] + inside.bb[3]) / 2 - 2; }
+    // the white of the bubble (PK_WHITE) gives its measure and its outline
+    const white = PK_WHITE[k], bb = bbOf(white, 0);
+    const w2 = { ...v, bw: bb[2] - bb[0], bh: bb[3] - bb[1], px: (bb[0] + bb[2]) / 2, py: (bb[1] + bb[3]) / 2 - 2 };
     const M = mover(BUB0 + k, v.Z, { after: speak(w2), ts: lite ? 1.1 : 1.5 });
-    return { ...M, k, v, outline: inside ? inside.pts : null, w2 };
+    return { ...M, k, v, outline: white, w2 };
   });
-  const SMK = 1.46; // (the smoke's thin curls are lifted a little, as on the cover: they are fainter than the white paint)
+  const SMK = 1.5; // (a lift for the smoke's thin curls, which are fainter than the white paint)
   const smoke = gridMesh(SMOKE_R, lite ? 12 : 20, lite ? 14 : 24, () => V.Z0 + 0.3, region(SMOKE_R, { gain: SMK, masks: cuts(SMOKE_K, SMOKE_R) }));
   const heart = mover(HEART_K, V.Z0 + 0.3, { gain: SMK });
-  const eye = mover(EYE_K, Zm(PK_EYE[0], PK_EYE[1]) - 0.02);
+  const eyeZ0 = Zm(PK_EYE[0], PK_EYE[1]) - 0.02, brow = mover(BROW_K, eyeZ0), eye = mover(EYE_K, eyeZ0);
 
   // ───────────────────────────── chalk helpers ─────────────────────────────
   const ell = (cx, cy, rx, ry, n = 14, rot = 0) => Array.from({ length: n }, (_, i) => { const a = (i / n) * TAU, x = Math.cos(a) * rx, y = Math.sin(a) * ry; return [cx + x * Math.cos(rot) - y * Math.sin(rot), cy + x * Math.sin(rot) + y * Math.cos(rot), 0]; });
@@ -143,7 +145,7 @@ ROOM_SETS['pato'] = function buildPato(ctx, kit, track) {
   // ───────────────────────────── the eyes: the cover's half-closed lid, a blink, and an open eye (his mood) ─────────────────────────────
   const eyeZ = eye.Zd, E2 = px2(eyeZ);
   const eyeOpen = (() => {
-    const R = kit.ribbons(20), cx = PK_EYE[0] - (EYE_R[0] + EYE_R[2]) / 2, cy = PK_EYE[1] - (EYE_R[1] + EYE_R[3]) / 2;
+    const R = kit.ribbons(20), cx = PK_EYE[0] - (eye.rect[0] + eye.rect[2]) / 2, cy = PK_EYE[1] - (eye.rect[1] + eye.rect[3]) / 2;
     const lid = []; for (let i = 0; i <= 14; i++) { const t = i / 14 * Math.PI; lid.push(E2(cx + Math.cos(t) * -20, cy - Math.sin(t) * 15)); }
     R.poly(lid, WC[1], 1);
     const low = []; for (let i = 0; i <= 14; i++) { const t = i / 14 * Math.PI; low.push(E2(cx + Math.cos(t) * -19, cy + Math.sin(t) * 9)); }
@@ -156,7 +158,7 @@ ROOM_SETS['pato'] = function buildPato(ctx, kit, track) {
     return { host, L };
   })();
   const blink = (() => {
-    const R = kit.ribbons(21), cx = PK_EYE[0] - (EYE_R[0] + EYE_R[2]) / 2, cy = PK_EYE[1] - (EYE_R[1] + EYE_R[3]) / 2, pts = [];
+    const R = kit.ribbons(21), cx = PK_EYE[0] - (eye.rect[0] + eye.rect[2]) / 2, cy = PK_EYE[1] - (eye.rect[1] + eye.rect[3]) / 2, pts = [];
     for (let i = 0; i <= 12; i++) { const t = i / 12; pts.push(E2(cx - 20 + t * 40, cy + 6 + Math.sin(t * Math.PI) * 4)); }
     R.poly(pts, WC[2], 1);
     const host = grp(root, eye.home[0], eye.home[1], eye.home[2] + 0.03), L = lines(R, { glow: true }); host.add(L.obj);
@@ -199,7 +201,6 @@ ROOM_SETS['pato'] = function buildPato(ctx, kit, track) {
   const placePos = H.slots.map(([x, y]) => [H.x + x, y + H.bh / 2, H.z]);
   // the bubble outlines (the emptied bubble keeps its line), the ring's pulse, the heart's pulse
   bubbles.forEach((b) => {
-    if (!b.outline) return;
     const R = kit.ribbons(60 + b.k), at = b.w2, c = [at.px, at.py], q = px2(b.v.Z), pc = P(c[0], c[1], b.v.Z);
     R.poly(b.outline.map((p) => q(p[0] - c[0], p[1] - c[1])), WC[1], 1, true);
     const L = lines(R, { glow: false }), g = grp(root, pc[0], pc[1], pc[2]); g.add(L.obj); b.line = { host: g, L, off: [pc[0] - b.home[0], pc[1] - b.home[1], pc[2] - b.home[2]] };
@@ -260,7 +261,7 @@ ROOM_SETS['pato'] = function buildPato(ctx, kit, track) {
   // ───────────────────────────── every frame ─────────────────────────────
   // D holds what is shown: each value follows its target (world.room.v) at its own rate, so a state change is always a smooth one.
   const D = { bub: [0, 0, 0, 0, 0], shake: [0, 0, 0, 0, 0], drop: [0, 0, 0, 0, 0], lay: [0, 0, 0, 0, 0], roof: 0, open: 0, fin: 0, pol: 0, near: [0, 0, 0, 0, 0] };
-  const st = { T: 0, init: false, tick: 0, nextBlink: 3.5, blinkAt: -9, from: [0, 1, 2, 3, 4].map(() => [0, 0, 0]) };
+  const st = { T: 0, init: false, tick: 0, nextBlink: 7, blinkAt: -9, from: [0, 1, 2, 3, 4].map(() => [0, 0, 0]) };
   const tmpV = V3(), tmpQ = V3();
   const bubNear = [0, 0, 0, 0, 0];
   const fromOf = (v, j) => (v.said && v.said[j] >= 0 ? bubbleP[v.said[j]] : null);
@@ -295,16 +296,16 @@ ROOM_SETS['pato'] = function buildPato(ctx, kit, track) {
     {
       if (m && T > st.nextBlink) { st.blinkAt = T; st.nextBlink = T + 5 + rnd() * 4; }
       const bl = m ? Math.max(0, Math.sin(clamp((T - st.blinkAt) / 0.7, 0, 1) * Math.PI)) : 0, op = D.open;
-      eye.a.u.uAlpha.value = (1 - op) * (1 - 0.95 * bl); eyeOpen.L.set(op); blink.L.set((1 - op) * bl * 0.95);
+      brow.a.u.uAlpha.value = 1 - op; eye.a.u.uAlpha.value = (1 - op) * (1 - 0.95 * bl); eyeOpen.L.set(op); blink.L.set((1 - op) * bl * 0.95);
     }
     // the bubbles: each hangs and bobs; a right answer empties it (its fill and words fade, its line stays) and its brick drops
     bubbles.forEach((b, k) => {
       const d = dist2(cp, bubbleW[k].w); bubNear[k] = d;
-      const e = D.bub[k], near = Math.min(1, Math.max(0, (NEAR + 0.8 - d) / 1.4)), sh = D.shake[k] * Math.sin(T * 38) * 0.05 * m;
+      const e = D.bub[k], near = Math.min(1, Math.max(0, (NEAR + 0.3 - d) / 1.0)), sh = D.shake[k] * Math.sin(T * 38) * 0.05 * m;
       b.host.position.set(b.home[0] + 0.05 * Math.sin(T * 0.7 + k * 1.9) * m + sh, b.home[1] + 0.07 * Math.sin(T * 0.9 + k * 1.3) * m, b.home[2]);
       b.host.rotation.z = 0.035 * Math.sin(T * 0.6 + k) * m;
       b.line.host.position.set(b.host.position.x + b.line.off[0], b.host.position.y + b.line.off[1], b.host.position.z + b.line.off[2]); b.line.host.rotation.z = b.host.rotation.z;
-      const fill = (1 - e) * (0.92 + 0.08 * Math.sin(T * 1.7 + k) * m);
+      const fill = (1 - e) * (0.97 + 0.03 * Math.sin(T * 1.7 + k) * m);
       b.a.u.uAlpha.value = fill * (1 - near); b.b.u.uAlpha.value = fill * near; b.line.L.set(e * 0.85);
       if (D.bub[k] < 0.5 && d < NEAR && v.phase === 'voices') ctx.anchors['rm-globo-' + k] = { pos: bubbleW[k].w, w: bubbleW[k].sz, h: bubbleW[k].sz }; else delete ctx.anchors['rm-globo-' + k];
     });
