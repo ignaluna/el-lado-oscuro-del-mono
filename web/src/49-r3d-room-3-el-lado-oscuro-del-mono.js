@@ -21,7 +21,7 @@ const GS = { H: 1.6, cx: 500, Z0: 5.5, ARR: 2.7, BOT: 985 };
 /** Where the visitor stands when a floor opens is the eye; the drawing is Z0 metres ahead of it. */
 const GS_SET = { x: 0, y: 1.6, z: GS.ARR + GS.Z0 };
 /** The lens depends on the screen: a wide one fits the whole paper at 1300 cover px of focal length, a phone's narrow view at 1600. The set's z never changes. */
-function gsLens(a) { const wide = a >= 1.1, f = wide ? 1300 : 1600; return { wide, f, yh: GS.BOT - ((GS.H - 0.15) * f) / GS.Z0, row: wide ? 520 : 560, sx: wide ? 0.42 : 0.5, sy: wide ? 0.48 : 0.46 }; }
+function gsLens(a) { return coverLens(GS, a, { f: 1300, row: 520, sx: 0.42, sy: 0.48 }, { f: 1600, row: 560, sx: 0.5, sy: 0.46 }); }
 /** The cover's regions (rectified cover pixels, the paper is 1000 square): the lips, the fur's hull, the tag and tube, the splatter, the stars, the drip. */
 const GS_POLY = {
   MOUTH: [[262, 372], [300, 338], [345, 318], [400, 300], [440, 305], [472, 335], [484, 390], [478, 450], [472, 520], [478, 560], [482, 620], [482, 690], [480, 760], [462, 805], [432, 835], [395, 858], [350, 866], [312, 850], [288, 812], [270, 765], [248, 705], [225, 648], [216, 600], [220, 545], [232, 490], [246, 430]],
@@ -59,7 +59,6 @@ ROOM_SETS['el-lado-oscuro-del-mono'] = function buildGrito(ctx, kit, track) {
   const mp = (Z) => Z / f; // metres per cover pixel at depth Z
 
   // ---- the cover's pixels → the set (x to the viewer's right, y up, z toward the visitor; the mouth's plane at z = 0) ----
-  const P = (px, py, Z = Z0) => [((px - V.cx) * Z) / f, V.H + ((yh - py) * Z) / f, Z0 - Z];
   const bump = (px, py, cx, cy, rx, ry) => Math.exp(-(((px - cx) / rx) ** 2 + ((py - cy) / ry) ** 2));
   /** How far each layer is from the eye. The mouth stands out of the fur toward the visitor; the tag floats well in front of it; the splatter and the paper are behind. */
   const Zm = (px, py) => Z0 - 0.8 * bump(px, py, 350, 620, 140, 300);
@@ -67,60 +66,7 @@ ROOM_SETS['el-lado-oscuro-del-mono'] = function buildGrito(ctx, kit, track) {
   const ZT = Z0 - 1.5, ZS1 = Z0 - 0.3, ZS2 = Z0 + 0.5, ZSP = Z0 + 0.6, ZBG = Z0 + 1.2;
 
   // ───────────────────────────── the tones: the photo's own contours, painted into textures ─────────────────────────────
-  const loops = gaDecode().filter((lp) => lp.a >= (lite ? (lp.l < 5 ? 36 : 14) : 0));
-  loops.forEach((lp) => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const p of lp.pts) { a = Math.min(a, p[0]); b = Math.min(b, p[1]); c = Math.max(c, p[0]); d = Math.max(d, p[1]); } lp.bb = [a, b, c, d]; });
-  const tonePts = loops.reduce((n, lp) => n + lp.pts.length, 0);
-  const TS = lite ? 1.05 : 1.7; // texture pixels per cover pixel
-  const GAIN = 1.0; // (the traced levels are already the cover's tones, lifted)
-  const pathOf = (pts) => { const p = new Path2D(); pts.forEach((q, i) => (i ? p.lineTo(q[0], q[1]) : p.moveTo(q[0], q[1]))); p.closePath(); return p; };
-  const GREY = { 5: 150, 6: 215, 7: 255, 8: 88, 9: 225 }; // (the grey each glitter group is painted with: its layer's tint makes it gold or silver)
-  const tones = (c, r, groups, gain) => {
-    for (const l of groups) {
-      const path = new Path2D(); let any = false;
-      for (const lp of loops) {
-        if (lp.l !== l || lp.bb[2] < r[0] || lp.bb[0] > r[2] || lp.bb[3] < r[1] || lp.bb[1] > r[3]) continue;
-        lp.pts.forEach((p, i) => (i ? path.lineTo(p[0], p[1]) : path.moveTo(p[0], p[1]))); path.closePath(); any = true;
-      }
-      if (!any) continue;
-      const g = Math.min(255, Math.round(l < 5 ? GA_FILL[l] * gain : GREY[l])); c.fillStyle = `rgb(${g},${g},${g})`; c.fill(path, 'evenodd');
-      if (l < 5) { c.strokeStyle = c.fillStyle; c.lineWidth = lite ? 0.8 : 0.6; c.lineJoin = 'round'; c.stroke(path); } // (the cover's strokes are a little bolder than their traced edges)
-    }
-  };
-  /** A soft mask (alpha) over a rectangle of the cover: polygons filled and blurred (blur in cover px). */
-  const maskOf = (w, hh, r, polys, blur, ts) => {
-    const m = document.createElement('canvas'); m.width = w; m.height = hh; const c = m.getContext('2d');
-    if (blur && 'filter' in c) c.filter = `blur(${(blur * ts).toFixed(1)}px)`;
-    c.scale(w / (r[2] - r[0]), hh / (r[3] - r[1])); c.translate(-r[0], -r[1]); c.fillStyle = '#fff';
-    for (const p of polys) c.fill(pathOf(p));
-    return m;
-  };
-  /**
-   * A texture painted from the tones inside a rectangle of the cover. groups: which levels; masks: [['in'|'out', polygons, blur], …] applied in order (the layers'
-   * weights add up to one, so each stroke is drawn once in all); ts scales the resolution. A soft glow is added around every bright band.
-   */
-  const region = (r, o = {}) => { const ts = TS * (o.ts || 1); return ctx.canvasTex(Math.max(4, Math.round((r[2] - r[0]) * ts)), Math.max(4, Math.round((r[3] - r[1]) * ts)), (c, w, hh) => {
-    const wc = document.createElement('canvas'); wc.width = w; wc.height = hh; const k = wc.getContext('2d');
-    k.save(); k.scale(w / (r[2] - r[0]), hh / (r[3] - r[1])); k.translate(-r[0], -r[1]);
-    tones(k, r, o.groups || [0, 1, 2, 3, 4], o.gain || GAIN);
-    k.restore();
-    for (const [mode, polys, blur] of o.masks || []) { k.globalCompositeOperation = mode === 'in' ? 'destination-in' : 'destination-out'; k.drawImage(maskOf(w, hh, r, polys, blur, ts), 0, 0); }
-    c.fillStyle = '#000'; c.fillRect(0, 0, w, hh); c.drawImage(wc, 0, 0);
-    if ('filter' in c && (o.glow ?? 0.15) > 0) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = o.glow ?? 0.15; c.filter = `blur(${((2.6 * ts) / 1.7).toFixed(1)}px)`; c.drawImage(c.canvas, 0, 0); c.restore(); } // a soft glow around every bright band
-  }); };
-  const mat = (tex, tint = [0.96, 0.95, 0.98]) => { const u = { uTex: { value: tex }, uAlpha: { value: 1 }, uReveal: { value: 1 }, uTint: { value: V3(...tint) } }; return { u, m: ctx.glowMat(TEXT_FRAG, u) }; };
-  /** A grid mesh over a cover rectangle whose every vertex sits on its pixel's ray at a depth `Zf(px, py)` (relative to `origin`, a point of the set); returns its geometry data. */
-  const gridMesh = (r, nx, ny, Zf, tex, host = root, origin = [0, 0, 0], tint) => {
-    const n = (nx + 1) * (ny + 1), base = new Float32Array(n * 3), uv = new Float32Array(n * 2), idx = [], pxy = new Float32Array(n * 2);
-    for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) {
-      const px = r[0] + ((r[2] - r[0]) * i) / nx, py = r[1] + ((r[3] - r[1]) * j) / ny, k = j * (nx + 1) + i, p = P(px, py, Zf(px, py));
-      base.set([p[0] - origin[0], p[1] - origin[1], p[2] - origin[2]], k * 3); pxy[k * 2] = px; pxy[k * 2 + 1] = py; uv[k * 2] = i / nx; uv[k * 2 + 1] = 1 - j / ny;
-    }
-    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const a = j * (nx + 1) + i, b = a + 1, c2 = a + nx + 1, d = c2 + 1; idx.push(a, c2, b, b, c2, d); }
-    const geo = ctx.keep(new THREE.BufferGeometry()), attr = new THREE.BufferAttribute(new Float32Array(base), 3);
-    geo.setAttribute('position', attr); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geo.setIndex(idx);
-    const M = mat(tex, tint), mesh = new THREE.Mesh(geo, M.m); mesh.frustumCulled = false; mesh.layers.set(1); host.add(mesh); // (layer 1: not mirrored by the water: the cover has no reflection)
-    return { mesh, attr, base, pxy, u: M.u, nx, ny, r, n };
-  };
+  const { P, loops, tonePts, region, mat, gridMesh, glitterRows } = coverTones(ctx, { V, lens: { f, yh }, decode: gaDecode, fill: GA_FILL, grey: { 5: 150, 6: 215, 7: 255, 8: 88, 9: 225 }, ts: [1.05, 1.7], root, rnd }); // (the greys: what each glitter group is painted with, its layer's tint makes it gold or silver)
 
   const quad = (cx, cy, w, hgt, rot) => { const c = Math.cos(rot), s2 = Math.sin(rot); return [[-w / 2, -hgt / 2], [w / 2, -hgt / 2], [w / 2, hgt / 2], [-w / 2, hgt / 2]].map(([x, y]) => [cx + x * c - y * s2, cy + x * s2 + y * c]); };
   const circle = (cx, cy, r, n = 16) => Array.from({ length: n }, (_, i) => [cx + Math.cos((i / n) * TAU) * r, cy + Math.sin((i / n) * TAU) * r]);
@@ -196,10 +142,9 @@ ROOM_SETS['el-lado-oscuro-del-mono'] = function buildGrito(ctx, kit, track) {
   const perRepair = repairRows[0].length;
 
   // glitter: sparkle points on the brightest grains of the gold and of the silver, twinkling
-  const glitterRows = (pts, size, dz) => pts.map(([x, y, b]) => { const p = P(x, y, Zm(x, y) - dz); return [p[0], p[1], p[2], size * (0.7 + rnd() * 0.8), 0.45 + 0.55 * (b / 255), rnd(), 0]; });
   const goldPts = GA_GOLD_PTS.filter((_, i) => !lite || i % 2 === 0), silPts = GA_SIL_PTS.filter((_, i) => !lite || i % 2 === 0);
-  const goldG = kit.points(glitterRows(goldPts, 0.045, 0.06), { shape: 3, twinkle: 0.95, tint: [1.2, 0.9, 0.42] });
-  const silG = kit.points(glitterRows(silPts, 0.04, 0.05), { shape: 3, twinkle: 0.95, tint: [0.9, 0.97, 1.1] });
+  const goldG = kit.points(glitterRows(goldPts, 0.045, (x, y) => Zm(x, y) - 0.06), { shape: 3, twinkle: 0.95, tint: [1.2, 0.9, 0.42] });
+  const silG = kit.points(glitterRows(silPts, 0.04, (x, y) => Zm(x, y) - 0.05), { shape: 3, twinkle: 0.95, tint: [0.9, 0.97, 1.1] });
   mouthG.add(goldG.obj); mouthG.add(silG.obj);
   const bigSpark = (list, tint) => kit.points(list.map(([x, y], i) => { const p = P(x, y, Zm(x, y) - 0.1); return [p[0], p[1], p[2], tint === 0 ? 0.2 : 0.13, 0.9, i * 0.27, 0]; }), { shape: 3, twinkle: 0.95, tint: tint === 0 ? [1, 0.85, 0.45] : [0.85, 0.92, 1] });
   const goldGlit = bigSpark([[407, 362], [425, 598], [376, 778], [400, 770]], 0), silGlit = bigSpark([[268, 390], [303, 378]], 1);
@@ -247,13 +192,8 @@ ROOM_SETS['el-lado-oscuro-del-mono'] = function buildGrito(ctx, kit, track) {
     firma: { t: () => P(540, 500, ZT), w: 3.2, h: 2.2 },
     dientes: { t: () => P(350, 615, Zm(350, 615)), w: 1.3, h: 2.2 },
   };
-  function aim(camL, tgtL, sx, sy, fov, a) {
-    root.updateMatrixWorld();
-    const cw = root.localToWorld(V3(...camL)), tw = root.localToWorld(V3(...tgtL));
-    const dx = tw.x - cw.x, dy = tw.y - cw.y, dz = tw.z - cw.z, tanV = Math.tan((fov * Math.PI) / 360), tanH = tanV * a;
-    return { x: cw.x, y: cw.y, z: cw.z, fov, yaw: Math.atan2(-dx, -dz) - Math.atan((0.5 - sx) * 2 * tanH), pitch: Math.atan2(dy, Math.hypot(dx, dz)) - Math.atan((0.5 - sy) * 2 * tanV) };
-  }
-  const fit = (w, h, fw, fh, fov, a) => { const tv = 2 * Math.tan((fov * Math.PI) / 360); return Math.max(h / (fh * tv), w / (fw * tv * a)); };
+  const aim = (camL, tgtL, sx, sy, fov, a) => coverAim(root, V3, camL, tgtL, sx, sy, fov, a);
+  const fit = coverFit;
   function pose(view, a, free) {
     const L = LOOK[view]; if (!L) return null;
     const fr = free || { x0: 0.3, y0: 0.1, x1: 0.95, y1: 0.55 }, sx = (fr.x0 + fr.x1) / 2, sy = (fr.y0 + fr.y1) / 2, fw = (fr.x1 - fr.x0) * 0.9, fh = (fr.y1 - fr.y0) * 0.86, phone = a < 0.8, fov = phone ? 56 : 44;
