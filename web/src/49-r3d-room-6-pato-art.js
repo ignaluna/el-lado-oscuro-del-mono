@@ -2,9 +2,9 @@
 // sleeve, so it was first unwarped to a square (the paper's four corners, a homography), its uneven background removed, its luminance lightly blurred and cut at five levels
 // (marching squares), and every contour simplified (about a pixel). Each level is a list of closed loops, nested ones are holes (even-odd), in rectified cover pixels (the paper
 // is 1100 square), as half-pixel integers: "n x0 y0 dx dy dx dy …", every number a variable-length code of 5 bits per character (the characters A-Z a-z 0-9 + - : 0-31 end
-// a number, 32-63 continue it), deltas zig-zagged. Decoded by pkDecode(): [{ l: level, pts: [[x, y] …], a: area }]. PK_FILL is the grey each level is painted with.
+// a number, 32-63 continue it), deltas zig-zagged. Decoded by pkDecode() (decodeTones, 49-r3d-room-0-tones.js): [{ l: level, pts: [[x, y] …], a: area }]. PK_FILL is the grey each level is painted with (the room paints it as it is).
 const PK_LEVELS = [34,78,122,168,212];
-const PK_FILL = [55,99,146,191,221];
+const PK_FILL = [72,129,190,248,255];
 const PK_TONE = [
   [
     'EviBjGDKIGILEyYmGFKKKGLEohB2HHOIIIJF2mBtIHQGKOLFNrBsQ+JDOaeROXAXOFMESUcUOWEGFzBfHPEHQS4C0BqDkBmCkCIUAaHQPSDOXKZgBmBLuBjBQZGfFjBflB-BtB9Bf1CdhBTBFGFuBP',
@@ -192,21 +192,7 @@ const PK_TONE = [
     'IASMeGFALEynB22BJEKkBEnBG5jB-4BFMcKISMCRbFuTv7BjCWKE4BPMH',
   ].join(''),
 ];
-function pkDecode() {
-  const AL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-', out = [];
-  PK_TONE.forEach((s, l) => {
-    let i = 0;
-    const num = () => { let v = 0, sh = 0, c; do { c = AL.indexOf(s[i++]); v += (c & 31) * 2 ** sh; sh += 5; } while (c >= 32); return v; };
-    const zg = () => { const v = num(); return v & 1 ? -(v + 1) / 2 : v / 2; };
-    while (i < s.length) {
-      const n = num(), pts = [[num() / 2, num() / 2]];
-      for (let k = 1; k < n; k++) { const p = pts[k - 1]; pts.push([p[0] + zg() / 2, p[1] + zg() / 2]); }
-      let a = 0; for (let k = 0; k < n; k++) { const p = pts[k], q = pts[(k + 1) % n]; a += p[0] * q[1] - q[0] * p[1]; }
-      out.push({ l, pts, a: Math.abs(a) / 2 });
-    }
-  });
-  return out;
-}
+function pkDecode() { return decodeTones(PK_TONE); }
 /** The duck's silhouette (the cut-out of his relief), in rectified cover pixels. */
 const PK_DUCK = [[684,215],[657,223],[635,223],[614,237],[598,242],[578,253],[558,271],[537,275],[537,299],[533,314],[498,341],[494,349],[492,374],[487,384],[486,399],[475,412],[448,436],[444,444],[440,473],[442,507],[451,516],[480,533],[435,567],[429,564],[407,563],[406,561],[416,541],[415,520],[394,520],[386,523],[383,500],[332,501],[332,528],[342,550],[315,562],[307,582],[268,638],[266,645],[266,670],[300,750],[332,764],[351,790],[368,788],[382,763],[401,780],[416,783],[417,797],[430,810],[430,830],[447,830],[454,824],[464,824],[469,834],[487,834],[490,817],[492,839],[499,848],[500,857],[531,859],[531,901],[534,904],[531,908],[532,931],[557,930],[567,940],[577,941],[583,946],[596,947],[607,954],[600,958],[583,961],[567,973],[560,987],[539,987],[535,1026],[542,1029],[577,1033],[579,1041],[601,1046],[640,1046],[644,1035],[676,1035],[683,1031],[707,1039],[725,1038],[729,1033],[787,1037],[825,1034],[824,1012],[764,1006],[763,993],[752,976],[743,955],[742,922],[737,911],[757,908],[757,888],[736,888],[733,908],[697,906],[696,893],[701,868],[727,852],[749,828],[757,763],[772,757],[775,732],[810,734],[814,719],[826,722],[844,722],[850,716],[846,682],[874,693],[898,694],[903,692],[904,675],[908,669],[908,605],[889,575],[849,547],[847,534],[828,529],[794,529],[775,520],[727,511],[701,498],[684,482],[707,454],[753,428],[758,415],[767,406],[778,405],[779,394],[788,388],[785,359],[757,336],[750,323],[746,268],[750,262],[750,243],[731,243],[726,251],[719,241],[705,235],[703,215]];
 /** The five bubbles' outlines (hand-fitted hulls, with margin): top, right, small left, big lower-left, lower-right. */

@@ -18,12 +18,12 @@
 //   From the arrival spot the room is the cover; walking in, it opens up. world.room.v holds the targets (the controller, 59-room-6-…,
 //   sets them whole); every value is damped here, so nothing needs a sequence and nothing is left half done.
 // ═══════════════════════════════════════════════════════════════════════════════════════════
-/** The eye that sees the cover: H its height (m), cx the column straight ahead, GR the cover row where his slippers touch the ground, Z0 how far (m) that is from the eye. */
-const PK = { H: 1.6, cx: 550, GR: 1015, Z0: 5.5, ARR: 2.7 };
+/** The eye that sees the cover: H its height (m), cx the column straight ahead, BOT the cover row of the top of his slippers (it stands 0.15 m above the floor), Z0 how far (m) the duck's plane is from the eye, ARR where the visitor arrives (z). */
+const PK = { H: 1.6, cx: 550, BOT: 980, Z0: 5.5, ARR: 2.7 };
 /** Where the visitor stands when a floor opens is the eye; the duck is Z0 metres ahead of it. */
 const PK_SET = { x: 0, y: 1.6, z: PK.ARR + PK.Z0 };
 /** The lens depends on the screen: a wide one keeps the duck in full at 1150 cover px of focal length, a phone's narrow view at 1500. The set's z never changes. */
-function pkLens(a) { const wide = a >= 1.1, f = wide ? 1150 : 1500; return { wide, f, yh: PK.GR - (PK.H * f) / PK.Z0 }; }
+function pkLens(a) { return coverLens(PK, a, { f: 1150, row: 640, sx: 0.42, sy: 0.5 }, { f: 1500, row: 640, sx: 0.5, sy: 0.5 }); }
 /**
  * The five bubbles, each with the Pato's line, the chapter's reply and the Pato's own logic. px, py: where the bubble is on the cover (the middle of its white);
  * Z: how far from the eye it hangs (the duck is at 5.5: 7 and 8 are behind him, 4.4 to 5 in front of his plane, to the sides); hull: its outline in PK_BUBBLES.
@@ -55,102 +55,70 @@ ROOM_SETS['pato'] = function buildPato(ctx, kit, track) {
   const lines = (rib, o = {}) => { segTotal += rib.count; const L = kit.lines(rib, o); L.core.layers.set(1); return L; }; // (layer 1: not mirrored by the water: the cover has no reflection)
   const mp = (Z) => Z / f; // metres per cover pixel at depth Z
 
-  // ---- the cover's pixels → the set (x to the viewer's right, y up, z toward the visitor; the duck's plane at z = 0) ----
+  // ---- how far each layer stands from the eye (the cover's pixels → the set, the tones painted into textures and the grid meshes are the shared helpers of 49-r3d-room-0-tones.js) ----
   const ground = (py) => (V.H * f) / Math.max(8, py - yh); // depth of a point lying on the ground at cover row py
-  const P = (px, py, Z = V.Z0) => [((px - V.cx) * Z) / f, V.H + ((yh - py) * Z) / f, V.Z0 - Z];
   const bump = (px, py, cx, cy, rx, ry) => Math.exp(-(((px - cx) / rx) ** 2 + ((py - cy) / ry) ** 2));
   /** How far the duck's body is from his plane: the head and the belly forward, his two hands forward, the slippers a little forward, the rear leg back. */
   const Zm = (px, py) => V.Z0 - 0.55 * bump(px, py, 610, 330, 150, 130) - 0.55 * bump(px, py, 570, 690, 170, 140) - 0.4 * bump(px, py, 300, 590, 80, 100) - 0.3 * bump(px, py, 720, 670, 90, 80) - 0.25 * bump(px, py, 660, 960, 110, 60) + 0.3 * bump(px, py, 520, 900, 50, 100);
-  const Pm = (px, py) => P(px, py, Zm(px, py));
 
   // ───────────────────────────── the tones: the photo's own contours, painted into textures ─────────────────────────────
-  const loops = pkDecode().filter((lp) => lp.a >= (lite ? 60 : 0));
-  loops.forEach((lp) => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const p of lp.pts) { a = Math.min(a, p[0]); b = Math.min(b, p[1]); c = Math.max(c, p[0]); d = Math.max(d, p[1]); } lp.bb = [a, b, c, d]; });
-  const tonePts = loops.reduce((n, lp) => n + lp.pts.length, 0);
-  const TS = lite ? 1.05 : 1.85; // texture pixels per cover pixel
-  const GAIN = 1.3;
-  const pathOf = (pts) => { const p = new Path2D(); pts.forEach((q, i) => (i ? p.lineTo(q[0], q[1]) : p.moveTo(q[0], q[1]))); p.closePath(); return p; };
-  const duckPath = pathOf(PK_DUCK), hullPaths = PK_BUBBLES.map(pathOf);
-  const smokePts = [[100, 120], [440, 120], [440, 508], [340, 508], [340, 538], [100, 538]], smokePath = pathOf(smokePts);
-  const SMOKE_R = [100, 120, 440, 538], HEART_R = [198, 295, 325, 410], EYE_R = [655, 282, 728, 350];
+  const { P, loops, tonePts, region, mat, gridMesh } = coverTones(ctx, { V, lens: { f, yh }, decode: pkDecode, fill: PK_FILL, ts: [1.05, 1.85], root, rnd });
+  const Pm = (px, py) => P(px, py, Zm(px, py));
+  const poly = ([x0, y0, x1, y1]) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]; // (a rectangle as a polygon)
   const bbOf = (pts, m = 3) => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const p of pts) { a = Math.min(a, p[0]); b = Math.min(b, p[1]); c = Math.max(c, p[0]); d = Math.max(d, p[1]); } return [Math.floor(a - m), Math.floor(b - m), Math.ceil(c + m), Math.ceil(d + m)]; };
-  const tones = (c, r, gain = GAIN, stroke = 0) => {
-    for (let l = 0; l < PK_FILL.length; l++) {
-      const path = new Path2D(); let any = false;
-      for (const lp of loops) {
-        if (lp.l !== l || lp.bb[2] < r[0] || lp.bb[0] > r[2] || lp.bb[3] < r[1] || lp.bb[1] > r[3]) continue;
-        lp.pts.forEach((p, i) => (i ? path.lineTo(p[0], p[1]) : path.moveTo(p[0], p[1]))); path.closePath(); any = true;
-      }
-      if (!any) continue;
-      const g = Math.min(255, Math.round(PK_FILL[l] * gain)); c.fillStyle = `rgb(${g},${g},${g})`; c.fill(path, 'evenodd');
-      if (stroke) { c.strokeStyle = c.fillStyle; c.lineWidth = stroke; c.lineJoin = 'round'; c.stroke(path); } // (the smoke's thin curls are drawn a little bolder, as on the cover)
-    }
+  const SMOKE_P = [[100, 120], [440, 120], [440, 508], [340, 508], [340, 538], [100, 538]];
+  const HEART_R = [198, 295, 325, 410], EYE_R = [655, 282, 728, 350];
+  // The cover's pixels are split among the layers with soft masks that add up to one (a layer takes what the layers before it left): the five bubbles, the heart, the eyelid,
+  // the smoke, the duck, and what is left is the ground below row 880 and the sky above it. A polygon's edge is blurred by the same amount wherever it is used.
+  const CUTS = [...PK_BUBBLES.map((p) => [p, 3]), [poly(HEART_R), 4], [poly(EYE_R), 2], [SMOKE_P, 4], [PK_DUCK, 6]];
+  const [BUB0, HEART_K, EYE_K, SMOKE_K, DUCK_K] = [0, 5, 6, 7, 8];
+  const SPLIT_P = poly([30, 30, 1020, 880]), SPLIT_B = 10;
+  /** The masks of layer k (k = CUTS.length: the left-overs, 'in' the sky or 'out' of it): everything before it is cut out and, for a layer of its own, its polygon is cut in; only the polygons that reach rect r count. */
+  const cuts = (k, r, rest) => {
+    const near = ([p, b]) => { const q = bbOf(p, 3 * b); return q[2] >= r[0] && q[0] <= r[2] && q[3] >= r[1] && q[1] <= r[3]; };
+    const m = CUTS.slice(0, k).filter(near).map(([p, b]) => ['out', [p], b]);
+    if (k < CUTS.length) m.push(['in', [CUTS[k][0]], CUTS[k][1]]); else m.push([rest, [SPLIT_P], SPLIT_B]);
+    return m;
   };
-  /**
-   * A texture painted from the tones inside a rectangle of the cover: clip (a Path2D), erase (rects and Path2Ds), after(c) draws more in cover pixels (the words in a bubble),
-   * ts scales the resolution. A soft glow is added around every bright band.
-   */
-  const region = (r, o = {}) => { const ts = TS * (o.ts || 1); return ctx.canvasTex(Math.max(4, Math.round((r[2] - r[0]) * ts)), Math.max(4, Math.round((r[3] - r[1]) * ts)), (c, w, hh) => {
-    c.fillStyle = '#000'; c.fillRect(0, 0, w, hh);
-    c.save(); c.scale(w / (r[2] - r[0]), hh / (r[3] - r[1])); c.translate(-r[0], -r[1]);
-    c.save(); if (o.clip) c.clip(o.clip);
-    tones(c, r, o.gain, o.stroke);
-    c.fillStyle = '#000';
-    c.restore();
-    for (const e of o.erase || []) { if (e instanceof Path2D) c.fill(e); else c.fillRect(e[0], e[1], e[2] - e[0], e[3] - e[1]); }
-    if (o.after) o.after(c);
-    c.restore();
-    if ('filter' in c) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.15; c.filter = `blur(${((2.6 * ts) / 1.7).toFixed(1)}px)`; c.drawImage(c.canvas, 0, 0); c.restore(); } // a soft glow around every bright band
-  }); };
-  const mat = (tex, tint = [0.96, 0.95, 0.98]) => { const u = { uTex: { value: tex }, uAlpha: { value: 1 }, uReveal: { value: 1 }, uTint: { value: V3(...tint) } }; return { u, m: ctx.glowMat(TEXT_FRAG, u) }; };
-  /** A grid mesh over a cover rectangle whose every vertex sits on its pixel's ray at a depth `Zf(px, py)`; returns its geometry data. */
-  const gridMesh = (r, nx, ny, Zf, tex, host = root) => {
-    const n = (nx + 1) * (ny + 1), base = new Float32Array(n * 3), uv = new Float32Array(n * 2), idx = [];
-    for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) {
-      const px = r[0] + ((r[2] - r[0]) * i) / nx, py = r[1] + ((r[3] - r[1]) * j) / ny, k = j * (nx + 1) + i, Z = Zf(px, py), p = P(px, py, Z);
-      base.set(p, k * 3); uv[k * 2] = i / nx; uv[k * 2 + 1] = 1 - j / ny;
-    }
-    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const a = j * (nx + 1) + i, b = a + 1, c2 = a + nx + 1, d = c2 + 1; idx.push(a, c2, b, b, c2, d); }
-    const geo = ctx.keep(new THREE.BufferGeometry()), attr = new THREE.BufferAttribute(new Float32Array(base), 3);
-    geo.setAttribute('position', attr); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geo.setIndex(idx);
-    const M = mat(tex), mesh = new THREE.Mesh(geo, M.m); mesh.frustumCulled = false; mesh.layers.set(1); host.add(mesh); // (layer 1: not mirrored by the water: the cover has no reflection)
-    return { mesh, attr, base, u: M.u, nx, ny, r };
-  };
+  const grown = (p, b) => bbOf(p, 3 * b + 1); // (a texture's rectangle: the polygon and the reach of its blur)
+  const SMOKE_R = grown(SMOKE_P, CUTS[SMOKE_K][1]);
 
   // the duck: a relief cut out by his silhouette; the eye, the bubbles and the smoke are cut out of it (they are the movers)
-  const erased = [...hullPaths, smokePath, EYE_R];
-  const DK_R = bbOf(PK_DUCK, 4);
-  const body = gridMesh(DK_R, lite ? 34 : 50, lite ? 38 : 58, Zm, region(DK_R, { clip: duckPath, erase: erased }));
+  const DK_R = grown(PK_DUCK, CUTS[DUCK_K][1]);
+  const body = gridMesh(DK_R, lite ? 34 : 50, lite ? 38 : 58, Zm, region(DK_R, { masks: cuts(DUCK_K, DK_R) }));
   // the ground: the bench lines and the floor under the slippers lie on the water's floor; the duck is cut out of it
-  const GR_R = [60, 880, 1000, 1100];
-  const groundL = gridMesh(GR_R, lite ? 28 : 44, lite ? 6 : 10, (px, py) => ground(py) * 0.985, region(GR_R, { erase: [duckPath, ...hullPaths] }));
+  const GR_R = [30, 860, 1020, 1100];
+  const groundL = gridMesh(GR_R, lite ? 28 : 44, lite ? 6 : 10, (px, py) => ground(py) * 0.985, region(GR_R, { masks: cuts(CUTS.length, GR_R, 'out') }));
   // the sky: the tiny dots, a flat layer behind him
-  const SK_R = [100, 60, 930, 880];
-  const sky = gridMesh(SK_R, 8, 8, () => 8.8, region(SK_R, { ts: 0.7, erase: [duckPath, smokePath, ...hullPaths] }));
+  const SK_R = [30, 30, 1020, 900];
+  const sky = gridMesh(SK_R, 8, 8, () => 8.8, region(SK_R, { ts: 0.7, masks: cuts(CUTS.length, SK_R, 'in') }));
   segTotal += tonePts; // (every contour edge is a chalk line of the drawing)
 
   // ───────────────────────────── movers: cut from the same tones ─────────────────────────────
-  const mover = (rect, Zd, o = {}) => {
-    const w = rect[2] - rect[0], h = rect[3] - rect[1], c = P((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2, Zd), host = grp(root, c[0], c[1], c[2]);
+  const mover = (k, Zd, o = {}) => {
+    const rect = grown(CUTS[k][0], CUTS[k][1]), w = rect[2] - rect[0], h = rect[3] - rect[1], c = P((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2, Zd), host = grp(root, c[0], c[1], c[2]);
     const geo = ctx.keep(new THREE.PlaneGeometry(w * mp(Zd), h * mp(Zd)));
     const mk = (tex) => { const M = mat(tex), m = new THREE.Mesh(geo, M.m); m.frustumCulled = false; m.layers.set(1); host.add(m); return { m, u: M.u }; };
-    const a = mk(region(rect, { clip: o.clip, erase: o.erase, ts: o.ts, gain: o.gain, stroke: o.stroke }));
-    const b = o.after ? mk(region(rect, { clip: o.clip, erase: o.erase, after: o.after, ts: o.ts, gain: o.gain, stroke: o.stroke })) : null;
+    const paint = () => region(rect, { ts: o.ts, gain: o.gain, masks: cuts(k, rect) });
+    const a = mk(paint());
+    const b = o.after ? mk(o.after(paint(), rect)) : null;
     return { host, a, b, home: c, w: w * mp(Zd), h: h * mp(Zd), rect, Zd };
   };
-  /** Black words inside a bubble, wrapped to fit (the bubbles are additive white, so the words are the dark that is left in them). */
-  const speak = (v) => (c) => {
-    const words = v.line.split(' '), W = v.bw * 0.74, Hh = v.bh * 0.66;
+  /** Black words inside a bubble, wrapped to fit (the bubbles are additive white, so the words are the dark that is left in them); drawn on a painted texture, in cover pixels. */
+  const speak = (v) => (tex, r) => {
+    const c = tex.image.getContext('2d'), words = v.line.split(' '), W = v.bw * 0.74, Hh = v.bh * 0.66;
+    c.save(); c.scale(tex.image.width / (r[2] - r[0]), tex.image.height / (r[3] - r[1])); c.translate(-r[0], -r[1]);
     for (let fs = 30; fs >= 9; fs -= 1) {
       c.font = FONT_DISPLAY(fs, '', 500); const rows = []; let cur = '';
       for (const w of words) { const t = cur ? cur + ' ' + w : w; if (c.measureText(t).width <= W || !cur) cur = t; else { rows.push(cur); cur = w; } }
       rows.push(cur);
-      if (rows.length * fs * 1.12 <= Hh && rows.every((r) => c.measureText(r).width <= W + 1)) {
+      if (rows.length * fs * 1.12 <= Hh && rows.every((r2) => c.measureText(r2).width <= W + 1)) {
         c.fillStyle = '#0a0a0a'; c.textAlign = 'center'; c.textBaseline = 'middle';
-        rows.forEach((r, i) => c.fillText(r, v.px, v.py + (i - (rows.length - 1) / 2) * fs * 1.12 + fs * 0.04));
-        return;
+        rows.forEach((r2, i) => c.fillText(r2, v.px, v.py + (i - (rows.length - 1) / 2) * fs * 1.12 + fs * 0.04));
+        break;
       }
     }
+    c.restore(); tex.needsUpdate = true; return tex;
   };
   const bubbles = PK_VOICES.map((v, k) => {
     const hull = PK_BUBBLES[k], bb = bbOf(hull, 2);
@@ -158,12 +126,13 @@ ROOM_SETS['pato'] = function buildPato(ctx, kit, track) {
     const inside = loops.filter((lp) => lp.l >= 2 && lp.a > 250 && lp.bb[0] >= bb[0] && lp.bb[2] <= bb[2] && lp.bb[1] >= bb[1] && lp.bb[3] <= bb[3]).sort((a, b) => b.a - a.a)[0];
     const w2 = { ...v, bw: inside ? inside.bb[2] - inside.bb[0] : 100, bh: inside ? inside.bb[3] - inside.bb[1] : 60 };
     if (inside) { w2.px = (inside.bb[0] + inside.bb[2]) / 2; w2.py = (inside.bb[1] + inside.bb[3]) / 2 - 2; }
-    const M = mover(bb, v.Z, { clip: hullPaths[k], after: speak(w2), ts: lite ? 1.1 : 1.5 });
+    const M = mover(BUB0 + k, v.Z, { after: speak(w2), ts: lite ? 1.1 : 1.5 });
     return { ...M, k, v, outline: inside ? inside.pts : null, w2 };
   });
-  const smoke = gridMesh(SMOKE_R, lite ? 12 : 20, lite ? 14 : 24, () => V.Z0 + 0.3, region(SMOKE_R, { clip: smokePath, erase: [HEART_R, ...hullPaths], gain: 1.9, stroke: 1.6 }));
-  const heart = mover(HEART_R, V.Z0 + 0.3, { gain: 1.9, stroke: 1.6 });
-  const eye = mover(EYE_R, Zm(PK_EYE[0], PK_EYE[1]) - 0.02);
+  const SMK = 1.46; // (the smoke's thin curls are lifted a little, as on the cover: they are fainter than the white paint)
+  const smoke = gridMesh(SMOKE_R, lite ? 12 : 20, lite ? 14 : 24, () => V.Z0 + 0.3, region(SMOKE_R, { gain: SMK, masks: cuts(SMOKE_K, SMOKE_R) }));
+  const heart = mover(HEART_K, V.Z0 + 0.3, { gain: SMK });
+  const eye = mover(EYE_K, Zm(PK_EYE[0], PK_EYE[1]) - 0.02);
 
   // ───────────────────────────── chalk helpers ─────────────────────────────
   const ell = (cx, cy, rx, ry, n = 14, rot = 0) => Array.from({ length: n }, (_, i) => { const a = (i / n) * TAU, x = Math.cos(a) * rx, y = Math.sin(a) * ry; return [cx + x * Math.cos(rot) - y * Math.sin(rot), cy + x * Math.sin(rot) + y * Math.cos(rot), 0]; });
@@ -280,13 +249,7 @@ ROOM_SETS['pato'] = function buildPato(ctx, kit, track) {
     anillo: { t: () => Pm(PK_RING[0], PK_RING[1]), w: 1.5, h: 1.3, up: 0 },
     ...Object.fromEntries(bubbles.map((b, k) => ['globo-' + k, { t: () => bubbleP[k], w: Math.max(1.5, b.w * 1.6), h: Math.max(1.2, b.h * 1.8), up: 0 }])),
   };
-  function aim(camL, tgtL, sx, sy, fov, a) {
-    root.updateMatrixWorld();
-    const cw = root.localToWorld(V3(...camL)), tw = root.localToWorld(V3(...tgtL));
-    const dx = tw.x - cw.x, dy = tw.y - cw.y, dz = tw.z - cw.z, tanV = Math.tan((fov * Math.PI) / 360), tanH = tanV * a;
-    return { x: cw.x, y: cw.y, z: cw.z, fov, yaw: Math.atan2(-dx, -dz) - Math.atan((0.5 - sx) * 2 * tanH), pitch: Math.atan2(dy, Math.hypot(dx, dz)) - Math.atan((0.5 - sy) * 2 * tanV) };
-  }
-  const fit = (w, h, fw, fh, fov, a) => { const tv = 2 * Math.tan((fov * Math.PI) / 360); return Math.max(h / (fh * tv), w / (fw * tv * a)); };
+  const aim = (camL, tgtL, sx, sy, fov, a) => coverAim(root, V3, camL, tgtL, sx, sy, fov, a), fit = coverFit;
   function pose(view, a, free) {
     const L = LOOK[view]; if (!L) return null;
     const fr = free || { x0: 0.3, y0: 0.1, x1: 0.95, y1: 0.55 }, sx = (fr.x0 + fr.x1) / 2, sy = (fr.y0 + fr.y1) / 2, fw = (fr.x1 - fr.x0) * 0.9, fh = (fr.y1 - fr.y0) * 0.86, phone = a < 0.8, fov = phone ? 56 : 44;
