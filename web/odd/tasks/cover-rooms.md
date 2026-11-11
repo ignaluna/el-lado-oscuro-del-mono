@@ -240,7 +240,14 @@ checks across several files. Writers run one at a time.
 - [x] C5 Floor 5 room, element `dolor-heredado` kept (route: delegated writer; commit: 3e5fa0a "feat(web): draw the Explotar cover as the walking monkey room")
 - [x] C6 Floor 6 room, with a dev-only roomless world for the roam and tier checks (route: delegated writer; commits: 1122373 "refactor(web): add a dev-only roomless world for the roam, rotate-hint and tier checks" and 41e7560 "feat(web): draw the Pato cover as the smug duck room")
 - [x] C7 Floor 7 room, element `fuego` kept (route: delegated writer; commit: 0c87ce8 "feat(web): draw the Casi perdido cover as the burning monkey room")
-- [ ] CY Fidelity pass on every room against its cover (user request 2026-11-09: once all floors are done, rework the drawings so they look more like the real ones)
+- [ ] CY Fidelity pass on every room against its cover (user request 2026-11-09: once all floors are done, rework the drawings so they look more like the real ones). Split into per-floor subtasks:
+  - [ ] CY1 Shared rendering fixes that hurt every room's fidelity (film grain on white masses, the intro caption over the bottom nav, the world's light and reflection that the covers do not have)
+  - [ ] CY2 Floor 3: retrace the scream cover with contour textures on rays from the arrival eye (today a procedural leaning board that reads as a slanted trapezoid and does not look like the cover)
+  - [ ] CY3 Floor 2: retrace the system cover the same way
+  - [ ] CY4 Floor 4: retrace the hands with contour textures (today thinned strokes, thin)
+  - [ ] CY5 Floor 8: retrace the ripples with contour textures (today thin, broken thinned strokes)
+  - [ ] CY6 Floor 1: compare with its cover and retrace if it is not as faithful as floors 5-7 and 9
+  - [ ] CY7 Polish floors 5, 6, 7 and 9 (smoke, silver glitter, brightness and flatness, layer edges)
 - [ ] CX Full check run and `RECORRIDO.md`
 
 ## Acceptance (per floor)
