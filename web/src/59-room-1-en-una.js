@@ -8,6 +8,7 @@
 //      the page and the chapter, once (Trial.finish).
 // The words keep the book's own: clue and done are verbatim chapter text; the hints are new prose.
 ROOMS['en-una'] = {
+  water: PLAIN_WATER, // the cover is plain black paper: no reflection, engraved rows, floor light, glints or horizon in the arrival view (see PLAIN_WATER)
   aim: { x: 0, y: 2.2, z: 10, sx: 0.42, sy: 0.4 },
   intro: 'La data baja desde arriba. La ilusión de elegir. El algoritmo ya está escrito.',
   clue: 'La data baja desde arriba. La ilusión de elegir.\nEl algoritmo ya está escrito.\nEl mono te observa desde adentro del vidrio.',

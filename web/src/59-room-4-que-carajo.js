@@ -10,6 +10,7 @@
 //      other button interrupts it), and the page and chapter 4 come out, once.
 // The words keep the book's own: clue and done are verbatim chapter text; the hints are new prose.
 ROOMS['que-carajo'] = {
+  water: PLAIN_WATER, // the cover is plain black paper: no reflection, engraved rows, floor light, glints or horizon in the arrival view (see PLAIN_WATER)
   aim: { x: 0, y: 2.4, z: 10.2, sx: 0.42, sy: 0.47 },
   intro: 'Dos manos levantadas y tres gotas. En el piso, marcas de algo arrastrado.',
   clue: 'Pero pesa distinto cuando lo miro de cerca, cuando lo sostengo con las dos manos en vez de arrastrarlo por la vida.',

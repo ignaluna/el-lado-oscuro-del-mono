@@ -10,6 +10,7 @@
 //      chapter 7 come out, once.
 // The words keep the book's own: clue and done are verbatim chapter text; the hints are new prose.
 ROOMS['no-me-perdones'] = {
+  water: PLAIN_WATER, // the cover is plain black paper: no reflection, engraved rows, floor light, glints or horizon in the arrival view (see PLAIN_WATER)
   aim: { x: NP_SET.x, y: 0.3, z: NP_SET.z, sx: 0.46, sy: 0.56 },
   intro: 'Un vacío negro. Ondas en el agua, una estrella chiquita y un reflejo que baja hacia vos.',
   clue: 'esos castillos de papel que llamé felicidad eran excusas para no detenerme, para no sentir.\nY vos llegaste a decirme, sin palabras, que no hay meta, que solo hay camino.',

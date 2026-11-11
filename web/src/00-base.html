@@ -2134,6 +2134,9 @@ void main(){
 const WATER_FRAG = /* glsl */`
 uniform sampler2D uReflect; uniform vec4 uRip[6]; uniform vec3 uAccent; uniform float uAccentAmt;
 uniform float uSpill; uniform float uPool; uniform float uTremor; uniform float uMirror; uniform float uLamp;
+// a cover room on plain black paper turns parts of the world's water off: x the engraved lines, y the floor's light pool and its tint (and the cabin's spill of light),
+// z the glints, w the water's own tone and its horizon (1 everywhere else; see PLAIN_WATER in 59-room-0.js)
+uniform vec4 uStyle;
 ${GLSL_LIGHTS}
 varying vec3 vW; varying vec4 vRef;
 ${GLSL_NOISE}
@@ -2160,13 +2163,13 @@ void main(){
   vec3 refl = texture2D(uReflect, ruv).rgb;
   float streak = smoothstep(0.22, 0.78, vnoise(vec2(wp.x*0.22, wp.y*2.1 + uTime*0.03)));
   refl *= 0.5 * (0.3 + 0.7*streak) * exp(-dist*0.026) * uMirror;
-  refl = mix(refl, refl*uAccent*1.5, uAccentAmt*0.6);
+  refl = mix(refl, refl*uAccent*1.5, uAccentAmt*uStyle.y*0.6);
 
   float lg = 0.0;
   for(int i=0;i<4;i++){
     float d = length(vW - uPPos[i]);
     float att = pow(clamp(1.0 - d/max(uPRange[i],0.001), 0.0, 1.0), 2.0);
-    lg += att * dot(uPCol[i], vec3(0.33));
+    lg += att * dot(uPCol[i], vec3(0.33)) * (i == 3 ? uStyle.y : 1.0); // (light 3 is the floor's own pool)
   }
   // engraved water lines along world Z
   float zc = (wp.y + hgt*0.22 + sn.x*0.4) / 0.45;
@@ -2176,9 +2179,9 @@ void main(){
   float line = smoothstep(1.0-ww-aa, 1.0-ww+aa, fl);
   line = mix(line, ww*0.5, smoothstep(0.3, 0.9, aa));
   vec3 ivory = vec3(0.92,0.9,0.83);
-  vec3 lineCol = mix(uAccent*1.1, ivory, 1.0 - uAccentAmt*0.6);
-  vec3 col = vec3(0.03,0.028,0.028);
-  col += lineCol * line * (0.055 + min(lg, 1.2)*0.16 + crest*0.55);
+  vec3 lineCol = mix(uAccent*1.1, ivory, 1.0 - uAccentAmt*uStyle.y*0.6);
+  vec3 col = vec3(0.03,0.028,0.028) * uStyle.w;
+  col += lineCol * line * (0.055*uStyle.x + min(lg, 1.2)*0.16*uStyle.x + crest*0.55); // (the crest of a ripple stays: the water still answers)
   col += lineCol * lg * 0.06;
   col += refl;
   // soft light pool in front of the plinth
@@ -2188,7 +2191,7 @@ void main(){
   float zz = wp.y - 0.9; // the light first falls on the steps
   float len = 1.2 + uSpill*9.5;
   float hw = 0.56 + max(zz,0.0)*0.3;
-  float sp = uSpill * smoothstep(hw, hw*0.45, abs(wp.x)) * smoothstep(len, 0.0, zz) * smoothstep(-0.25, 0.25, zz);
+  float sp = uSpill * uStyle.y * smoothstep(hw, hw*0.45, abs(wp.x)) * smoothstep(len, 0.0, zz) * smoothstep(-0.25, 0.25, zz);
   col += vec3(0.95,0.82,0.62) * sp * (0.12 + 0.13*line) * uLamp;
   col += ivory * crest * 0.25;
   // sparse twinkling glints, some prismatic
@@ -2198,9 +2201,9 @@ void main(){
     float tw = pow(0.5+0.5*sin(uTime*(0.5+gh*1.7)+gh*80.0), 8.0);
     float gl = smoothstep(0.09, 0.0, length(wp-c)) * tw;
     vec3 gcol = hash21(gc+9.3) > 0.82 ? 0.5+0.5*cos(6.283*(gh*3.0+vec3(0.0,0.33,0.67))) : ivory;
-    col += gcol * gl * 0.5;
+    col += gcol * gl * 0.5 * uStyle.z;
   }
-  col = mix(col, uVoid, smoothstep(uFog.x, uFog.y, dist));
+  col = mix(col, uVoid * uStyle.w, smoothstep(uFog.x, uFog.y, dist));
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -2213,10 +2216,10 @@ uniform float uSpeed; uniform float uPrism; uniform float uPrismT; uniform float
 varying vec2 vUv;
 ${GLSL_NOISE}
 // scene colour, smeared vertically while the cabin moves
+vec3 smp0(vec2 u){ return texture2D(tScene, u).rgb; }
 vec3 smp(vec2 u){
   if(uSpeed > 0.01){
     vec3 a = vec3(0.0); float sp = uSpeed*0.02;
-vec3 smp0(vec2 u){ return texture2D(tScene, u).rgb; }
     for(int i=-2;i<=2;i++) a += texture2D(tScene, u + vec2(0.0, float(i)*sp)).rgb;
     return a/5.0;
   }

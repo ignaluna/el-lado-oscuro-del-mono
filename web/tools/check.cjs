@@ -2559,6 +2559,9 @@ const SCENARIOS = {
         return { over, box: c, text: e.textContent, inView: c.l >= 0 && c.r <= innerWidth && c.t >= 0 && c.b <= innerHeight, clipped: e.scrollHeight > e.clientHeight + 1 };
       });
       check(!!cap && cap.over.length === 0 && cap.inView && !cap.clipped, `${n}: the arrival line clears the buttons and the player and is whole (${cap ? JSON.stringify({ over: cap.over, box: cap.box, inView: cap.inView, clipped: cap.clipped }) : 'not shown'})`);
+      // a cover is plain black paper: the world's engraved water rows, floor light, glints, horizon and reflection stay off in the arrival view (Room.waterStyle)
+      const wat = (await state(p)).tier.water;
+      check(wat.style.every((v) => v === 0) && wat.mirror === 0, `${n}: the cover is plain black paper: none of the world's water rows, floor light, glints, horizon or reflection (${JSON.stringify(wat)})`);
       let s = await rmState();
       check(s.here && s.id === id && s.set && s.set.segments > W.minSegments && W.built(s.set), `${n}: the cover is built in the world: ${s.set && s.set.segments} chalk lines (${JSON.stringify(s.set)})`);
       check(((await state(p)).portal || {}).dock === 'compact' || p.viewportSize().width < 640, `${n}: the official player waits in the corner (the room is the floor)`);

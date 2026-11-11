@@ -8,6 +8,7 @@
 //      facing the figure. "Siempre te llevan de vuelta a vos." The page and chapter 9 come out, once.
 // The words keep the book's own: clue and done are verbatim chapter text; the hints are new prose.
 ROOMS['portales'] = {
+  water: PLAIN_WATER, // the cover is plain black paper: no reflection, engraved rows, floor light, glints or horizon in the arrival view (see PLAIN_WATER)
   aim: { x: PT_SET.x, y: PT_SET.y, z: PT_SET.z, sx: 0.46, sy: 0.5 },
   intro: 'Un árbol enorme alrededor de un vórtice. Sus raíces bajan hacia vos y, entre ellas, un chico parado en un resplandor.',
   clue: 'quiero creer que algo mío va a quedar acá: en la raíz de un árbol, en el ladrido de un perro, en el eco suave de una guitarra que todavía suena.\nAcá lo invisible se nota: en cómo los vecinos se saludan, en la risa compartida sin motivo.',

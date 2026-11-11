@@ -9,6 +9,7 @@
 //   4. In the silence, at the hole: INHALAR / EXHALAR, three full breaths, at your own pace. Then the page and the chapter, once.
 // The words keep the book's own: clue and done are verbatim chapter text; the hints are new prose.
 ROOMS['que-te-esta-pasando'] = {
+  water: PLAIN_WATER, // the cover is plain black paper: no reflection, engraved rows, floor light, glints or horizon in the arrival view (see PLAIN_WATER)
   aim: { x: 0, y: 2.4, z: 9.2, sx: 0.42, sy: 0.47 },
   intro: 'Todos los caminos van al mismo hueco. Nos obligan a llenarlo.',
   clue: 'Nos obligan a llenarlo. Con plata, con éxito, con amor, con sustancias.\nPero no se llena.\nSe habita.',

@@ -10,6 +10,7 @@
 //   4. When the last tooth is mended the mouth calms and says "perdón.": the page and chapter 3, once.
 // The words keep the book's own: clue and done are verbatim chapter text; the hints are new prose.
 ROOMS['el-lado-oscuro-del-mono'] = {
+  water: PLAIN_WATER, // the cover is plain black paper: no reflection, engraved rows, floor light, glints or horizon in the arrival view (see PLAIN_WATER)
   aim: { x: 0, y: 2.4, z: 9.2, sx: 0.42, sy: 0.47 },
   intro: 'Una boca enorme grita. A veces el cuerpo avisa.',
   clue: 'A veces el cuerpo avisa.\nCalor. Tensión. La palabra empujando.\n“Callate.”',

@@ -18,6 +18,16 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════
 const ROOMS = {};
 
+/**
+ * What of the world's water a room keeps (ROOMS[id].water). The world is a dark pool with engraved lines, a reflection of whatever
+ * stands on it, a tinted light pool of the floor and a few glints. A cover on plain black paper has none of that, so each room says
+ * what stays; a ripple's crest always stays, because the water still answers to a ripple. Every value is 0..1 and omitted ones keep
+ * the world's own (1): lines (the engraved rows), mirror (the reflection), pool (the floor's tinted light and the light the cabin spills), glints, tone (the water's
+ * own dark tone and the paler horizon where it fades: 0 makes the floor the same black as the sky).
+ */
+const WORLD_WATER = { lines: 1, mirror: 1, pool: 1, glints: 1, tone: 1 };
+const PLAIN_WATER = { lines: 0, mirror: 0, pool: 0, glints: 0, tone: 0 }; // the cover is plain black paper: the arrival view is too
+
 const Room = {
   id: null,          // track id of the room being visited (null elsewhere, and always null without the 3D world)
   s: null,           // its saved state
@@ -34,6 +44,8 @@ const Room = {
   track() { return this.id ? trackById(this.id) : null; },
   roomless: false,   // evaluation only (Dev.actions.roomless): every floor is built as a plain world, as if it had no room
   hosts(track) { return !this.roomless && !!(track && ROOMS[track.id]); },
+  /** The water this floor shows (see PLAIN_WATER): the world's own unless the room says otherwise. */
+  waterStyle(track) { const d = track && this.hosts(track) ? ROOMS[track.id] : null; return d && d.water ? { ...WORLD_WATER, ...d.water } : WORLD_WATER; },
   /** The room needs the 3D world (the 2D fallback keeps the plate of Trial). */
   available() { return !!(R && R.kind === '3d' && R.roomPose && this.id); },
   here() { return this.available() && world.phase === 'floor' && !!this.track() && world.floor === this.track().floor; },

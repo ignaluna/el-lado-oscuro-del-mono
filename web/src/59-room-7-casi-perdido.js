@@ -11,6 +11,7 @@
 //      glitter falls and the hand leaves the temple: "Hoy estoy triste. Y no está mal." Then the closing line, the page and chapter 8 come out, once.
 // The words keep the book's own: the clue and the done line are chapter text; the hints and the rest are new prose.
 ROOMS['casi-perdido'] = {
+  water: PLAIN_WATER, // the cover is plain black paper: no reflection, engraved rows, floor light, glints or horizon in the arrival view (see PLAIN_WATER)
   /** The first view looks at the middle of the drawing: the cover's rows are read at the lens of the screen (see the set). */
   get aim() { const a = aspectNow(), L = cpLens(a); return { x: CP_SET.x, y: CP.H + ((L.yh - 520) * CP.Z0) / L.f, z: CP_SET.z, sx: L.wide ? 0.42 : 0.5, sy: 0.5 }; },
   intro: 'Un mono de pelo largo y sonrisa calma se apoya la mano en la sien, y le arde la cabeza: llamas blancas, doradas y plateadas. Un pensamiento sube por el fuego, a su izquierda: tocalo. A los costados, tres ruedas de carga no dejan de girar.',

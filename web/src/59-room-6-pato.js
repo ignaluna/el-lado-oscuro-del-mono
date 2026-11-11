@@ -12,6 +12,7 @@
 /** What his eyelids ask for before each brick: half closed (ceder) or open (pedir). Three and two. */
 const PK_MOODS = ['ceder', 'pedir', 'ceder', 'ceder', 'pedir'];
 ROOMS['pato'] = {
+  water: PLAIN_WATER, // the cover is plain black paper: no reflection, engraved rows, floor light, glints or horizon in the arrival view (see PLAIN_WATER)
   /** The first view looks at the duck: the cover's rows are read at the lens of the screen (see the set). */
   get aim() { const a = aspectNow(), L = pkLens(a); return { x: PK_SET.x, y: PK.H + ((L.yh - 640) * PK.Z0) / L.f, z: PK_SET.z, sx: L.wide ? 0.42 : 0.5, sy: 0.5 }; },
   intro: 'Un pato de párpados pesados fuma un cigarrillo, y el humo se enrosca en un corazón. Cinco globos blancos flotan a su alrededor, algunos detrás de él: acercate a leerlos. A un costado, una casa apenas dibujada, sin ladrillos.',
