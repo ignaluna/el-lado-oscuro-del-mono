@@ -440,7 +440,7 @@ function createRenderer3D(THREE) {
   const postU = {
     tScene: { value: sceneRT.texture }, uRes: { value: new THREE.Vector2(1, 1) }, uTime: { value: 0 }, uExposure: { value: 1 },
     uReduced: { value: 0 }, uSpeed: { value: 0 }, uPrism: { value: 0 }, uPrismT: { value: 0.5 }, uFlick: { value: 1 },
-    uVoid: { value: vecHex(PAPER) }, uBoot: { value: 1 },
+    uVoid: { value: vecHex(PAPER) }, uBoot: { value: 1 }, uClean: { value: 0 },
   };
   const postScene = new THREE.Scene();
   const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -747,6 +747,7 @@ const aspectM = portrait ? 2048 / 300 : 2048 / 150;
     postU.uSpeed.value = w.reduced ? 0 : w.speed; postU.uPrism.value = w.prism; postU.uFlick.value = w.reduced ? 0 : 1;
     postU.uPrismT.value = 0.5 + 0.5 * Math.sin(t * 2.1);
     // light wall behind the DOM player
+    postU.uClean.value = roomObj.built() ? 1 : 0; // a cover room has painted white masses: they get no static (see POST_FRAG)
     const gl = w.glow;
     if (gl.rect && gl.amount > 0.001) placeWall(gl.rect, gl.accent, gl.amount); else wall.visible = false;
     for (const f of ctx.updaters) f(dt, t);
