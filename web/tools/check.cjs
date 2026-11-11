@@ -1597,8 +1597,8 @@ const ROOM_WALKS = {
     midOK: (s) => s.rungs === '0' && s.visual.v.rung[0] === 1 && s.stage === 0, midMsg: 'a reload keeps the rung that was let go (and nothing else)',
   },
   'pato': {
-    floor: 6, chapter: 'cap-5', minSegments: 8000, play: playPato,
-    built: (set) => set.contours > 7000 && set.bubbles === 5 && set.bricks === 5 && set.places === 5,
+    floor: 6, chapter: 'cap-5', minSegments: 10000, play: playPato,
+    built: (set) => set.contours > 10000 && set.bubbles === 5 && set.bricks === 5 && set.places === 5,
     tierBuilt: (set) => set.bubbles === 5 && set.bricks === 5,
     hots: [], // (the bubbles show only near, and the house, the ring and the heart wait for their turn: nothing can be touched from the arrival spot)
     afterSolve: (s) => s.visual.v.fin === 1 && s.visual.v.roof === 1 && s.visual.v.open === 1,
