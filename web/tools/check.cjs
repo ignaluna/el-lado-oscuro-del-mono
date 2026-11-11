@@ -1515,8 +1515,8 @@ const ROOM_WALKS = {
     midOK: (s) => s.cuts === 'sustancias' && s.visual.v.cut[3] === 1 && s.visual.v.quiet === 0, midMsg: 'a reload keeps what was cut (the chimney stays out, the rest runs)',
   },
   'el-lado-oscuro-del-mono': {
-    floor: 3, chapter: 'cap-3', minSegments: 1200, play: playGrito,
-    built: (set) => set.teeth === 19 && set.breakable === 8 && set.shards === 8,
+    floor: 3, chapter: 'cap-3', minSegments: 8000, play: playGrito,
+    built: (set) => set.contours > 8000 && set.teeth === 19 && set.breakable === 8 && set.shards === 8 && set.gold > 40 && set.silver > 30,
     tierBuilt: (set) => set.shards === 8,
     hots: [/^Salpicaduras/, /^El pelo/, /^Una firma/, /^La boca/],
     afterSolve: (s) => s.visual.v.calm === 1 && s.visual.v.word === 1 && s.fixed === s.need,

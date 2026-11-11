@@ -1,209 +1,219 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════
-// FLOOR 3 · «EL LADO OSCURO DEL MONO»  (the cover, as a screaming mouth: white chalk on black, gold and silver teeth)
-//   The drawing is a huge monkey mouth framed by jagged fur and two angry eyes, its teeth gold and silver, several of the
-//   lower ones crossed out with an ✗; a graffiti tag loops out of the mouth; two asterisk stars, ink splatter top left,
-//   "11:11" in a corner. Built as a relief board leaning back toward the visitor (so the whole drawing reads from where
-//   they stand, with the teeth standing out of it), laid out in the cover's own pixels (see P()).
-//   Ambient movement while the mouth screams: the mouth and the fur tremble, the tag grows and shrinks, the splatter shimmers
-//   with heat, the gold glints, a drip falls from the lip. world.room.v holds the targets (the controller, 59-room-3-…, sets
-//   them whole); every value is damped here, so nothing needs a sequence and nothing is left half done.
-//   Tooth shards float on the water around the board: eight spots, as many as there are crossed-out teeth (3 + breaks).
+// FLOOR 3 · «EL LADO OSCURO DEL MONO»  (the cover, as a screaming mouth: white chalk on black, gold and silver glitter on the teeth)
+//   The drawing: a huge monkey mouth seen from the side, framed by jagged fur with hatching and two angry brows; the upper teeth carry grey glitter and a gold
+//   fill, the lower ones small X's and gold fills; a stippled throat and tongue, a drip from the lower lip; a pale tube and a graffiti tag with loops cross out of
+//   the mouth to the right; two asterisk stars; white ink splatter top left; scratches; "11:11" top right. The photo is a black paper taped on an orange graffiti
+//   heart, so the tones were traced from a rectified copy (49-r3d-room-3-el-lado-oscuro-del-mono-art.js): the white and grey tones as contours at five levels,
+//   the gold glitter and the silver glitter segmented apart (colour, and a zone for the silver) and drawn on their own layers, with sparkle points on their grains.
+//   The visitor arrives at the eye that sees the cover (1.6 m high) and every point stands where it projects onto the cover's own pixels from there. Layers share
+//   that eye and each one sits at the depth that suits it; the cover's pixels are split among them with soft masks that add up to one, so from the arrival spot
+//   the sum is the cover, seen frontally, and walking in opens it up:
+//     · the mouth (lips, teeth, throat) is a relief that stands out of the fur toward the visitor, and its teeth are patches of their own,
+//     · the fur is a ring behind it that shivers,
+//     · the tube and the tag are a layer well in front of the mouth that grows and shrinks, freezes and is swallowed,
+//     · the splatter is a layer behind that shimmers with heat; the two stars are layers at their own depths; the drip is a patch that falls from the lip,
+//     · the eight teeth that can break are patches cut from the same tones: the tooth, its ✗ (the cover's own where it has one) and a gold repair with its crack.
+//   world.room.v holds the targets (the controller, 59-room-3-…, sets them whole); every value is damped here, so nothing needs a sequence and nothing is left half done.
+//   Tooth shards float on the water to the sides: eight spots, as many as there are crossed-out teeth (3 + breaks).
 // ═══════════════════════════════════════════════════════════════════════════════════════════
-/** Local frame (metres): +x to the viewer's right, +z toward the visitor, y up. The board leans back by `tilt`. */
-const GRITO_SET = { x: 0, z: 9.2, yc: 2.35, K: 0.0068, tilt: (58 * Math.PI) / 180, o: [470, 880] };
-/** The cover's pixels (the photo is 900 wide) that hotspots and close looks aim at, and how much each look shows (metres). */
-const GRITO_PX = {
-  heat: [228, 652], fur: [236, 850], tag: [560, 815], mouth: [350, 905], pivot: [350, 850],
-  looks: { tinta: { at: [236, 656], w: 1.3, h: 1.05 }, pelo: { at: [240, 846], w: 1.2, h: 2.2 }, firma: { at: [560, 815], w: 2.9, h: 2.2 }, dientes: { at: [350, 880], w: 2.1, h: 3.2 } },
+/** The eye that sees the cover: H its height (m), cx the column straight ahead, Z0 how far (m) the mouth's plane is from the eye, ARR where the visitor arrives (z), BOT the cover row that stands 0.15 m above the floor. */
+const GS = { H: 1.6, cx: 500, Z0: 5.5, ARR: 2.7, BOT: 985 };
+/** Where the visitor stands when a floor opens is the eye; the drawing is Z0 metres ahead of it. */
+const GS_SET = { x: 0, y: 1.6, z: GS.ARR + GS.Z0 };
+/** The lens depends on the screen: a wide one fits the whole paper at 1300 cover px of focal length, a phone's narrow view at 1600. The set's z never changes. */
+function gsLens(a) { const wide = a >= 1.1, f = wide ? 1300 : 1600; return { wide, f, yh: GS.BOT - ((GS.H - 0.15) * f) / GS.Z0, row: wide ? 520 : 560, sx: wide ? 0.42 : 0.5, sy: wide ? 0.48 : 0.46 }; }
+/** The cover's regions (rectified cover pixels, the paper is 1000 square): the lips, the fur's hull, the tag and tube, the splatter, the stars, the drip. */
+const GS_POLY = {
+  MOUTH: [[262, 372], [300, 338], [345, 318], [400, 300], [440, 305], [472, 335], [484, 390], [478, 450], [472, 520], [478, 560], [482, 620], [482, 690], [480, 760], [462, 805], [432, 835], [395, 858], [350, 866], [312, 850], [288, 812], [270, 765], [248, 705], [225, 648], [216, 600], [220, 545], [232, 490], [246, 430]],
+  HULL: [[190, 320], [240, 268], [330, 262], [440, 282], [495, 325], [506, 420], [500, 600], [498, 700], [488, 830], [450, 885], [405, 935], [372, 985], [345, 940], [300, 908], [255, 832], [212, 740], [160, 650], [96, 566], [104, 500], [150, 410]],
+  TAG: [[185, 478], [260, 470], [335, 455], [372, 440], [440, 430], [452, 345], [560, 318], [640, 300], [690, 305], [760, 370], [800, 380], [830, 410], [880, 610], [888, 650], [880, 675], [740, 678], [600, 676], [440, 672], [418, 655], [470, 645], [470, 540], [388, 540], [388, 600], [335, 588], [290, 562], [215, 560], [185, 520]],
+  SPLAT: [[95, 190], [318, 190], [318, 262], [240, 266], [192, 318], [150, 345], [95, 332]],
+  STAR1: [[480, 676], [650, 676], [650, 830], [480, 830]],
+  STAR2: [[640, 745], [885, 745], [885, 905], [640, 905]],
+  DRIP: [[402, 822], [424, 822], [424, 860], [402, 860]],
 };
-/** The teeth: [id, centre x, centre y, width, height, turn (rad), kind] in cover pixels. U = upper row, L and R = the lower columns, B = the bottom row. */
+/** The teeth: [id, centre x, centre y, width, height, turn (rad), kind] in cover pixels. U = upper row, L and R = the lower columns, B = the bottom row (19, as many as the cover shows). */
 const GRITO_TEETH = [
-  ...Array.from({ length: 7 }, (_, i) => ['U' + i, 312 + i * 13, 718 - i * 2.5, 13, 21, -0.13, i === 6 ? 'gold' : i < 4 ? 'silver' : 'white']),
-  ['L0', 290, 868, 21, 21, -0.37, 'white'], ['L1', 302, 893, 21, 21, -0.37, 'white'], ['L2', 312, 922, 21, 21, -0.37, 'white'], ['L3', 318, 948, 21, 21, -0.37, 'white'],
-  ['R0', 390, 855, 21, 21, -0.49, 'white'], ['R1', 402, 877, 21, 21, -0.49, 'gold'], ['R2', 413, 898, 21, 21, -0.49, 'white'],
-  ['B0', 353, 1003, 17, 23, -0.35, 'white'], ['B1', 373, 1007, 17, 23, -0.35, 'gold'], ['B2', 385, 1003, 17, 23, -0.35, 'gold'], ['B3', 400, 990, 17, 23, -0.35, 'white'], ['B4', 413, 977, 17, 23, -0.35, 'white'],
+  ['U0', 268, 390, 26, 34, -0.5, 'silver'], ['U1', 303, 378, 22, 26, -0.2, 'silver'], ['U2', 327, 377, 22, 24, -0.1, 'white'], ['U3', 353, 372, 22, 24, -0.1, 'white'], ['U4', 377, 362, 22, 26, -0.15, 'white'], ['U5', 407, 362, 24, 32, -0.5, 'gold'],
+  ['L0', 272, 583, 24, 26, 0.28, 'white'], ['L1', 284, 619, 24, 26, 0.28, 'white'], ['L2', 299, 658, 24, 28, 0.3, 'white'], ['L3', 308, 695, 24, 26, 0.3, 'white'],
+  ['R0', 408, 566, 24, 26, -0.3, 'white'], ['R1', 425, 598, 22, 24, -0.3, 'gold'], ['R2', 443, 624, 22, 22, -0.3, 'white'], ['R3', 441, 676, 20, 20, 0, 'white'],
+  ['B0', 353, 772, 28, 28, 0.1, 'white'], ['B1', 376, 778, 26, 26, 0.1, 'gold'], ['B2', 400, 770, 26, 28, 0, 'gold'], ['B3', 421, 756, 24, 28, -0.3, 'white'], ['B4', 441, 740, 24, 30, -0.45, 'white'],
 ];
-/** The order in which teeth carry an ✗ (the first three from the start; every break adds the next one). */
+/** The order in which teeth carry an ✗ (the first three from the start; every break adds the next one). The cover draws an ✗ on L0, L1, L2, R0 and R2 itself: those five are cut from its tones, the other three are chalk. */
 const GRITO_BREAK = ['L0', 'L1', 'L2', 'R0', 'R2', 'L3', 'B0', 'B4'];
-/** Where the shards float, in the set's own frame [x, z] (the visitor arrives at z ≈ 6.5, looking toward the board): all to the sides, none in the first view. */
-const GRITO_SHARDS = [[-4.2, 3.0], [4.4, 3.4], [-6.6, 0.2], [6.8, 0.8], [-8.0, 4.8], [8.2, 5.4], [-7.6, -2.6], [7.8, -3.0]];
+const GS_CROSS = 5; // how many of them (the first five) have an ✗ in the cover
+/** Where the shards float, in the set's own frame [x, z] (the visitor arrives at z = 5.5, looking toward the drawing): all to the sides, none in the first view. */
+const GRITO_SHARDS = [[-4.2, 2.0], [4.4, 2.4], [-6.6, -0.8], [6.8, -0.2], [-8.0, 3.8], [8.2, 4.4], [-7.6, -3.6], [7.8, -4.0]];
 
 ROOM_SETS['el-lado-oscuro-del-mono'] = function buildGrito(ctx, kit, track) {
-  const { THREE, V3 } = ctx, RU = kit.RU, S = GRITO_SET, lite = ctx.lite, K = S.K, sT = Math.sin(S.tilt), cT = Math.cos(S.tilt);
-  const rnd = mulberry32(33);
+  const { THREE, V3 } = ctx, RU = kit.RU, lite = ctx.lite, V = GS, Z0 = GS.Z0;
+  const { wide, f, yh } = gsLens(ctx.W / Math.max(1, ctx.H));
   const root = new THREE.Group();
-  root.position.set(S.x, 0, S.z);
-  root.rotation.y = Math.atan2(-S.x, 2.7 - S.z); // the front (+z local) faces the place where the visitor stands
+  root.position.set(GS_SET.x, 0, GS_SET.z);
+  root.rotation.y = Math.PI; // the front (+z local) faces the arrival spot
   const grp = (parent = root, x = 0, y = 0, z = 0) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
-  const W3w = 4.2, W2 = 3.0, W1 = 2.0, W0 = 1.4; // line widths (CSS px)
+  const rnd = mulberry32(33);
+  const W2 = lite ? 1.9 : 2.5, W1 = lite ? 1.2 : 1.6, W0 = 1.2; // chalk line widths (CSS px)
   let segTotal = 0;
-  const lines = (rib, o = {}) => { segTotal += rib.count; return kit.lines(rib, o); };
+  const lines = (rib, o = {}) => { segTotal += rib.count; const L = kit.lines(rib, o); L.core.layers.set(1); return L; }; // (layer 1: not mirrored by the water: the cover has no reflection)
+  const mp = (Z) => Z / f; // metres per cover pixel at depth Z
 
-  // ---- the board: cover pixels (x right, y down) → the set's metres; h lifts a point off the board ----
-  const P = (px, py, h = 0) => { const X = (px - S.o[0]) * K, Y = -(py - S.o[1]) * K; return [X, S.yc + Y * sT + h * cT, -Y * cT + h * sT]; };
-  const EY = [0, sT, -cT], NN = [0, cT, sT]; // up the drawing, and out of it (toward the visitor)
-  const NNv = V3(...NN);
-  const pen = (seed) => {
-    const R = kit.ribbons(seed);
-    const d = {
-      R,
-      seg: (a, b, w = W1, al = 1, h = 0) => R.seg(P(a[0], a[1], h), P(b[0], b[1], h), w, al),
-      poly: (pts, w = W1, al = 1, closed = false, h = 0) => R.poly(pts.map((q) => P(q[0], q[1], h)), w, al, closed),
-      circ: (cx, cy, r, w = W1, al = 1, h = 0, n = 14) => d.poly(Array.from({ length: n }, (_, i) => [cx + Math.cos((i / n) * TAU) * r, cy + Math.sin((i / n) * TAU) * r]), w, al, true, h),
-      /** A tooth: a block standing out of the board (base, top, four edges), turned about its centre. */
-      quad(cx, cy, w, hgt, rot) { const c = Math.cos(rot), s2 = Math.sin(rot); return [[-w / 2, -hgt / 2], [w / 2, -hgt / 2], [w / 2, hgt / 2], [-w / 2, hgt / 2]].map(([x, y]) => [cx + x * c - y * s2, cy + x * s2 + y * c]); },
-      block(q, hh, w = W1, al = 1) { d.poly(q, w, al, true, 0); d.poly(q, w, al, true, hh); for (const [x, y] of q) R.seg(P(x, y, 0), P(x, y, hh), w * 0.8, al); },
-      pill(cx, cy, w, hgt, ww = W1, al = 0.95, h = 0, rot = 0) {
-        const r = w / 2, L = hgt / 2 - r, pts = [], c = Math.cos(rot), s2 = Math.sin(rot), put = (x, y) => pts.push([cx + x * c - y * s2, cy + x * s2 + y * c]);
-        for (let i = 0; i <= 10; i++) { const a = Math.PI + (i / 10) * Math.PI; put(Math.cos(a) * r, -L + Math.sin(a) * r); }
-        for (let i = 0; i <= 10; i++) { const a = (i / 10) * Math.PI; put(Math.cos(a) * r, L + Math.sin(a) * r); }
-        d.poly(pts, ww, al, true, h);
-      },
-      /** An asterisk of uneven arms, drawn as strokes through the centre. */
-      asterisk(cx, cy, lens, rot, ww = W2, al = 1, h = 0) { lens.forEach((L, i) => { const a = rot + (i * TAU) / lens.length; d.seg([cx, cy], [cx + Math.cos(a) * L, cy + Math.sin(a) * L], ww, al, h); }); d.circ(cx, cy, 3, W1, al, h, 8); },
-    };
-    return d;
-  };
-  /** Calls fn(point, tangent, i) every `step` px along a polyline (px space). */
-  const walk = (path, step, fn) => {
-    let acc = 0, idx = 0;
-    for (let i = 0; i < path.length - 1; i++) {
-      const a = path[i], b = path[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, tx = (b[0] - a[0]) / L, ty = (b[1] - a[1]) / L;
-      for (; acc <= L; acc += step) fn([a[0] + tx * acc, a[1] + ty * acc], [tx, ty], idx++);
-      acc -= L;
+  // ---- the cover's pixels → the set (x to the viewer's right, y up, z toward the visitor; the mouth's plane at z = 0) ----
+  const P = (px, py, Z = Z0) => [((px - V.cx) * Z) / f, V.H + ((yh - py) * Z) / f, Z0 - Z];
+  const bump = (px, py, cx, cy, rx, ry) => Math.exp(-(((px - cx) / rx) ** 2 + ((py - cy) / ry) ** 2));
+  /** How far each layer is from the eye. The mouth stands out of the fur toward the visitor; the tag floats well in front of it; the splatter and the paper are behind. */
+  const Zm = (px, py) => Z0 - 0.8 * bump(px, py, 350, 620, 140, 300);
+  const Zf = (px, py) => Z0 + 0.1 - 0.3 * bump(px, py, 350, 620, 220, 340);
+  const ZT = Z0 - 1.5, ZS1 = Z0 - 0.3, ZS2 = Z0 + 0.5, ZSP = Z0 + 0.6, ZBG = Z0 + 1.2;
+
+  // ───────────────────────────── the tones: the photo's own contours, painted into textures ─────────────────────────────
+  const loops = gaDecode().filter((lp) => lp.a >= (lite ? (lp.l < 5 ? 36 : 14) : 0));
+  loops.forEach((lp) => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const p of lp.pts) { a = Math.min(a, p[0]); b = Math.min(b, p[1]); c = Math.max(c, p[0]); d = Math.max(d, p[1]); } lp.bb = [a, b, c, d]; });
+  const tonePts = loops.reduce((n, lp) => n + lp.pts.length, 0);
+  const TS = lite ? 1.05 : 1.7; // texture pixels per cover pixel
+  const GAIN = 1.0; // (the traced levels are already the cover's tones, lifted)
+  const pathOf = (pts) => { const p = new Path2D(); pts.forEach((q, i) => (i ? p.lineTo(q[0], q[1]) : p.moveTo(q[0], q[1]))); p.closePath(); return p; };
+  const GREY = { 5: 150, 6: 215, 7: 255, 8: 88, 9: 225 }; // (the grey each glitter group is painted with: its layer's tint makes it gold or silver)
+  const tones = (c, r, groups, gain) => {
+    for (const l of groups) {
+      const path = new Path2D(); let any = false;
+      for (const lp of loops) {
+        if (lp.l !== l || lp.bb[2] < r[0] || lp.bb[0] > r[2] || lp.bb[3] < r[1] || lp.bb[1] > r[3]) continue;
+        lp.pts.forEach((p, i) => (i ? path.lineTo(p[0], p[1]) : path.moveTo(p[0], p[1]))); path.closePath(); any = true;
+      }
+      if (!any) continue;
+      const g = Math.min(255, Math.round(l < 5 ? GA_FILL[l] * gain : GREY[l])); c.fillStyle = `rgb(${g},${g},${g})`; c.fill(path, 'evenodd');
+      if (l < 5) { c.strokeStyle = c.fillStyle; c.lineWidth = lite ? 0.8 : 0.6; c.lineJoin = 'round'; c.stroke(path); } // (the cover's strokes are a little bolder than their traced edges)
     }
   };
-  const spline = (pts, n = 7, closed = false) => {
-    const out = [], m = pts.length, at = (i) => (closed ? pts[((i % m) + m) % m] : pts[Math.max(0, Math.min(m - 1, i))]);
-    for (let i = 0; i < (closed ? m : m - 1); i++) {
-      const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
-      for (let k = 0; k < n; k++) { const t = k / n, t2 = t * t, t3 = t2 * t; out.push([0, 1].map((c) => 0.5 * (2 * p1[c] + (-p0[c] + p2[c]) * t + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * t2 + (-p0[c] + 3 * p1[c] - 3 * p2[c] + p3[c]) * t3))); }
+  /** A soft mask (alpha) over a rectangle of the cover: polygons filled and blurred (blur in cover px). */
+  const maskOf = (w, hh, r, polys, blur, ts) => {
+    const m = document.createElement('canvas'); m.width = w; m.height = hh; const c = m.getContext('2d');
+    if (blur && 'filter' in c) c.filter = `blur(${(blur * ts).toFixed(1)}px)`;
+    c.scale(w / (r[2] - r[0]), hh / (r[3] - r[1])); c.translate(-r[0], -r[1]); c.fillStyle = '#fff';
+    for (const p of polys) c.fill(pathOf(p));
+    return m;
+  };
+  /**
+   * A texture painted from the tones inside a rectangle of the cover. groups: which levels; masks: [['in'|'out', polygons, blur], …] applied in order (the layers'
+   * weights add up to one, so each stroke is drawn once in all); ts scales the resolution. A soft glow is added around every bright band.
+   */
+  const region = (r, o = {}) => { const ts = TS * (o.ts || 1); return ctx.canvasTex(Math.max(4, Math.round((r[2] - r[0]) * ts)), Math.max(4, Math.round((r[3] - r[1]) * ts)), (c, w, hh) => {
+    const wc = document.createElement('canvas'); wc.width = w; wc.height = hh; const k = wc.getContext('2d');
+    k.save(); k.scale(w / (r[2] - r[0]), hh / (r[3] - r[1])); k.translate(-r[0], -r[1]);
+    tones(k, r, o.groups || [0, 1, 2, 3, 4], o.gain || GAIN);
+    k.restore();
+    for (const [mode, polys, blur] of o.masks || []) { k.globalCompositeOperation = mode === 'in' ? 'destination-in' : 'destination-out'; k.drawImage(maskOf(w, hh, r, polys, blur, ts), 0, 0); }
+    c.fillStyle = '#000'; c.fillRect(0, 0, w, hh); c.drawImage(wc, 0, 0);
+    if ('filter' in c && (o.glow ?? 0.15) > 0) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = o.glow ?? 0.15; c.filter = `blur(${((2.6 * ts) / 1.7).toFixed(1)}px)`; c.drawImage(c.canvas, 0, 0); c.restore(); } // a soft glow around every bright band
+  }); };
+  const mat = (tex, tint = [0.96, 0.95, 0.98]) => { const u = { uTex: { value: tex }, uAlpha: { value: 1 }, uReveal: { value: 1 }, uTint: { value: V3(...tint) } }; return { u, m: ctx.glowMat(TEXT_FRAG, u) }; };
+  /** A grid mesh over a cover rectangle whose every vertex sits on its pixel's ray at a depth `Zf(px, py)` (relative to `origin`, a point of the set); returns its geometry data. */
+  const gridMesh = (r, nx, ny, Zf, tex, host = root, origin = [0, 0, 0], tint) => {
+    const n = (nx + 1) * (ny + 1), base = new Float32Array(n * 3), uv = new Float32Array(n * 2), idx = [], pxy = new Float32Array(n * 2);
+    for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) {
+      const px = r[0] + ((r[2] - r[0]) * i) / nx, py = r[1] + ((r[3] - r[1]) * j) / ny, k = j * (nx + 1) + i, p = P(px, py, Zf(px, py));
+      base.set([p[0] - origin[0], p[1] - origin[1], p[2] - origin[2]], k * 3); pxy[k * 2] = px; pxy[k * 2 + 1] = py; uv[k * 2] = i / nx; uv[k * 2 + 1] = 1 - j / ny;
     }
-    if (!closed) out.push(pts[pts.length - 1]);
-    return out;
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const a = j * (nx + 1) + i, b = a + 1, c2 = a + nx + 1, d = c2 + 1; idx.push(a, c2, b, b, c2, d); }
+    const geo = ctx.keep(new THREE.BufferGeometry()), attr = new THREE.BufferAttribute(new Float32Array(base), 3);
+    geo.setAttribute('position', attr); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geo.setIndex(idx);
+    const M = mat(tex, tint), mesh = new THREE.Mesh(geo, M.m); mesh.frustumCulled = false; mesh.layers.set(1); host.add(mesh); // (layer 1: not mirrored by the water: the cover has no reflection)
+    return { mesh, attr, base, pxy, u: M.u, nx, ny, r, n };
   };
-  /** Hair: a jagged line that follows a path (clockwise on screen: the push is outward), every `step` px alternating between the path and a tuft. */
-  const furZig = (path, amp, step, seed, inward = 0) => {
-    const r = mulberry32(seed), pts = [];
-    walk(path.concat([path[0]]), step, (p, t, i) => {
-      const nx = t[1], ny = -t[0], a = amp * (0.5 + r()), o = (i % 2 ? a : -a * 0.2) - inward, j = (r() - 0.5) * step * 0.6;
-      pts.push([p[0] + nx * o + t[0] * j, p[1] + ny * o + t[1] * j]);
-    });
-    return pts;
-  };
-  const dots = { white: [], gold: [], silver: [] }; // sprite rows: [x, y, z, size, alpha, seed, kind]
-  const dot = (list, x, y, h, sz, al = 0.9) => { const p = P(x, y, h); list.push([p[0], p[1], p[2], sz, al, rnd(), 0]); };
 
-  // ───────────────────────────── the paper, scratches and flecks (the part that does not move) ─────────────────────────────
-  const C = pen(7);
-  C.poly([[100, 440], [815, 440], [815, 1175], [100, 1175]], 1.6, 0.35, true);
-  for (const [a, b] of [[[330, 521], [386, 516]], [[521, 545], [562, 539]], [[150, 1148], [236, 1128]], [[580, 1121], [700, 1129]], [[120, 760], [164, 760]], [[650, 590], [706, 640]]]) C.seg(a, b, W0, 0.28);
-  for (const [a, b] of [[[440, 650], [482, 688]], [[598, 626], [664, 664]], [[651, 700], [676, 748]], [[420, 678], [470, 700]]]) walk([a, b], 6, (p) => dot(dots.white, p[0], p[1], 0, 0.016, 0.85));
-  for (const [x, y, s2] of [[212, 632, 0.07], [241, 607, 0.05], [281, 604, 0.05], [528, 517, 0.035], [150, 600, 0.03], [196, 622, 0.035]]) dot(dots.white, x, y, 0, s2, 0.95);
-  const cityL = lines(C.R, { glow: true }); root.add(cityL.obj);
+  const quad = (cx, cy, w, hgt, rot) => { const c = Math.cos(rot), s2 = Math.sin(rot); return [[-w / 2, -hgt / 2], [w / 2, -hgt / 2], [w / 2, hgt / 2], [-w / 2, hgt / 2]].map(([x, y]) => [cx + x * c - y * s2, cy + x * s2 + y * c]); };
+  const circle = (cx, cy, r, n = 16) => Array.from({ length: n }, (_, i) => [cx + Math.cos((i / n) * TAU) * r, cy + Math.sin((i / n) * TAU) * r]);
+  const teethOf = (ids) => ids.map((id) => GRITO_TEETH.find((t) => t[0] === id));
+  const BR = teethOf(GRITO_BREAK); // the teeth that can break, in order
+  const toothMask = (t) => quad(t[1], t[2], t[3] + 8, t[4] + 8, t[5]);
+  const crossMask = (t) => circle(t[1], t[2], 11);
+  const around = (t) => [t[1] - 26, t[2] - 26, t[1] + 26, t[2] + 26];
 
-  // ───────────────────────────── the mouth (it trembles as a whole): lips, gum, teeth, throat ─────────────────────────────
+  // ───────────────────────────── the layers (each its own texture on the cover's rays) ─────────────────────────────
+  const G_POLY = GS_POLY, hasX = (k) => k < GS_CROSS;
+  const NX = (a, b) => (lite ? a : b);
+  // the paper: scratches and flecks that do not move (everything outside the fur, the tag, the stars and the splatter)
+  const BG_R = [22, 22, 978, 978];
+  const bg = gridMesh(BG_R, 10, 10, () => ZBG, region(BG_R, { ts: 0.4, masks: [['out', [G_POLY.HULL], 6], ['out', [G_POLY.TAG], 5], ['out', [G_POLY.STAR1], 6], ['out', [G_POLY.STAR2], 6], ['out', [G_POLY.SPLAT], 5]] }));
+  // the fur: a ring around the mouth, behind it (it shivers)
+  const FUR_R = [92, 255, 512, 988];
+  const fur = gridMesh(FUR_R, NX(18, 26), NX(30, 44), Zf, region(FUR_R, { masks: [['in', [G_POLY.HULL], 6], ['out', [G_POLY.MOUTH], 5], ['out', [G_POLY.TAG], 5]] }));
+  // the mouth: lips, gum, throat; the teeth that can break and the drip are cut out of it (they are patches of their own)
+  const MOUTH_R = [205, 285, 505, 880];
   const mouthG = grp(root);
-  const M = pen(8);
-  const LIP = [[283, 730], [285, 703], [300, 687], [333, 677], [373, 670], [400, 670], [417, 687], [418, 730], [417, 770], [413, 807], [417, 853], [430, 903], [433, 953], [423, 987], [407, 1013], [373, 1033], [340, 1037], [317, 1023], [300, 997], [290, 953], [277, 913], [267, 873], [263, 837], [267, 807], [277, 770]];
-  const lipS = spline(LIP, 5, true), MC = [348, 855];
-  M.poly(lipS, W3w, 1, true);
-  M.poly(lipS.map(([x, y]) => [MC[0] + (x - MC[0]) * 0.9, MC[1] + (y - MC[1]) * 0.9]), W1, 0.85, true);
-  M.poly(spline([[283, 730], [310, 698], [357, 687], [387, 683], [417, 697]], 6), W2, 0.9); // the upper gum
-  M.poly(spline([[277, 860], [310, 987], [350, 1027], [400, 1017], [427, 973], [430, 903]], 6), W1, 0.8); // the lower lip, inside
-  M.poly(spline([[373, 710], [387, 753], [400, 807], [407, 853]], 5), W1, 0.85); M.poly(spline([[400, 707], [413, 753], [417, 807]], 5), W1, 0.8); // the strap of the cheek
-  for (const [a, b, c2] of [[[327, 737], [336, 750], [330, 768]], [[343, 733], [352, 748], [346, 766]], [[360, 742], [354, 756], [362, 772]]]) M.poly(spline([a, b, c2], 4), W0, 0.55); // inside, a curl
-  M.poly([[298, 680], [322, 667], [323, 685]], W2, 1, true); M.poly([[335, 676], [358, 660], [358, 679]], W2, 1, true); // the angry eyes
-  for (const [a, b] of [[[290, 655], [309, 645]], [[304, 651], [324, 640]], [[320, 655], [342, 642]], [[345, 652], [364, 640]], [[366, 650], [388, 641]]]) M.seg(a, b, W1, 0.9); // brows
-  // the teeth, standing out of the board
-  const TH = 0.04, toothQ = {};
-  const rounded = (q, r) => q.flatMap((c, i) => { const a = q[(i + 3) % 4], b = q[(i + 1) % 4], la = Math.hypot(a[0] - c[0], a[1] - c[1]), lb = Math.hypot(b[0] - c[0], b[1] - c[1]); return [[c[0] + ((a[0] - c[0]) * r) / la, c[1] + ((a[1] - c[1]) * r) / la], [c[0] + ((b[0] - c[0]) * r) / lb, c[1] + ((b[1] - c[1]) * r) / lb]]; });
-  for (const t of GRITO_TEETH) { // a tooth: a rounded block, its crown above its root (the relief)
-    const q = M.quad(t[1], t[2], t[3], t[4], t[5]), rq = rounded(q, 3.2); toothQ[t[0]] = q;
-    M.poly(rq, W1, 0.5, true, 0); M.poly(rq, W1 * 1.15, 1, true, TH);
-    if (!lite) M.poly(rounded(M.quad(t[1], t[2], t[3] * 0.55, t[4] * 0.55, t[5]), 2), W0, 0.45, true, TH);
-  }
-  const mouthL = lines(M.R, { glow: true }); mouthG.add(mouthL.obj);
-  // the glitter: gold fills the gold teeth, silver the upper left; each tooth has its own sprinkle
-  const sprinkle = (list, q, n, sz) => { const cx = (q[0][0] + q[2][0]) / 2, cy = (q[0][1] + q[2][1]) / 2; for (let i = 0; i < n; i++) { const u = rnd(), v = rnd(), x = lerp(lerp(q[0][0], q[1][0], u), lerp(q[3][0], q[2][0], u), v), y = lerp(lerp(q[0][1], q[1][1], u), lerp(q[3][1], q[2][1], u), v); dot(list, x, y, TH + 0.012, sz * (0.7 + rnd() * 0.6), 0.9); } return [cx, cy]; };
-  const goldCentres = [], silverCentres = [];
-  for (const t of GRITO_TEETH) {
-    if (t[6] === 'gold') goldCentres.push(sprinkle(dots.gold, toothQ[t[0]], lite ? 7 : 14, 0.03));
-    else if (t[6] === 'silver') silverCentres.push(sprinkle(dots.silver, toothQ[t[0]], lite ? 3 : 6, 0.022));
-  }
-  for (let i = 0; i < (lite ? 5 : 11); i++) dot(dots.silver, 284 + rnd() * 20, 712 + rnd() * 20, 0.02, 0.02 + rnd() * 0.012, 0.85); // the silver on the upper left lip
-  { // the throat: a dotted tongue (dark and stippled) and the dots on the dark
-    const n = lite ? 60 : 150;
-    for (let i = 0; i < n; i++) { const a = rnd() * TAU, r2 = Math.sqrt(rnd()); dot(dots.white, 352 + Math.cos(a) * 46 * r2, 937 + Math.sin(a) * 36 * r2, 0.01, 0.012 + rnd() * 0.007, 0.8); }
-  }
-  const mouthGold = kit.points(dots.gold, { shape: 0, twinkle: 0.9, tint: [1, 0.78, 0.28] }); mouthG.add(mouthGold.obj);
-  const mouthGlit = kit.points(goldCentres.map((c, i) => { const p = P(c[0], c[1], TH + 0.03); return [p[0], p[1], p[2], 0.2, 0.9, i * 0.23, 0]; }), { shape: 3, twinkle: 0.95, tint: [1, 0.85, 0.45] }); mouthG.add(mouthGlit.obj);
-  const mouthSilver = kit.points(dots.silver, { shape: 0, twinkle: 0.9, tint: [0.8, 0.88, 1] }); mouthG.add(mouthSilver.obj);
-  const silverGlit = kit.points(silverCentres.map((c, i) => { const p = P(c[0], c[1], TH + 0.03); return [p[0], p[1], p[2], 0.12, 0.8, i * 0.31, 0]; }), { shape: 3, twinkle: 0.95, tint: [0.85, 0.92, 1] }); mouthG.add(silverGlit.obj);
-  // the crossed-out teeth (an ✗ each, drawn in as the teeth break) and the repairs (gold: a rim and a crack, like kintsugi)
+  const mouth = gridMesh(MOUTH_R, NX(16, 24), NX(26, 40), Zm, region(MOUTH_R, { masks: [['in', [G_POLY.MOUTH], 5], ['out', [G_POLY.TAG], 5], ['out', BR.map(toothMask).concat([G_POLY.DRIP]), 1.4]] }), mouthG);
+  // the gold and the silver glitter of the mouth: their own layers (warm and cool), on the mouth's relief
+  const goldR = [335, 320, 475, 815], silR = [250, 350, 325, 425];
+  const gold = gridMesh(goldR, NX(10, 14), NX(22, 32), (x, y) => Zm(x, y) - 0.03, region(goldR, { groups: [5, 6, 7], ts: 1.5, glow: 0.2, masks: [['in', [G_POLY.MOUTH], 4], ['out', [G_POLY.TAG], 5]] }), mouthG, [0, 0, 0], [1.28, 0.93, 0.38]);
+  const silver = gridMesh(silR, 8, 8, (x, y) => Zm(x, y) - 0.02, region(silR, { groups: [8, 9], ts: 1.6, glow: 0.2, masks: [['in', [G_POLY.MOUTH], 4]] }), mouthG, [0, 0, 0], [0.9, 0.95, 1.02]);
+  // the tooth patches: the tooth as the cover has it (without its ✗), the cover's own ✗ where it has one, and a gold repair
+  const toothP = BR.map((t) => {
+    const r = around(t), masks = [['in', [toothMask(t)], 1.4]]; if (hasX(BR.indexOf(t))) masks.push(['out', [crossMask(t)], 1.2]);
+    return gridMesh(r, 3, 3, Zm, region(r, { ts: 1.7, masks }), mouthG);
+  });
+  const crossP = BR.map((t, k) => (hasX(k) ? gridMesh(around(t), 3, 3, (x, y) => Zm(x, y) - 0.015, region(around(t), { ts: 1.7, masks: [['in', [crossMask(t)], 1.2]] }), mouthG) : null));
+  const goldTooth = (t) => ctx.canvasTex(96, 96, (c, w, hh) => { // a gold tooth painted in grey (the layer's tint makes it gold): a rounded block, shaded, with grains
+    c.fillStyle = '#000'; c.fillRect(0, 0, w, hh);
+    const q = quad(48, 48, (t[3] + 2) * 2.1, (t[4] + 2) * 2.1, 0), g = c.createLinearGradient(0, 22, 0, 74); g.addColorStop(0, '#f2f2f2'); g.addColorStop(1, '#9c9c9c');
+    c.save(); c.translate(48, 48); c.rotate(t[5]); c.translate(-48, -48); c.fillStyle = g; c.beginPath(); c.roundRect(q[0][0], q[0][1], q[1][0] - q[0][0], q[2][1] - q[1][1], 10); c.fill();
+    const r2 = mulberry32(5 + Math.round(t[1])); for (let i = 0; i < 70; i++) { c.fillStyle = `rgba(255,255,255,${0.25 + r2() * 0.5})`; c.fillRect(q[0][0] + r2() * (q[1][0] - q[0][0]), q[0][1] + r2() * (q[2][1] - q[1][1]), 2 + r2() * 3, 2 + r2() * 3); }
+    c.restore();
+  });
+  const fixP = BR.map((t) => { const r = around(t), G = gridMesh(r, 3, 3, (x, y) => Zm(x, y) - 0.04, goldTooth(t), mouthG, [0, 0, 0], [1.28, 0.93, 0.38]); G.u.uAlpha.value = 0; return G; });
+  // the drip: the patch that falls from the lower lip
+  const DRIP_R = [398, 818, 428, 862];
+  const dripHost = grp(mouthG), dripP = gridMesh(DRIP_R, 3, 3, Zm, region(DRIP_R, { ts: 2, masks: [['in', [G_POLY.DRIP], 1]] }), dripHost);
+  // the tube and the tag: well in front of the mouth, scaling about the tube's base (it grows and shrinks, freezes half out, is swallowed)
+  const TAG_R = [180, 290, 895, 700], TAG_PIV = [300, 515], tagC = P(TAG_PIV[0], TAG_PIV[1], ZT);
+  const tagHost = grp(root, tagC[0], tagC[1], tagC[2]);
+  const tag = gridMesh(TAG_R, NX(16, 22), NX(10, 14), () => ZT, region(TAG_R, { masks: [['in', [G_POLY.TAG], 5]] }), tagHost, tagC);
+  // the two stars, each at its own depth
+  const S1_R = [470, 668, 660, 838], S2_R = [630, 738, 892, 912];
+  const star1 = gridMesh(S1_R, 6, 6, () => ZS1, region(S1_R, { masks: [['in', [G_POLY.STAR1], 6]] }));
+  const star2 = gridMesh(S2_R, 6, 6, () => ZS2, region(S2_R, { masks: [['in', [G_POLY.STAR2], 6]] }));
+  // the splatter (top left): behind everything, it shimmers with heat
+  const SP_R = [88, 184, 326, 352];
+  const splat = gridMesh(SP_R, NX(12, 18), NX(8, 12), () => ZSP, region(SP_R, { masks: [['in', [G_POLY.SPLAT], 5]] }), root, [0, 0, 0], [0.97, 0.94, 0.9]);
+  segTotal += tonePts; // (every contour edge is a chalk line of the drawing)
+
+  // ───────────────────────────── chalk: what is told (the ✗ of the three teeth the cover has none on, the repairs, the shards) ─────────────────────────────
+  const poly3 = (R, pts, w, al, closed = false) => R.poly(pts.map(([x, y]) => { const p = P(x, y, Zm(x, y) - 0.05); return p; }), w, al, closed);
   const crossL = [], repairL = [], repairRows = [], repairGlitRows = [];
-  GRITO_BREAK.forEach((id, k) => {
-    const t = GRITO_TEETH.find((x) => x[0] === id), q = toothQ[id], X = pen(40 + k), G = pen(60 + k), r2 = mulberry32(90 + k);
-    const [cx, cy] = [t[1], t[2]], e = (a, b, w) => X.seg([cx + a[0] * t[3] * 0.3, cy + a[1] * t[4] * 0.3], [cx + b[0] * t[3] * 0.3, cy + b[1] * t[4] * 0.3], w, 1, TH + 0.01);
-    e([-1, -1], [1, 1], W2); e([1, -1], [-1, 1], W2);
-    G.poly(q, W2, 1, true, TH + 0.012);
-    G.poly([[cx - t[3] * 0.2, cy - t[4] * 0.45], [cx + t[3] * 0.08, cy - t[4] * 0.18], [cx - t[3] * 0.1, cy + t[4] * 0.02], [cx + t[3] * 0.18, cy + t[4] * 0.24], [cx, cy + t[4] * 0.46]], W2, 1, false, TH + 0.015);
-    crossL.push(lines(X.R, { glow: true })); repairL.push(lines(G.R, { glow: true, tint: [1, 0.8, 0.34] }));
-    mouthG.add(crossL[k].obj, repairL[k].obj);
-    const rows = []; for (let i = 0; i < (lite ? 6 : 12); i++) { const p = P(cx + (r2() - 0.5) * t[3] * 0.8, cy + (r2() - 0.5) * t[4] * 0.8, TH + 0.014); rows.push([p[0], p[1], p[2], 0.03 + r2() * 0.014, 0.95, r2(), 0]); }
-    { const p = P(cx, cy, TH + 0.03); repairGlitRows.push([p[0], p[1], p[2], 0.2, 0.95, r2(), 0]); }
+  BR.forEach((t, k) => {
+    const X = kit.ribbons(40 + k), G = kit.ribbons(60 + k), r2 = mulberry32(90 + k), [cx, cy] = [t[1], t[2]], e = (a, b, w) => poly3(X, [[cx + a[0] * t[3] * 0.3, cy + a[1] * t[4] * 0.3], [cx + b[0] * t[3] * 0.3, cy + b[1] * t[4] * 0.3]], w, 1);
+    if (!hasX(k)) { e([-1, -1], [1, 1], W2); e([1, -1], [-1, 1], W2); }
+    poly3(G, quad(cx, cy, t[3], t[4], t[5]), W2, 1, true);
+    poly3(G, [[cx - t[3] * 0.2, cy - t[4] * 0.45], [cx + t[3] * 0.08, cy - t[4] * 0.18], [cx - t[3] * 0.1, cy + t[4] * 0.02], [cx + t[3] * 0.18, cy + t[4] * 0.24], [cx, cy + t[4] * 0.46]], W2, 1);
+    const xl = hasX(k) ? null : lines(X, { glow: true }), gl = lines(G, { glow: true, tint: [1, 0.8, 0.34] });
+    crossL.push(xl); repairL.push(gl); if (xl) mouthG.add(xl.obj); mouthG.add(gl.obj);
+    const rows = []; for (let i = 0; i < (lite ? 6 : 12); i++) { const px = cx + (r2() - 0.5) * t[3] * 0.8, py = cy + (r2() - 0.5) * t[4] * 0.8, p = P(px, py, Zm(px, py) - 0.07); rows.push([p[0], p[1], p[2], 0.03 + r2() * 0.014, 0.95, r2(), 0]); }
+    { const p = P(cx, cy, Zm(cx, cy) - 0.09); repairGlitRows.push([p[0], p[1], p[2], 0.2, 0.95, r2(), 0]); }
     repairRows.push(rows);
   });
   const repairPts = kit.points(repairRows.flat(), { shape: 0, twinkle: 0.9, tint: [1, 0.8, 0.3] }); mouthG.add(repairPts.obj);
   const repairGlit = kit.points(repairGlitRows, { shape: 3, twinkle: 0.95, tint: [1, 0.86, 0.5] }); mouthG.add(repairGlit.obj);
   const perRepair = repairRows[0].length;
 
-  // ───────────────────────────── the fur (it bristles): jagged outlines and short hairs ─────────────────────────────
-  const SIL = [[223, 807], [220, 730], [243, 683], [267, 670], [310, 660], [345, 655], [387, 653], [427, 670], [433, 720], [436, 800], [440, 920], [440, 1003], [427, 1037], [387, 1063], [363, 1113], [345, 1090], [320, 1087], [300, 1053], [277, 970], [257, 937], [243, 887], [230, 853]];
-  const silS = spline(SIL, 5, true), F = pen(9);
-  F.poly(furZig(silS, 6, 8, 71), W1, 1);
-  if (!lite) F.poly(furZig(silS, 3, 9, 72, 8), W0, 0.55);
-  for (let i = 0; i < (lite ? 8 : 18); i++) { const y = 742 + i * 10.5 + rnd() * 4, x0 = 219 + rnd() * 6; F.seg([x0, y], [x0 + 13 + rnd() * 5, y - 8 - rnd() * 3], W0, 0.7); } // hair on the left cheek
-  for (let i = 0; i < (lite ? 5 : 10); i++) { const y = 700 + i * 20 + rnd() * 6; F.seg([436, y], [446 + rnd() * 4, y - 6], W0, 0.6); } // and on the right
-  const furL = lines(F.R, { glow: true });
-  const pivot = P(GRITO_PX.pivot[0], GRITO_PX.pivot[1], 0), furHost = grp(root, pivot[0], pivot[1], pivot[2]);
-  furL.obj.position.set(-pivot[0], -pivot[1], -pivot[2]); furHost.add(furL.obj);
+  // glitter: sparkle points on the brightest grains of the gold and of the silver, twinkling
+  const glitterRows = (pts, size, dz) => pts.map(([x, y, b]) => { const p = P(x, y, Zm(x, y) - dz); return [p[0], p[1], p[2], size * (0.7 + rnd() * 0.8), 0.45 + 0.55 * (b / 255), rnd(), 0]; });
+  const goldPts = GA_GOLD_PTS.filter((_, i) => !lite || i % 2 === 0), silPts = GA_SIL_PTS.filter((_, i) => !lite || i % 2 === 0);
+  const goldG = kit.points(glitterRows(goldPts, 0.045, 0.06), { shape: 3, twinkle: 0.95, tint: [1.2, 0.9, 0.42] });
+  const silG = kit.points(glitterRows(silPts, 0.04, 0.05), { shape: 3, twinkle: 0.95, tint: [0.9, 0.97, 1.1] });
+  mouthG.add(goldG.obj); mouthG.add(silG.obj);
+  const bigSpark = (list, tint) => kit.points(list.map(([x, y], i) => { const p = P(x, y, Zm(x, y) - 0.1); return [p[0], p[1], p[2], tint === 0 ? 0.2 : 0.13, 0.9, i * 0.27, 0]; }), { shape: 3, twinkle: 0.95, tint: tint === 0 ? [1, 0.85, 0.45] : [0.85, 0.92, 1] });
+  const goldGlit = bigSpark([[407, 362], [425, 598], [376, 778], [400, 770]], 0), silGlit = bigSpark([[268, 390], [303, 378]], 1);
+  mouthG.add(goldGlit.obj); mouthG.add(silGlit.obj);
 
-  // ───────────────────────────── the tag: a tube and the scribble that come out of the mouth (it grows, freezes, is swallowed) ─────────────────────────────
-  const TG = pen(12);
-  const TAG = [
-    [[428, 790], [427, 750], [432, 720], [447, 700], [467, 697], [482, 713], [485, 740], [480, 773], [472, 797]],
-    [[477, 787], [487, 763], [507, 750], [530, 748], [542, 763], [537, 787], [517, 803], [483, 797], [440, 790]],
-    [[352, 834], [400, 797], [433, 790], [483, 787], [533, 797], [573, 827], [580, 873], [560, 893], [500, 887], [450, 880], [413, 907], [385, 925]],
-    [[385, 925], [450, 920], [517, 922], [580, 917], [582, 887], [543, 883], [483, 885], [410, 910], [380, 926]],
-    [[533, 807], [543, 740], [560, 693], [573, 672], [573, 740], [573, 883]],
-    [[547, 822], [600, 820], [650, 819], [660, 826], [650, 834], [620, 830]],
-    [[587, 827], [607, 773], [620, 747], [630, 750], [620, 797], [617, 820]],
-    [[633, 723], [667, 813], [690, 880], [713, 933], [728, 897]],
-    [[637, 760], [663, 800], [677, 827], [667, 900]],
-    [[583, 893], [607, 900], [633, 897], [657, 873], [663, 840], [653, 820]],
-  ];
-  TAG.forEach((pts, i) => TG.poly(spline(pts, 4), i < 4 ? W3w : W2, 1));
-  TG.pill(300, 825, 26, 120, W2, 1, 0, Math.atan2(20, 100) + Math.PI / 2); // the pale tube it comes out of, with its hatching
-  for (let i = -2; i <= 2; i++) TG.seg([252 + i * 1.2, 817 + i * 4.4], [344 + i * 1.2, 837 + i * 4.4], W0, 0.5);
-  const tagL = lines(TG.R, { glow: true });
-  const tagC = P(350, 835, 0), tagHost = grp(root, tagC[0], tagC[1], tagC[2]);
-  tagL.obj.position.set(-tagC[0], -tagC[1], -tagC[2]); tagHost.add(tagL.obj);
+  // heat over the splatter: warm specks that rise from it
+  const heatRows = []; for (let i = 0; i < (lite ? 12 : 28); i++) { const px = 110 + rnd() * 190, py = 200 + rnd() * 130, p = P(px, py, ZSP - 0.05); heatRows.push([p[0], p[1], p[2], 0.05 + rnd() * 0.04, 0.9, i / (lite ? 12 : 28), 0]); }
+  const heat = kit.points(heatRows, { shape: 0, mode: 1, rise: [0, 0.4, 0], speed: 0.12, spread: 0.1, tint: [1, 0.78, 0.55] }); root.add(heat.obj);
 
-  // ───────────────────────────── the two stars, and 11:11 ─────────────────────────────
-  const s1Pen = pen(14), s2Pen = pen(15);
-  s1Pen.asterisk(497, 985, [46, 30, 40, 34, 44, 28], -1.25, W3w, 1); s2Pen.asterisk(652, 1040, [68, 40, 52, 62, 36, 48], -0.1, W3w, 1);
-  const star1 = lines(s1Pen.R, { glow: true }), star2 = lines(s2Pen.R, { glow: true }); root.add(star1.obj, star2.obj);
-  const sig = kit.plane(ctx.canvasTex(256, 96, (c, w, hh) => { c.fillStyle = '#000'; c.fillRect(0, 0, w, hh); c.font = FONT_DISPLAY(66, '', 500); c.textAlign = 'center'; c.textBaseline = 'middle'; c.shadowColor = 'rgba(255,255,255,.5)'; c.shadowBlur = 10; c.fillStyle = '#fff'; c.fillText('11:11', w / 2, hh / 2 + 4); }), 0.62, 0.23, { alpha: 0.8 });
-  sig.mesh.position.set(...P(725, 488, 0.01)); sig.mesh.rotation.x = S.tilt - Math.PI / 2; root.add(sig.mesh);
+  // 11:11 and the word that comes when every tooth is mended
+  const sig = kit.plane(ctx.canvasTex(256, 96, (c, w, hh) => { c.fillStyle = '#000'; c.fillRect(0, 0, w, hh); c.font = FONT_DISPLAY(66, '', 500); c.textAlign = 'center'; c.textBaseline = 'middle'; c.shadowColor = 'rgba(255,255,255,.5)'; c.shadowBlur = 10; c.fillStyle = '#fff'; c.fillText('11:11', w / 2, hh / 2 + 4); }), 0.5, 0.19, { alpha: 0.55 });
+  { const p = P(870, 68, ZBG - 0.05); sig.mesh.position.set(p[0], p[1], p[2]); root.add(sig.mesh); }
   const wordPlane = kit.plane(ctx.canvasTex(512, 160, (c, w, hh) => { c.fillStyle = '#000'; c.fillRect(0, 0, w, hh); c.font = FONT_DISPLAY(96, 'italic', 500); c.textAlign = 'center'; c.textBaseline = 'middle'; c.shadowColor = 'rgba(255,255,255,.7)'; c.shadowBlur = 16; c.fillStyle = '#fff'; c.fillText('perdón.', w / 2, hh / 2 + 4); }), 1.5, 0.47, { alpha: 0 });
-  wordPlane.mesh.position.set(...P(430, 1118, 0.03)); wordPlane.mesh.rotation.x = S.tilt - Math.PI / 2; root.add(wordPlane.mesh);
-
-  // ───────────────────────────── sprites: the splatter and its heat, the drip, the dots on the dark ─────────────────────────────
-  const splat = kit.points(dots.white, { shape: 0, twinkle: 0.4, tint: [0.93, 0.9, 0.82] }); root.add(splat.obj);
-  const heatRows = []; for (let i = 0; i < (lite ? 12 : 28); i++) { const p = P(170 + rnd() * 125, 650 + rnd() * 60, 0.03); heatRows.push([p[0], p[1], p[2], 0.05 + rnd() * 0.04, 0.9, i / (lite ? 12 : 28), 0]); }
-  const heat = kit.points(heatRows, { shape: 0, mode: 1, rise: [EY[0] * 0.6, EY[1] * 0.6, EY[2] * 0.6], speed: 0.12, spread: 0.1, tint: [1, 0.78, 0.55] }); root.add(heat.obj);
-  const drip = kit.points([[0, 0, 0, 0.07, 1, 0.5, 0]], { shape: 0, tint: [0.95, 0.93, 0.88] }); root.add(drip.obj);
+  { const p = P(600, 945, Z0 - 0.4); wordPlane.mesh.position.set(p[0], p[1], p[2]); root.add(wordPlane.mesh); }
 
   // ───────────────────────────── the shards floating on the water (one per crossed-out tooth) ─────────────────────────────
   const shards = [], shardRows = [], ringRows = [];
@@ -212,7 +222,7 @@ ROOM_SETS['el-lado-oscuro-del-mono'] = function buildGrito(ctx, kit, track) {
     const pts = [[-0.12, 0], [-0.16, 0.2], [-0.07, 0.34], [0.03, 0.27], [0.15, 0.36], [0.14, 0.11], [0.05, 0]].map(([a, b]) => [a * sc * (0.9 + r2() * 0.2), b * sc * (0.9 + r2() * 0.2), 0]);
     R.poly(pts, W2, 1, true); R.poly([[0, 0.05 * sc, 0], [0.01 * sc, 0.2 * sc, 0], [-0.05 * sc, 0.3 * sc, 0]], W0, 0.6); R.poly([[-0.1 * sc, 0.1 * sc, 0], [0.1 * sc, 0.16 * sc, 0]], W0, 0.5);
     const L = lines(R, { glow: true }), g = grp(root, x, 0.5, z);
-    g.rotation.y = Math.atan2(-x, 6.5 - z) + (r2() - 0.5) * 0.5; g.add(L.obj);
+    g.rotation.y = Math.atan2(-x, GS.Z0 - z) + (r2() - 0.5) * 0.5; g.add(L.obj);
     shards.push({ g, L, x, z, ph: i * 1.7 });
     shardRows.push([x, 0.75, z, 0.36, 1, i * 0.37, 0]); ringRows.push([x, 0.68, z, 1.1, 0.6, i * 0.13, 0]);
   });
@@ -225,12 +235,18 @@ ROOM_SETS['el-lado-oscuro-del-mono'] = function buildGrito(ctx, kit, track) {
   // ───────────────────────────── hotspots (world positions) and what the visitor bumps into ─────────────────────────────
   root.updateMatrixWorld(true);
   const W3 = (p) => root.localToWorld(V3(p[0], p[1], p[2]));
-  const anchorSpec = { 'rm-salpicadura': ['heat', 0.1, 1.2, 1.0], 'rm-pelo': ['fur', 0.1, 0.8, 1.7], 'rm-firma': ['tag', 0.12, 2.3, 1.6], 'rm-dientes': ['mouth', TH, 1.2, 1.6] };
-  for (const [id, [k, h, w, hh]] of Object.entries(anchorSpec)) ctx.anchors[id] = { pos: W3(P(GRITO_PX[k][0], GRITO_PX[k][1], h)), w, h: hh };
+  const anchorSpec = { 'rm-salpicadura': [[205, 262, ZSP], 1.2, 1.0], 'rm-pelo': [[205, 740, Zf(205, 740)], 0.6, 1.7], 'rm-firma': [[560, 470, ZT], 1.3, 1.2], 'rm-dientes': [[360, 650, Zm(360, 650)], 0.55, 1.6] };
+  for (const [id, [at, w, hh]] of Object.entries(anchorSpec)) ctx.anchors[id] = { pos: W3(P(at[0], at[1], at[2])), w, h: hh };
   GRITO_SHARDS.forEach(([x, z], i) => { ctx.anchors['rm-pieza-' + i] = { pos: W3([x, 0.5, z]), w: 0.95, h: 0.95 }; });
-  const solids = [(() => { const p = W3([0, 0, -0.25]); return { kind: 'box', x: p.x, z: p.z, hw: 2.4, hd: 1.5, ry: root.rotation.y }; })()];
+  const solids = [(() => { const p = W3([0, 0, 0.3]); return { kind: 'box', x: p.x, z: p.z, hw: 2.7, hd: 1.6, ry: root.rotation.y }; })()];
 
-  // ───────────────────────────── camera poses: straight in front of the part of the board that is looked at ─────────────────────────────
+  // ───────────────────────────── camera poses: straight in front of the part of the drawing that is looked at ─────────────────────────────
+  const LOOK = {
+    tinta: { t: () => P(200, 262, ZSP), w: 1.5, h: 1.2 },
+    pelo: { t: () => P(225, 700, Zf(225, 700)), w: 1.2, h: 1.9 },
+    firma: { t: () => P(540, 500, ZT), w: 3.2, h: 2.2 },
+    dientes: { t: () => P(350, 615, Zm(350, 615)), w: 1.3, h: 2.2 },
+  };
   function aim(camL, tgtL, sx, sy, fov, a) {
     root.updateMatrixWorld();
     const cw = root.localToWorld(V3(...camL)), tw = root.localToWorld(V3(...tgtL));
@@ -239,19 +255,21 @@ ROOM_SETS['el-lado-oscuro-del-mono'] = function buildGrito(ctx, kit, track) {
   }
   const fit = (w, h, fw, fh, fov, a) => { const tv = 2 * Math.tan((fov * Math.PI) / 360); return Math.max(h / (fh * tv), w / (fw * tv * a)); };
   function pose(view, a, free) {
-    const look = GRITO_PX.looks[view];
-    if (!look) return null;
-    const f = free || { x0: 0.3, y0: 0.1, x1: 0.95, y1: 0.55 }, sx = (f.x0 + f.x1) / 2, sy = (f.y0 + f.y1) / 2, fw = (f.x1 - f.x0) * 0.9, fh = (f.y1 - f.y0) * 0.86, phone = a < 0.8, fov = phone ? 56 : 44;
-    const c = P(look.at[0], look.at[1], 0.1), d = fit(look.w, look.h, fw, fh, fov, a);
-    return aim([c[0] + NN[0] * d, c[1] + NN[1] * d, c[2] + NN[2] * d], c, sx, sy, fov, a);
+    const L = LOOK[view]; if (!L) return null;
+    const fr = free || { x0: 0.3, y0: 0.1, x1: 0.95, y1: 0.55 }, sx = (fr.x0 + fr.x1) / 2, sy = (fr.y0 + fr.y1) / 2, fw = (fr.x1 - fr.x0) * 0.9, fh = (fr.y1 - fr.y0) * 0.86, phone = a < 0.8, fov = phone ? 56 : 44;
+    const t = L.t(), d = fit(L.w, L.h, fw, fh, fov, a);
+    return aim([t[0], t[1] + 0.1, t[2] + d * 0.97], t, sx, sy, fov, a);
   }
 
   // ───────────────────────────── every frame ─────────────────────────────
   // D holds what is shown: each value follows its target (world.room.v) with its own rate, so a state change is always a smooth one.
   const N = GRITO_BREAK.length, D = { sign: [0, 0, 0], tag: 1, free: 1, x: Array(N).fill(0), fix: Array(N).fill(0), shard: Array(N).fill(0), ready: 0, calm: 0, word: 0, shout: 0 };
   const st = { T: 0, init: false, drip: 0, fixShown: Array(N).fill(-1) };
-  const tmpV = V3(), tmpF = V3(), tmpU = V3(), spinQ = new THREE.Quaternion();
+  const tmpV = V3(), tmpF = V3(), tmpU = V3(), spinQ = new THREE.Quaternion(), NNv = V3(0, 0, 1);
   const follow = (arr, tgt, rate, dt) => { for (let i = 0; i < arr.length; i++) arr[i] = damp(arr[i], tgt[i] || 0, rate, dt); };
+  const furPiv = P(350, 620, Zf(350, 620)), splatPiv = P(200, 260, ZSP);
+  /** Each vertex of a mesh is moved by fn(px, py, x, y) → [x, y] (set metres). */
+  const move = (M, fn) => { const arr = M.attr.array; for (let i = 0; i < M.n; i++) { const k = i * 3, d = fn(M.pxy[i * 2], M.pxy[i * 2 + 1], M.base[k], M.base[k + 1]); arr[k] = d[0]; arr[k + 1] = d[1]; arr[k + 2] = M.base[k + 2]; } M.attr.needsUpdate = true; };
   function update(dt, t) {
     const v = world.room.v || {}, ok = Array.isArray(v.sign) && Array.isArray(v.x), m = world.reduced ? 0 : 1, rate = world.reduced ? 9 : 3;
     if (ok) {
@@ -264,20 +282,35 @@ ROOM_SETS['el-lado-oscuro-del-mono'] = function buildGrito(ctx, kit, track) {
     }
     st.T += dt * m; RU.uTime.value = st.T;
     const T = st.T, scream = (1 - D.calm) * m, sh = 1 + 3 * D.shout;
-    // the mouth trembles as a whole; the fur shivers and stands on end when the tension is noticed
+    // the mouth trembles as a whole (its teeth, glitter and repairs with it)
     mouthG.position.set(Math.sin(T * 37) * 0.0035 * scream * sh, Math.sin(T * 29 + 1) * 0.003 * scream * sh, 0);
-    furHost.scale.setScalar(1 + (0.012 * Math.sin(T * 13) + 0.03 * D.sign[1] + 0.012 * D.shout) * (1 - D.calm * 0.9) * (m || 0.3));
-    furL.set(0.8 + 0.2 * (0.5 + 0.5 * Math.sin(T * 11)) * scream + 0.1 * D.sign[1]); mouthL.set(0.92 + 0.08 * D.shout); cityL.set(0.85 + 0.15 * (1 - D.calm));
+    mouth.u.uAlpha.value = 0.95 + 0.05 * D.shout + 0.02 * Math.sin(T * 11) * scream;
+    // the fur shivers and stands on end when the tension is noticed
+    {
+      const k = 1 + (0.03 * D.sign[1] + 0.012 * D.shout) * (1 - D.calm * 0.9) * (m || 0.3), a = (0.004 + 0.011 * D.sign[1] + 0.008 * D.shout) * scream;
+      move(fur, (px, py, x, y) => [furPiv[0] + (x - furPiv[0]) * k + a * Math.sin(T * 37 + py * 0.21 + px * 0.13), furPiv[1] + (y - furPiv[1]) * k + a * Math.sin(T * 29 + px * 0.17 + py * 0.05)]);
+      fur.u.uAlpha.value = 0.86 + 0.14 * (0.5 + 0.5 * Math.sin(T * 11)) * scream + 0.12 * D.sign[1];
+    }
+    // the splatter shimmers with heat (stronger once the heat is noticed): a haze that wobbles it, and warm specks
+    {
+      const hz = (0.4 + 0.6 * D.sign[0]) * (1 - D.calm) * m;
+      move(splat, (px, py, x, y) => [x + 0.011 * hz * Math.sin(T * 2.6 + py * 0.07), y + 0.007 * hz * Math.sin(T * 2.1 + px * 0.06)]);
+      splat.u.uAlpha.value = 0.75 + 0.25 * D.sign[0]; splat.u.uTint.value.set(0.97, 0.94 - 0.1 * D.sign[0], 0.9 - 0.2 * D.sign[0]);
+      heat.set((0.4 + 0.5 * D.sign[0]) * (1 - D.calm));
+    }
     // the tag: it grows and shrinks while the word pushes, freezes half out, and is swallowed
     const grow = (0.1 * Math.sin(T * 1.3) + 0.04 * Math.sin(T * 3.1)) * D.free * m, k = Math.max(0.001, D.tag * (1 + grow));
     tagHost.scale.setScalar(k); spinQ.setFromAxisAngle(NNv, -(1 - Math.min(1, D.tag)) * 0.9); tagHost.quaternion.copy(spinQ);
-    tagL.set(Math.min(1, D.tag * 3.5)); tagHost.visible = D.tag > 0.01;
-    // the stars twinkle; the splatter shimmers with heat (stronger once the heat is noticed)
-    star1.set(0.72 + 0.28 * Math.sin(T * 1.7) * m); star2.set(0.72 + 0.28 * Math.sin(T * 1.3 + 2) * m);
-    splat.set(0.75 + 0.25 * D.sign[0]); heat.set((0.4 + 0.5 * D.sign[0]) * (1 - D.calm));
-    mouthGold.set(0.95); mouthGlit.set(0.9); mouthSilver.set(0.9); silverGlit.set(0.85);
-    // the teeth: an ✗ where a tooth broke, gold where it was mended
-    for (let i = 0; i < N; i++) { crossL[i].set(D.x[i] * (1 - D.fix[i]) * (0.85 + 0.15 * D.shout)); repairL[i].set(D.fix[i]); }
+    tag.u.uAlpha.value = Math.min(1, D.tag * 3.5) * (0.94 + 0.06 * D.free); tagHost.visible = D.tag > 0.01;
+    // the stars twinkle
+    star1.u.uAlpha.value = 0.8 + 0.2 * Math.sin(T * 1.7) * m; star2.u.uAlpha.value = 0.8 + 0.2 * Math.sin(T * 1.3 + 2) * m;
+    goldG.set(0.95); silG.set(0.9); goldGlit.set(0.9); silGlit.set(0.85);
+    // the teeth: an ✗ where a tooth broke (the cover's own, or chalk), gold where it was mended
+    for (let i = 0; i < N; i++) {
+      const xa = D.x[i] * (1 - D.fix[i]) * (0.85 + 0.15 * D.shout);
+      if (crossP[i]) crossP[i].u.uAlpha.value = xa; else crossL[i].set(xa);
+      toothP[i].u.uAlpha.value = 1 - D.fix[i]; fixP[i].u.uAlpha.value = D.fix[i]; repairL[i].set(D.fix[i]);
+    }
     let changed = false;
     for (let i = 0; i < N; i++) {
       const a = D.fix[i]; if (Math.abs(a - st.fixShown[i]) < 0.004) continue;
@@ -286,19 +319,23 @@ ROOM_SETS['el-lado-oscuro-del-mono'] = function buildGrito(ctx, kit, track) {
       repairGlit.dat[i * 4 + 1] = a * 0.95;
     }
     if (changed) { repairPts.geo.attributes.aData.needsUpdate = true; repairGlit.geo.attributes.aData.needsUpdate = true; }
-    // the drip falls from the lower lip while the mouth screams
-    st.drip = (st.drip + dt * 0.35 * m) % 1;
-    const dp = P(392, 1040 + st.drip * 70, 0.05); drip.pos[0] = dp[0]; drip.pos[1] = dp[1]; drip.pos[2] = dp[2]; drip.geo.attributes.position.needsUpdate = true; drip.set(Math.sin(st.drip * Math.PI) * 0.9 * (1 - D.calm));
+    // the drip hangs from the lower lip, falls and fades while the mouth screams (it hangs still when it is calm)
+    {
+      if (D.calm > 0.5) st.drip = 0; else st.drip = (st.drip + dt * 0.3 * m) % 1;
+      const ph = st.drip, off = Math.max(0, ph - 0.25) / 0.75;
+      dripHost.position.set(0, -Math.pow(off, 1.6) * 0.45, 0);
+      dripP.u.uAlpha.value = (ph < 0.25 ? 1 : Math.max(0, 1 - off * 1.15)) * Math.min(1, ph * 14 + 0.2);
+    }
     // the shards bob on the water; they shine when it is time to take them
     for (let i = 0; i < N; i++) {
       const s = shards[i], a = D.shard[i];
       s.g.visible = a > 0.01; s.g.position.y = 0.5 + 0.05 * Math.sin(T * 1.4 + s.ph) * m; s.g.rotation.z = 0.08 * Math.sin(T * 0.9 + s.ph) * m;
       s.L.set(a * (0.55 + 0.45 * D.ready));
       shardGlit.dat[i * 4 + 1] = a * (0.25 + 0.75 * D.ready); shardGlit.pos[i * 3 + 1] = 0.75 + 0.05 * Math.sin(T * 1.4 + s.ph) * m;
-      rings.dat[i * 4 + 1] = a * 0.55 * (0.5 + 0.5 * Math.sin(T * 1.1 + s.ph)) ; rings.dat[i * 4] = 0.7 + 0.3 * ((T * 0.25 + i * 0.13) % 1);
+      rings.dat[i * 4 + 1] = a * 0.55 * (0.5 + 0.5 * Math.sin(T * 1.1 + s.ph)); rings.dat[i * 4] = 0.7 + 0.3 * ((T * 0.25 + i * 0.13) % 1);
     }
     shardGlit.geo.attributes.aData.needsUpdate = true; shardGlit.geo.attributes.position.needsUpdate = true; rings.geo.attributes.aData.needsUpdate = true;
-    sig.set(0.8); wordPlane.set(D.word * 0.95);
+    sig.set(0.55); wordPlane.set(D.word * 0.95);
     // the page flying to the book
     const pg = world.room.page;
     sheet.mesh.visible = pg > 0.001 && pg < 0.999;
@@ -306,7 +343,7 @@ ROOM_SETS['el-lado-oscuro-del-mono'] = function buildGrito(ctx, kit, track) {
       const cam = ctx.camera; cam.updateMatrixWorld();
       tmpF.set(0, 0, -1).applyQuaternion(cam.quaternion); tmpU.set(0, 1, 0).applyQuaternion(cam.quaternion);
       const mid = tmpV.copy(cam.position).addScaledVector(tmpF, 0.62).addScaledVector(tmpU, 0.02);
-      const k1 = smooth(0, 0.45, pg), k3 = smooth(0.62, 1, pg), from = root.localToWorld(V3(...P(350, 880, 0.2))), icon = ctx.bookIconPoint ? ctx.bookIconPoint(0.62) : mid.clone();
+      const k1 = smooth(0, 0.45, pg), k3 = smooth(0.62, 1, pg), from = root.localToWorld(V3(...P(350, 640, Zm(350, 640) - 0.2))), icon = ctx.bookIconPoint ? ctx.bookIconPoint(0.62) : mid.clone();
       sheet.mesh.position.lerpVectors(from, mid, k1).lerp(icon, k3);
       sheet.mesh.quaternion.copy(cam.quaternion); sheet.mesh.rotateZ(Math.sin(pg * 9) * 0.08 * (1 - k3));
       sheet.mesh.scale.setScalar(Math.max(0.001, k1 * (1 - 0.75 * k3) * 2.6));
@@ -314,10 +351,14 @@ ROOM_SETS['el-lado-oscuro-del-mono'] = function buildGrito(ctx, kit, track) {
     }
   }
 
+  const texSize = (g) => g.mesh.material.uniforms.uTex.value.image.width + 'x' + g.mesh.material.uniforms.uTex.value.image.height;
   return {
     root, update, pose,
     solids: () => solids,
     extra: [sheet.mesh],
-    info: () => ({ segments: segTotal, lite, teeth: GRITO_TEETH.length, breakable: N, shards: GRITO_SHARDS.length, gold: dots.gold.length }),
+    info: () => ({
+      segments: segTotal, lite, contours: tonePts, ribbons: segTotal - tonePts, teeth: GRITO_TEETH.length, breakable: N, shards: GRITO_SHARDS.length, gold: goldPts.length, silver: silPts.length, wide, f,
+      texture: [bg, fur, mouth, tag, star1, star2, splat].map(texSize).join(' + '),
+    }),
   };
 };

@@ -11,7 +11,8 @@
 // The words keep the book's own: clue and done are verbatim chapter text; the hints are new prose.
 ROOMS['el-lado-oscuro-del-mono'] = {
   water: PLAIN_WATER, // the cover is plain black paper: no reflection, engraved rows, floor light, glints or horizon in the arrival view (see PLAIN_WATER)
-  aim: { x: 0, y: 2.4, z: 9.2, sx: 0.42, sy: 0.47 },
+  /** The camera looks at a row of the cover (the set's lens depends on the screen); the set's z never changes. */
+  get aim() { const L = gsLens(aspectNow()); return { x: GS_SET.x, y: GS.H + ((L.yh - L.row) * GS.Z0) / L.f, z: GS_SET.z, sx: L.sx, sy: L.sy }; },
   intro: 'Una boca enorme grita. A veces el cuerpo avisa.',
   clue: 'A veces el cuerpo avisa.\nCalor. Tensión. La palabra empujando.\n“Callate.”',
   done: 'Perdón. No alcanza, ya sé. Pero es lo único que tengo.',
