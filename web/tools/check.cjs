@@ -183,10 +183,14 @@ const state = (p) => ev(p, () => window.__eldom.state());
 const hotPoint = (p, prefix) => ev(p, (l) => {
   for (const b of document.querySelectorAll('.hot')) {
     if (b.hidden || !(b.getAttribute('aria-label') || '').startsWith(l)) continue;
-    const r = b.getBoundingClientRect(), x = r.x + r.width / 2, y = r.y + r.height / 2;
-    if (x < 8 || y < 8 || x > innerWidth - 8 || y > innerHeight - 8) continue;
-    const top = document.elementFromPoint(x, y);
-    if (top === b || b.contains(top)) return [x, y];
+    const r = b.getBoundingClientRect();
+    // the centre first; if something (the corner player, a button) covers it, any other point of the hotspot that is on screen and free: the visible part of a hotspot is tappable
+    for (const [u, v] of [[0.5, 0.5], [0.5, 0.25], [0.5, 0.75], [0.25, 0.5], [0.75, 0.5], [0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75], [0.5, 0.1], [0.5, 0.9], [0.5, 0.4], [0.5, 0.6]]) {
+      const x = r.x + r.width * u, y = r.y + r.height * v;
+      if (x < 8 || y < 8 || x > innerWidth - 8 || y > innerHeight - 8) continue;
+      const top = document.elementFromPoint(x, y);
+      if (top === b || b.contains(top)) return [x, y];
+    }
   }
   return null;
 }, prefix);
