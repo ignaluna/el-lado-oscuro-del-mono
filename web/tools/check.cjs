@@ -1550,9 +1550,9 @@ const ROOM_WALKS = {
     midOK: (s) => s.forks === 1 && s.found === 0 && s.visual.v.forks === 1 && s.held === 0, midMsg: 'a reload keeps the first turn that was taken (and nothing else)',
   },
   'no-me-perdones': {
-    floor: 8, chapter: 'cap-7', minSegments: 700, play: playVacio,
-    built: (set) => set.strokes > 300 && set.castles.length === 3 && set.bands >= 4,
-    tierBuilt: (set) => set.castles.length === 3 && set.bands >= 4,
+    floor: 8, chapter: 'cap-7', minSegments: 3000, play: playVacio,
+    built: (set) => set.contours > 3000 && set.castles.length === 3,
+    tierBuilt: (set) => set.castles.length === 3 && set.contours > 2500,
     hots: [/^Una estrella chiquita/],
     afterSolve: (s) => s.visual.v.calm === 1 && s.placed,
     solvedRoom: (s) => s.visual.v.calm === 1 && s.visual.v.down === 1 && s.visual.v.open.every((x) => x === 1) && s.visual.v.far === 1 && s.placed,
