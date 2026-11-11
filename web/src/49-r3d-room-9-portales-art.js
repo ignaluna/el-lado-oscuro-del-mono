@@ -2,7 +2,7 @@
 // luminance, lightly blurred, was cut at five levels (marching squares) and every contour simplified (about one pixel). Each level is a list of closed
 // loops, nested ones are holes (even-odd), in cover pixels (the photo is 900 wide), as half-pixel integers: "n x0 y0 dx dy dx dy …", every number a
 // variable-length code of 5 bits per character (the characters A-Z a-z 0-9 + - : 0-31 end a number, 32-63 continue it), deltas zig-zagged.
-// Decoded by ptDecode(): [{ l: level, pts: [[x, y] …], a: area }]. PT_FILL is the grey each level is painted with (the mean of its band).
+// Decoded by ptDecode() (decodeTones, 49-r3d-room-0-tones.js): [{ l: level, pts: [[x, y] …], a: area }]. PT_FILL is the grey each level is painted with (the mean of its band; the room paints it as it is).
 const PT_LEVELS = [48,88,128,168,210];
 const PT_FILL = [66,107,148,188,229];
 const PT_TONE = [
@@ -518,18 +518,4 @@ const PT_TONE = [
     'SBAN',
   ].join(''),
 ];
-function ptDecode() {
-  const AL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-', out = [];
-  PT_TONE.forEach((s, l) => {
-    let i = 0;
-    const num = () => { let v = 0, sh = 0, c; do { c = AL.indexOf(s[i++]); v += (c & 31) * 2 ** sh; sh += 5; } while (c >= 32); return v; };
-    const zg = () => { const v = num(); return v & 1 ? -(v + 1) / 2 : v / 2; };
-    while (i < s.length) {
-      const n = num(), pts = [[num() / 2, num() / 2]];
-      for (let k = 1; k < n; k++) { const p = pts[k - 1]; pts.push([p[0] + zg() / 2, p[1] + zg() / 2]); }
-      let a = 0; for (let k = 0; k < n; k++) { const p = pts[k], q = pts[(k + 1) % n]; a += p[0] * q[1] - q[0] * p[1]; }
-      out.push({ l, pts, a: Math.abs(a) / 2 });
-    }
-  });
-  return out;
-}
+function ptDecode() { return decodeTones(PT_TONE); }

@@ -13,10 +13,12 @@
 //   world.room.v holds the targets (the controller, 59-room-9-…, sets them whole); every value is damped here, so nothing needs a
 //   sequence and nothing is left half done.
 // ═══════════════════════════════════════════════════════════════════════════════════════════
-/** The eye that sees the cover: H its height (m), cx the column straight ahead, GR the cover row where the trunks meet the ground, Z0 how far (m) that is from the eye. */
-const PT = { H: 1.6, cx: 450, GR: 958, Z0: 6.6, ARR: 2.7, X0: 30, Y0: 415, W: 800, HT: 790 };
-/** Where the visitor stands when a floor opens is the eye; the set's aim is the middle of the tree, Z0 metres ahead of it. */
-const PT_SET = { x: 0, y: 1.0, z: PT.ARR + PT.Z0 };
+/** The eye that sees the cover: H its height (m), cx the column straight ahead, GR the cover row where the trunks meet the ground, BOT the cover row of the ground 0.15 m under the eye's horizon line (the lens' own), Z0 how far (m) the trunks' plane is from the eye. */
+const PT = { H: 1.6, cx: 450, GR: 958, BOT: 931, Z0: 6.6, ARR: 2.7 };
+/** Where the visitor stands when a floor opens is the eye; the set is Z0 metres ahead of it. */
+const PT_SET = { x: 0, z: PT.ARR + PT.Z0 };
+/** The lens depends on the screen: a wide screen fills the height at 1050 cover px of focal length aimed at the vortex's row, a phone's narrow view keeps the tree whole at 1320. The set's z never changes. */
+function ptLens(a) { return coverLens(PT, a, { f: 1050, row: 799, sx: 0.46, sy: 0.5 }, { f: 1320, row: 758, sx: 0.5, sy: 0.46 }); }
 /** The four roots (cover pixels of where each one touches the ground), the things that can be left in them (the chapter's own) and the decoys. */
 const PT_ROOTS = [[165, 1030], [235, 1108], [545, 1062], [702, 1085]];
 const PT_THINGS = ['perro', 'guitarra', 'vecinos', 'risa'];
@@ -29,15 +31,14 @@ const PT_GLOW = { c: [410, 1060], r: [92, 90], feet: 1127 };
 
 ROOM_SETS['portales'] = function buildPortales(ctx, kit, track) {
   const { THREE, V3 } = ctx, RU = kit.RU, lite = ctx.lite, V = PT;
-  // On a wide screen the cover fills the height; a phone's narrow view keeps the tree whole at a longer lens. The set's z never changes.
-  const wide = ctx.W / Math.max(1, ctx.H) >= 1.1, f = wide ? 1050 : 1320, yh = V.GR - (V.H * f) / V.Z0;
+  const { wide, f, yh } = ptLens(ctx.W / Math.max(1, ctx.H));
   const root = new THREE.Group();
   root.position.set(0, 0, PT_SET.z);
   root.rotation.y = Math.PI; // the front (+z local) faces the arrival spot
   const grp = (parent = root, x = 0, y = 0, z = 0) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
   const rnd = mulberry32(99);
   const WC = lite ? [1.3, 2.0, 2.8] : [1.8, 2.6, 3.6];
-  let segTotal = 0, tonePts = 0;
+  let segTotal = 0;
   const lines = (rib, o = {}) => { segTotal += rib.count; return kit.lines(rib, o); };
 
   // ---- the cover's pixels → the set (x to the viewer's right, y up, z toward the visitor; the trunks' plane at z = 0) ----
@@ -50,71 +51,30 @@ ROOM_SETS['portales'] = function buildPortales(ctx, kit, track) {
     return (-0.9 * Math.sqrt(dome) + tunnel + house) * fade;
   };
   const Zof = (px, py) => (py >= V.GR ? ground(py) * 0.985 : V.Z0 + relief(px, py)); // (the ground is lifted 2 cm along its own ray: it stays under the water's depth test)
-  const P = (px, py, dz = 0) => { const Z = Zof(px, py) + dz; return [((px - V.cx) * Z) / f, V.H + ((yh - py) * Z) / f, V.Z0 - Z]; };
   const mpx = (px, py) => Zof(px, py) / f; // metres per cover pixel at a point
 
-  // ───────────────────────────── the tones: the photo's own contours, painted into a texture on the relief ─────────────────────────────
-  const loops = ptDecode(), MINA = lite ? 26 : 0;
-  const TS = lite ? 1.28 : 1.92; // texture pixels per cover pixel
+  // ───────────────────────────── the tones: the photo's own contours, painted into textures on the relief ─────────────────────────────
+  // (the cover's pixels → the set, the tones painted with a soft glow, the soft masks and the grid meshes are the shared helpers of 49-r3d-room-0-tones.js)
+  const { P: cp, tonePts, region, gridMesh } = coverTones(ctx, { V, lens: { f, yh }, decode: ptDecode, fill: PT_FILL, ts: [1.28, 1.92], root, rnd });
+  const P = (px, py, dz = 0) => cp(px, py, Zof(px, py) + dz);
   const GC = PT_GLOW.c, GRr = PT_GLOW.r;
-  const paintTones = (c, clip) => {
-    for (let l = 0; l < PT_FILL.length; l++) {
-      const path = new Path2D(); let n = 0;
-      for (const lp of loops) {
-        if (lp.l !== l || lp.a < MINA) continue;
-        if (clip) { let inb = false; for (const p of lp.pts) if (p[0] > clip[0] && p[0] < clip[2] && p[1] > clip[1] && p[1] < clip[3]) { inb = true; break; } if (!inb) continue; }
-        lp.pts.forEach((p, i) => (i ? path.lineTo(p[0], p[1]) : path.moveTo(p[0], p[1]))); path.closePath(); n += lp.pts.length;
-      }
-      const g = Math.min(255, Math.round(PT_FILL[l] * 1.0)); c.fillStyle = `rgb(${g},${g},${g})`; c.fill(path, 'evenodd');
-      if (!clip) tonePts += n;
-    }
-  };
-  /** The glow's mask: 1 inside the glow and 0 outside, with a soft edge (the tones are split between the ground and the standing cut-out by it). */
-  const maskGradient = (c, inside) => {
-    c.save(); c.translate(GC[0], GC[1]); c.scale(GRr[0], GRr[1]);
-    const gr = c.createRadialGradient(0, 0, 0, 0, 0, 1);
-    gr.addColorStop(0, inside ? '#fff' : '#000'); gr.addColorStop(0.62, inside ? '#fff' : '#000'); gr.addColorStop(1, inside ? '#000' : '#fff');
-    c.globalCompositeOperation = 'multiply'; c.fillStyle = gr; c.fillRect(-3, -3, 6, 6); c.restore();
-  };
-  const toneTex = ctx.canvasTex(Math.round(V.W * TS), Math.round(V.HT * TS), (c, w, hh) => {
-    c.fillStyle = '#000'; c.fillRect(0, 0, w, hh);
-    c.save(); c.scale(TS, TS); c.translate(-V.X0, -V.Y0); paintTones(c, null); c.restore();
-    if ('filter' in c) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.3; c.filter = `blur(${(3.2 * TS / 1.9).toFixed(1)}px)`; c.drawImage(c.canvas, 0, 0); c.restore(); } // a soft glow around every bright band
-    c.save(); c.scale(TS, TS); c.translate(-V.X0, -V.Y0); maskGradient(c, false); c.restore();
-  });
-  const GB = [GC[0] - GRr[0] * 1.05, GC[1] - GRr[1] * 1.05, GC[0] + GRr[0] * 1.05, GC[1] + GRr[1] * 1.05];
-  const glowTex = ctx.canvasTex(Math.round((GB[2] - GB[0]) * TS), Math.round((GB[3] - GB[1]) * TS), (c, w, hh) => {
-    c.fillStyle = '#000'; c.fillRect(0, 0, w, hh);
-    c.save(); c.scale(TS, TS); c.translate(-GB[0], -GB[1]); paintTones(c, GB);
-    if ('filter' in c) { c.restore(); c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.3; c.filter = `blur(${(3.2 * TS / 1.9).toFixed(1)}px)`; c.drawImage(c.canvas, 0, 0); c.restore(); c.save(); c.scale(TS, TS); c.translate(-GB[0], -GB[1]); }
-    maskGradient(c, true); c.restore();
-  });
-  const toneU = { uTex: { value: toneTex }, uAlpha: { value: 1 }, uReveal: { value: 1 }, uTint: { value: V3(0.9, 0.9, 0.95) } };
-  const glowU = { uTex: { value: glowTex }, uAlpha: { value: 1 }, uReveal: { value: 1 }, uTint: { value: V3(1.12, 1.12, 1.2) } };
+  // The figure and its glow are a standing cut-out in front of the tree. The tones are split between the two by one soft ellipse (a mask and its complement add up to one),
+  // so from the arrival spot the sum is exactly the cover and no edge shows.
+  const GLOW_BLUR = 8, GLOW_POLY = Array.from({ length: 48 }, (_, i) => [GC[0] + Math.cos((i / 48) * TAU) * GRr[0] * 0.81, GC[1] + Math.sin((i / 48) * TAU) * GRr[1] * 0.81]);
+  const GB = [GC[0] - GRr[0] * 0.81 - 3 * GLOW_BLUR - 1, GC[1] - GRr[1] * 0.81 - 3 * GLOW_BLUR - 1, GC[0] + GRr[0] * 0.81 + 3 * GLOW_BLUR + 1, GC[1] + GRr[1] * 0.81 + 3 * GLOW_BLUR + 1];
 
   // the relief: a grid whose every vertex sits on its pixel's ray, at the depth of the tree there
-  const NX = lite ? 64 : 92, NY = lite ? 68 : 98, GX0 = 60, GX1 = 790, GY0 = 425, GY1 = 1185;
-  const basePos = new Float32Array((NX + 1) * (NY + 1) * 3), uvs = new Float32Array((NX + 1) * (NY + 1) * 2), bw = new Float32Array((NX + 1) * (NY + 1)), bdir = new Float32Array((NX + 1) * (NY + 1) * 2);
-  const live = []; // the vertices of the canopy, which breathe
-  for (let j = 0; j <= NY; j++) for (let i = 0; i <= NX; i++) {
-    const px = GX0 + ((GX1 - GX0) * i) / NX, py = GY0 + ((GY1 - GY0) * j) / NY, k = j * (NX + 1) + i, p = P(px, py);
-    basePos.set(p, k * 3); uvs[k * 2] = (px - V.X0) / V.W; uvs[k * 2 + 1] = 1 - (py - V.Y0) / V.HT;
+  const NX = lite ? 64 : 92, NY = lite ? 68 : 98, TREE_R = [60, 425, 790, 1185];
+  const tree = gridMesh(TREE_R, NX, NY, Zof, region(TREE_R, { glow: 0.3, masks: [['out', [GLOW_POLY], GLOW_BLUR]] }), root, [0, 0, 0], [0.9, 0.9, 0.95]);
+  const bw = new Float32Array(tree.n), bdir = new Float32Array(tree.n * 2), live = []; // the vertices of the canopy, which breathe
+  for (let k = 0; k < tree.n; k++) {
+    const px = tree.pxy[k * 2], py = tree.pxy[k * 2 + 1];
     const e = Math.hypot((px - 445) / 330, (py - 700) / 260), vort = 1 - smooth(0.82, 1.0, Math.hypot((px - 450) / 108, (py - 812) / 124)), w = smooth(0.55, 1.05, e) * (1 - smooth(820, 930, py)) * (1 - 0.8 * vort);
     bw[k] = w; if (w > 0.03) { live.push(k); const L = Math.hypot(px - 445, py - 700) || 1; bdir[k * 2] = (px - 445) / L; bdir[k * 2 + 1] = -(py - 700) / L; }
   }
-  const idx = []; for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) { const a = j * (NX + 1) + i, b = a + 1, c2 = a + NX + 1, d = c2 + 1; idx.push(a, c2, b, b, c2, d); }
-  const treeGeo = ctx.keep(new THREE.BufferGeometry()), posAttr = new THREE.BufferAttribute(new Float32Array(basePos), 3);
-  treeGeo.setAttribute('position', posAttr); treeGeo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2)); treeGeo.setIndex(idx);
-  const treeMesh = new THREE.Mesh(treeGeo, ctx.glowMat(TEXT_FRAG, toneU)); treeMesh.frustumCulled = false; root.add(treeMesh);
+  const posAttr = tree.attr, basePos = tree.base, toneU = tree.u;
   // the figure and its glow: a standing cut-out at the depth of its feet
-  const Zf = ground(PT_GLOW.feet), glowGeo = ctx.keep(new THREE.BufferGeometry()), gn = 10, gpos = [], guv = [], gidx = [];
-  for (let j = 0; j <= gn; j++) for (let i = 0; i <= gn; i++) {
-    const px = GB[0] + ((GB[2] - GB[0]) * i) / gn, py = GB[1] + ((GB[3] - GB[1]) * j) / gn;
-    gpos.push(((px - V.cx) * Zf) / f, V.H + ((yh - py) * Zf) / f, V.Z0 - Zf); guv.push(i / gn, 1 - j / gn);
-  }
-  for (let j = 0; j < gn; j++) for (let i = 0; i < gn; i++) { const a = j * (gn + 1) + i; gidx.push(a, a + gn + 1, a + 1, a + 1, a + gn + 1, a + gn + 2); }
-  glowGeo.setAttribute('position', new THREE.Float32BufferAttribute(gpos, 3)); glowGeo.setAttribute('uv', new THREE.Float32BufferAttribute(guv, 2)); glowGeo.setIndex(gidx);
-  const glowMesh = new THREE.Mesh(glowGeo, ctx.glowMat(TEXT_FRAG, glowU)); glowMesh.frustumCulled = false; root.add(glowMesh);
+  const Zf = ground(PT_GLOW.feet), glowU = gridMesh(GB, 10, 10, () => Zf, region(GB, { glow: 0.3, masks: [['in', [GLOW_POLY], GLOW_BLUR]] }), root, [0, 0, 0], [1.12, 1.12, 1.2]).u;
   segTotal += tonePts; // (every contour edge is a chalk line of the drawing)
 
   // ───────────────────────────── chalk helpers: spirals, stars, the glyphs of what is left in a root ─────────────────────────────
@@ -214,18 +174,11 @@ ROOM_SETS['portales'] = function buildPortales(ctx, kit, track) {
     ...Object.fromEntries(PT_SPIRALS.map((sp, k) => ['espiral-' + k, { at: sp.c, dz: -0.2, w: Math.max(1.4, sp.rx * 5 * mpx(sp.c[0], sp.c[1])), h: Math.max(1.6, sp.ry * 3.2 * mpx(sp.c[0], sp.c[1])), up: 0 }])),
     ...Object.fromEntries(PT_ROOTS.map((r, k) => ['raiz-' + k, { at: r, dz: 0, w: 2.2, h: 1.6, up: 0.5, ground: true }])),
   };
-  function aim(camL, tgtL, sx, sy, fov, a) {
-    root.updateMatrixWorld();
-    const cw = root.localToWorld(V3(...camL)), tw = root.localToWorld(V3(...tgtL));
-    const dx = tw.x - cw.x, dy = tw.y - cw.y, dz = tw.z - cw.z, tanV = Math.tan((fov * Math.PI) / 360), tanH = tanV * a;
-    return { x: cw.x, y: cw.y, z: cw.z, fov, yaw: Math.atan2(-dx, -dz) - Math.atan((0.5 - sx) * 2 * tanH), pitch: Math.atan2(dy, Math.hypot(dx, dz)) - Math.atan((0.5 - sy) * 2 * tanV) };
-  }
-  const fit = (w, h, fw, fh, fov, a) => { const tv = 2 * Math.tan((fov * Math.PI) / 360); return Math.max(h / (fh * tv), w / (fw * tv * a)); };
   function pose(view, a, free) {
     const L = LOOK[view]; if (!L) return null;
     const fr = free || { x0: 0.3, y0: 0.1, x1: 0.95, y1: 0.55 }, sx = (fr.x0 + fr.x1) / 2, sy = (fr.y0 + fr.y1) / 2, fw = (fr.x1 - fr.x0) * 0.9, fh = (fr.y1 - fr.y0) * 0.86, phone = a < 0.8, fov = phone ? 56 : 44;
-    const d = fit(L.w, L.h, fw, fh, fov, a), t = P(L.at[0], L.at[1], L.dz); if (L.ground) t[1] += 0.3;
-    return aim([t[0], t[1] + L.up + 0.18, t[2] + d * 0.97], t, sx, sy, fov, a);
+    const d = coverFit(L.w, L.h, fw, fh, fov, a), t = P(L.at[0], L.at[1], L.dz); if (L.ground) t[1] += 0.3;
+    return coverAim(root, V3, [t[0], t[1] + L.up + 0.18, t[2] + d * 0.97], t, sx, sy, fov, a);
   }
 
   // ───────────────────────────── every frame ─────────────────────────────
@@ -315,6 +268,6 @@ ROOM_SETS['portales'] = function buildPortales(ctx, kit, track) {
     root, update, pose,
     solids: () => solids,
     extra: [vision, cross.mesh, sheet.mesh],
-    info: () => ({ segments: segTotal, lite, contours: tonePts, ribbons: segTotal - tonePts, roots: PT_ROOTS.length, spirals: PT_SPIRALS.length, wide, f, texture: toneTex.image.width + 'x' + toneTex.image.height, vortex: { x: vw.x, y: vw.y, z: vw.z }, figure: { x: gw.x, y: gw.y, z: gw.z }, look: +D.look.toFixed(2) }),
+    info: () => ({ segments: segTotal, lite, contours: tonePts, ribbons: segTotal - tonePts, roots: PT_ROOTS.length, spirals: PT_SPIRALS.length, wide, f, texture: toneU.uTex.value.image.width + 'x' + toneU.uTex.value.image.height, vortex: { x: vw.x, y: vw.y, z: vw.z }, figure: { x: gw.x, y: gw.y, z: gw.z }, look: +D.look.toFixed(2) }),
   };
 };

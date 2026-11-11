@@ -9,7 +9,8 @@
 // The words keep the book's own: clue and done are verbatim chapter text; the hints are new prose.
 ROOMS['portales'] = {
   water: PLAIN_WATER, // the cover is plain black paper: no reflection, engraved rows, floor light, glints or horizon in the arrival view (see PLAIN_WATER)
-  aim: { x: PT_SET.x, y: PT_SET.y, z: PT_SET.z, sx: 0.46, sy: 0.5 },
+  /** The first view looks at the vortex: the cover's rows are read at the lens of the screen (see the set). */
+  get aim() { const L = ptLens(aspectNow()); return { x: PT_SET.x, y: PT.H + ((L.yh - L.row) * PT.Z0) / L.f, z: PT_SET.z, sx: L.sx, sy: L.sy }; }, // (the cover's row that is aimed at, by aspect; a phone ignores sy)
   intro: 'Un árbol enorme alrededor de un vórtice. Sus raíces bajan hacia vos y, entre ellas, un chico parado en un resplandor.',
   clue: 'quiero creer que algo mío va a quedar acá: en la raíz de un árbol, en el ladrido de un perro, en el eco suave de una guitarra que todavía suena.\nAcá lo invisible se nota: en cómo los vecinos se saludan, en la risa compartida sin motivo.',
   done: 'Los portales no desaparecen. Se transforman. Pero siempre te llevan de vuelta a vos.',
