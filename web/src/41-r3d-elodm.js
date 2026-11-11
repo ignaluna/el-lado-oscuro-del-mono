@@ -74,22 +74,11 @@ const ELODM_KINDS = {
     return () => {};
   },
 
-  // 7 — Casi Perdido: a hearth with weak embers
-  fire(F, ctx) {
-    const { THREE } = ctx, { pos: o, s } = elementSpot(F, ctx);
-    shape(F, o, s, [[-0.4, -0.5], [-0.4, 0.1], [-0.25, 0.3], [0.25, 0.3], [0.4, 0.1], [0.4, -0.5]], F.lineMat([0.9, 0.82, 0.72], 0.6), false);
-    shape(F, o, s, [[-0.25, -0.42], [0.25, -0.42]], F.lineMat([0.7, 0.45, 0.3], 0.8), false);
-    const flames = F.particles(220, { mode: 0, box: [s * 0.4, s * 0.55, s * 0.15], origin: F.V3(o.x, o.y - s * 0.45, o.z), size: 14, alpha: 0.4, speed: 0.3, tint: [1, 0.62, 0.3], soft: 1 });
-    const glow = F.mesh(new THREE.CircleGeometry(s * 0.3, 32), F.basic([1, 0.55, 0.25], 0.08, { side: THREE.DoubleSide }), o.x, o.y - s * 0.3, o.z + 0.05 * s);
-    F.light(F.V3(o.x, o.y - s * 0.2, o.z - 0.8), 0.5, s * 5);
-    return (dt, t) => {
-      const tr = world.trial, heat = 0.25 + 0.45 * tr.progress + 0.3 * tr.solved;
-      flames.u.uPhase.value += dt * flames.speed * 4 * (0.5 + heat);
-      flames.u.uAlpha.value = 0.15 + 0.6 * heat;
-      flames.u.uBox.value.y = s * (0.25 + 0.6 * heat);
-      glow.material.opacity = 0.05 + 0.2 * heat + 0.04 * Math.sin(t * 5);
-      F.lightK = 0.3 + 0.9 * heat;
-    };
+  // 7 — Casi Perdido: the cover, walkable, a monkey with his hand on his temple and his head on fire, with three loading spinners at his sides. Its art is a
+  // room (49-r3d-room-7-casi-perdido.js) built beside the floor; the floor itself only keeps a faint light.
+  fire(F) {
+    F.light(F.V3(F.A.x, 2.4, F.A.z - 1), 0.25, 8);
+    return () => {};
   },
 
   // 8 — No me perdones: the cover, walkable, ripples on dark water with a star and three paper castles in the void. Its art is a room

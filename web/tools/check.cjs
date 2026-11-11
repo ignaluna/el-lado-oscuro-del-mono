@@ -1290,6 +1290,158 @@ async function playPato(p, { check, shot, thorough = false }) {
 }
 
 /**
+ * Plays floor 7's room (the monkey with his head on fire, three spinners and the things of the quiet life) with real clicks: the ten thoughts that rise in the flames
+ * (DEJAR QUE ARDA for what belongs to the fire, BAJARLO A MI LADO for the quiet life, which lands at three spots), the three spinners (reached by walking: at each one
+ * the thing below it stills it, the wheel keeps spinning) and the slow hold MIRAR LAS BRASAS (the flames burn down, the gold falls, the hand leaves the temple).
+ * `thorough` adds saved states that must be rejected, things touched out of turn, the hint ladder of every stage, wrong choices on both kinds of thought, a wheel
+ * given the attention and an interrupted hold. Returns the room's state at the end.
+ */
+async function playCasiPerdido(p, { check, shot, thorough = false }) {
+  const FLOOR = 7, KEY = 'eldom.room.casi-perdido.v1';
+  const TH = [
+    { text: 'Producir', kind: 'fuego' }, { text: 'Unos mates', kind: 'lado' }, { text: 'La culpa de no estar produciendo', kind: 'fuego' }, { text: 'Pasear con Rita', kind: 'lado' }, { text: 'El rendimiento', kind: 'fuego' },
+    { text: 'Hacer música con amigos', kind: 'lado' }, { text: 'Correr detrás del objetivo', kind: 'fuego' }, { text: 'Abrazar a mi novia', kind: 'lado' }, { text: 'Estar distraído', kind: 'fuego' }, { text: 'Volver a la naturaleza de las cosas', kind: 'lado' },
+  ];
+  const SPOTS = [
+    { name: 'arriba a la izquierda, detrás del mono', thing: 'el mate' }, { name: 'abajo a la izquierda, a su costado', thing: 'la correa de Rita' }, { name: 'a la derecha, detrás del mono', thing: 'la guitarra' },
+  ];
+  const ORDER = [2, 0, 1]; // (the spinners are decided in any order: the farthest first)
+  const rmState = async () => (await state(p)).room;
+  const until = async (pred, ms = 15000) => { const t0 = Date.now(); let s; for (;;) { s = await rmState(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(120); } };
+  const act = (name) => p.locator(`#rm-acts [data-act="${name}"]`).first();
+  /** The camera has stopped (a close look gives way to the room over a second or more: a hotspot is looked for only once it is back). */
+  const settle = async () => { let last = null; for (let n = 0; n < 40; n++) { const c = (await state(p)).cam, key = [c.x, c.y, c.z, c.yaw, c.pitch, c.fov].map((v) => v.toFixed(3)).join(); if (key === last) return; last = key; await wait(250); } };
+  const tapHot = async (label) => { await settle(); await turnTo(p, label); await clickHot(p, label); };
+  const reload = async () => {
+    await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
+    await ev(p, () => window.__eldom.dev.released()); await ev(p, (f) => window.__eldom.dev.arrive(f), FLOOR); await waitFloor(p, FLOOR); await wait(2600);
+  };
+  const hintLadder = async (stage, rx, msg) => {
+    await p.locator('#rm-hint').click(); await wait(200); let s = await rmState(); const h1 = s.status;
+    check(h1.length > 20 && s.more && s.stage === stage, `${msg}: hint 1 "${h1}"`);
+    await p.locator('#rm-more').click(); await wait(200); const h2 = (await rmState()).status;
+    await p.locator('#rm-more').click(); await wait(200); s = await rmState();
+    check(h2 !== h1 && s.status !== h2 && rx.test(s.status) && !s.more, `${msg}: hint 3 gives the whole answer ("${s.status}") and there is no fourth`);
+    if (await p.locator('#rm-close').isVisible()) { await p.locator('#rm-close').click(); await wait(300); }
+  };
+  /** Stands the visitor `d` metres in front of a world point (on the side the visitor arrived from), facing it. */
+  const standAt = async (wx, wz, d) => { const x = wx, z = wz - d; await ev(p, ([x, z, y]) => window.__eldom.dev.roamTo(x, z, y), [x, z, Math.atan2(-(wx - x), -(wz - z))]); await wait(900); };
+  /** On a phone the line said when something shows itself ("cerca tuyo…") sits over the middle of the screen for a few seconds: a tap waits for it to go. */
+  const hintGone = async () => { await wait(700); await p.waitForFunction(() => { const e = document.querySelector('#cap-hint'); return !e || e.hidden || !e.textContent.trim(); }, null, { timeout: 9000 }).catch(() => {}); };
+  const home = async () => { await ev(p, () => window.__eldom.dev.roamTo(0, 2.7, Math.PI)); await wait(600); };
+  const spinHot = (k) => `Una rueda de carga que gira ${SPOTS[k].name}`;
+  const spinHots = () => p.locator('.hot:not([hidden])[aria-label^="Una rueda de carga"]').count();
+  const ids = (str) => str.split(',').filter(Boolean);
+  let s = await rmState();
+
+  if (thorough) {
+    // a saved state that makes no sense is rejected and what is valid is kept
+    const plant = async (raw) => { await ev(p, ([k, r]) => localStorage.setItem(k, typeof r === 'string' ? r : JSON.stringify(r)), [KEY, raw]); await reload(); return rmState(); };
+    s = await plant({ v: 1, stage: 3, said: [0, 1, 2, 3, 4, 5, 6, 7, 8, 12], spun: [0, 1, 2], done: true });
+    check(!s.done && s.said === '0,1,2,3,4,5,6,7,8' && s.spun === '' && s.phase === 'thoughts' && s.stage === 0, `a thought that does not exist: the valid prefix is kept, nothing after it (said "${s.said}")`);
+    s = await plant({ v: 1, said: [0, 1, 1, 3], spun: [0] });
+    check(s.said === '0,1' && s.spun === '' && s.phase === 'thoughts', `a thought decided twice: the valid prefix is kept (said "${s.said}")`);
+    s = await plant({ v: 1, said: [0, 1, 2], spun: [0, 1, 2], done: true });
+    check(!s.done && s.spun === '' && s.said === '0,1,2', 'spinners decided before the ten thoughts: refused');
+    s = await plant({ v: 1, said: [9, 8, 7, 6, 5, 4, 3, 2, 1, 0], spun: [2, 2, 0], done: true });
+    check(!s.done && s.said === '9,8,7,6,5,4,3,2,1,0' && s.spun === '2' && s.phase === 'spinners' && s.stage === 1, `a spinner decided twice: the valid prefix is kept (spun "${s.spun}"), the thoughts in the order they were decided`);
+    s = await plant({ v: 1, said: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], spun: [0, 5, 1], done: true });
+    check(!s.done && s.spun === '0' && s.phase === 'spinners', `a spinner that does not exist: the valid prefix is kept (spun "${s.spun}")`);
+    s = await plant({ v: 1, said: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], spun: [0, 1], done: true });
+    check(!s.done && s.spun === '0,1' && s.phase === 'spinners' && s.stage === 1, '"done" with one spinner still turning: refused');
+    s = await plant({ v: 1, said: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], spun: [1, 0, 2] });
+    check(!s.done && s.phase === 'finale' && s.stage === 2 && s.visual.v.fin === 0 && s.visual.v.spun.every((x) => x === 1), 'a state play can reach is kept as it is (the three spinners still, the flames still burning)');
+    s = await plant({ v: 2, said: [0, 1, 2] });
+    check(s.stage === 0 && s.said === '', 'a saved state of another version: a fresh room');
+    s = await plant('esto no es json{');
+    check(!s.done && s.stage === 0 && s.said === '', 'an unreadable saved state: a fresh room');
+    await ev(p, () => window.__eldom.dev.roomReset()); await wait(600);
+    s = await rmState();
+  }
+  check(s.here && s.view === 'wide' && s.stage === 0 && s.phase === 'thoughts' && s.said === '' && s.cur === 0 && s.visual.v.said.every((x) => x === 0), `the room: standing in it, stage ${s.stage}, ten thoughts to decide, the first one rising ("Producir")`);
+  check((await p.locator('.hot:not([hidden])[aria-label^="Un pensamiento sube por las llamas: «Producir»"]').count()) === 1 && (await spinHots()) === 0 && s.set.spotDist.every((d) => d > 4.2), `from the arrival spot the thought can be touched and no spinner can: they show only near (${s.set.spotDist.join(', ')} m)`);
+  // nothing can be done before its turn
+  for (const id of ['rm-giro-0', 'rm-giro-1', 'rm-giro-2', 'rm-llamas']) await ev(p, (i) => window.__eldom.ui.roomTap(i), id);
+  await wait(500); s = await rmState();
+  check(s.view === 'wide' && s.stage === 0 && s.said === '' && s.spun === '' && !s.done, 'the spinners and the flames cannot be used before the ten thoughts are decided');
+
+  // 1. the thoughts
+  if (thorough) await hintLadder(0, /«Producir»[\s\S]*«Unos mates»/, 'stage 0');
+  await tapHot('Un pensamiento sube por las llamas'); s = await until((x) => x.view === 'pensamiento' && x.panel, 8000); await wait(900);
+  check(s.acts.some((a) => a.act === 'arder' && /DEJAR QUE ARDA/.test(a.text)) && s.acts.some((a) => a.act === 'bajar' && /BAJARLO A MI LADO/.test(a.text)) && /«Producir»/.test(s.status) && /Quedan 10/.test(s.status), `a thought: DEJAR QUE ARDA and BAJARLO A MI LADO ("${s.status}")`);
+  if (thorough) {
+    await shot('room7-02-thought');
+    // a wrong choice sends it back up and counts a try: a thought of the fire put by his side, then one of the quiet life put in the fire
+    let t0 = s.tries; await act('bajar').click(); s = await until((x) => x.tries === t0 + 1, 3000);
+    check(s.tries === t0 + 1 && s.said === '' && s.cur === 1 && /se quema/.test(s.status) && /Unos mates/.test(s.status), `«Producir» put by his side counts a try and goes back up; the next thought rises ("${s.status}")`);
+    s = await until((x) => x.set.shown === 1, 3000); check(s.set.shown === 1, 'the thought that was sent back flies up as the next one appears');
+    t0 = s.tries; await act('arder').click(); s = await until((x) => x.tries === t0 + 1, 3000);
+    check(s.tries === t0 + 1 && s.said === '' && s.cur === 2 && /no se quema/.test(s.status) && /es lo que querés vivir/.test(s.status), `«Unos mates» put in the fire counts a try and goes back up ("${s.status}")`);
+  }
+  for (let n = 0; n < 10; n++) {
+    s = await rmState(); const c = s.cur, t = TH[c];
+    check(t && ids(s.said).length === n && !ids(s.said).includes(String(c)), `thought ${n + 1}: «${t && t.text}» rises (${s.status.slice(0, 60)})`);
+    await act(t.kind === 'fuego' ? 'arder' : 'bajar').click(); s = await until((x) => ids(x.said).length === n + 1, 4000);
+    check(ids(s.said).includes(String(c)) && s.visual.v.said[c] === 1, `thought ${n + 1}: «${t.text}» ${t.kind === 'fuego' ? 'is let burn' : 'comes down by his side'} ("${s.status.slice(0, 90)}")`);
+    if (thorough && n === 1) { await wait(2200); await shot('room7-03-landing'); }
+  }
+  s = await until((x) => x.stage === 1 && x.view === 'wide', 9000);
+  check(ids(s.said).length === 10 && s.phase === 'spinners' && s.visual.v.said.every((x) => x === 1), 'the ten thoughts are decided: the spinners are next');
+  s = await until((x) => x.set.glyph.every((g) => g > 0.9) && x.set.flying === 0, 8000);
+  check(s.set.glyph.every((g) => g > 0.9), `the quiet life lands at the three spots (the mate, Rita's leash, the guitar): ${s.set.glyph.join(', ')}`);
+  if (thorough) { await settle(); await home(); await wait(1500); await shot('room7-04-things'); }
+
+  // 2. the spinners: each is reached by walking and decided
+  if (thorough) { await settle(); await home(); await hintLadder(1, /EL MATE, LA CORREA DE RITA y LA GUITARRA/, 'stage 1'); await ev(p, () => window.__eldom.ui.roomTap('rm-llamas')); await wait(300); check((await rmState()).view === 'wide', 'the flames cannot be used before the spinners are decided'); }
+  await settle(); await home();
+  check((await spinHots()) === 0, 'from the arrival spot no spinner can be touched');
+  for (const [i, k] of ORDER.entries()) {
+    const set = (await rmState()).set, sp = set.spinAt[k];
+    await settle(); await standAt(sp.x, sp.z, 2.6); await hintGone();
+    await tapHot(spinHot(k)); s = await until((x) => x.view === `giro-${k}` && x.panel, 8000); await wait(900);
+    check(s.acts.some((a) => a.act === 'rueda') && s.acts.some((a) => a.act === 'cosa' && a.text.toLowerCase() === SPOTS[k].thing.toLowerCase()) && s.status.includes(SPOTS[k].thing), `spinner ${i + 1}: the wheel or ${SPOTS[k].thing} ("${s.status}")`);
+    if (thorough && i === 0) await shot('room7-05-spinner');
+    if (thorough && i < 2) { // the wheel gets the attention: it keeps spinning and counts a try
+      const t0 = s.tries; await act('rueda').click(); s = await until((x) => x.tries === t0 + 1, 3000);
+      check(s.tries === t0 + 1 && !ids(s.spun).includes(String(k)) && s.set.still[k] < 0.3 && /sigue girando/.test(s.status), `spinner ${i + 1}: the wheel keeps spinning and counts a try ("${s.status}")`);
+    }
+    const n0 = ids((await rmState()).spun).length;
+    await act('cosa').click(); s = await until((x) => ids(x.spun).length === n0 + 1, 4000);
+    check(ids(s.spun).includes(String(k)) && s.visual.v.spun[k] === 1 && /se detiene/.test(s.status), `spinner ${i + 1}: ${SPOTS[k].thing} stops the wheel, a still star ("${s.status}")`);
+    s = await until((x) => x.set.still[k] > 0.9, 5000); check(s.set.still[k] > 0.9, `spinner ${i + 1}: it is a still star now (${s.set.still.join(', ')})`);
+    await until((x) => x.view === 'wide', 6000);
+  }
+  s = await until((x) => x.stage === 2 && x.view === 'wide', 8000);
+  check(s.phase === 'finale' && ids(s.spun).length === 3 && s.visual.v.spun.every((x) => x === 1), 'the three spinners are still: the flames are next');
+  if (thorough) { await settle(); await home(); await wait(1500); await shot('room7-06-stars'); }
+
+  // 3. the embers: a slow hold
+  await settle(); await home();
+  if (thorough) await hintLadder(2, /MIRAR LAS BRASAS/, 'stage 2');
+  await tapHot('Las llamas de su cabeza'); s = await until((x) => x.view === 'brasas' && x.panel, 8000); await wait(900);
+  check(s.acts.some((a) => a.act === 'brasas') && /apagan las brasas/.test(s.status), `the flames: a slow hold ("${s.status}")`);
+  if (thorough) { // a hold that is interrupted does nothing; a second tap on the same button interrupts it too
+    await act('brasas').click(); await wait(1200); s = await rmState();
+    check(/MIRAR LAS BRASAS · \d/.test(await act('brasas').innerText()) && s.visual.v.watch === 1, 'the hold shows its count and the flames begin to go down');
+    await act('brasas').click(); await wait(600); s = await rmState();
+    check(!/·/.test(await act('brasas').innerText()) && s.visual.v.watch === 0 && s.visual.v.fin === 0 && !s.done, 'a second tap on the same button interrupts it');
+    await act('brasas').click(); await wait(1200); await act('volver').click(); await wait(1500); s = await rmState();
+    check(!s.done && s.visual.v.fin === 0 && s.visual.v.watch === 0 && s.set.burn < 0.2, 'leaving interrupts the hold: nothing happens and the flames come back');
+    await tapHot('Las llamas de su cabeza'); await until((x) => x.view === 'brasas' && x.panel, 8000); await wait(900);
+  }
+  await act('brasas').click();
+  if (thorough) {
+    await wait(3200); await shot('room7-07-watching');
+    s = await until((x) => x.visual.v.fin === 1, 9000); check(s.visual.v.fin === 1 && !s.done, 'the hold runs out: the flames burn down (the chapter is a moment away)');
+    s = await until((x) => x.set.burn > 0.55 && x.set.hand > 0.4, 8000); check(s.set.burn > 0.55 && s.set.hand > 0.4, `the flames are embers, the gold falls and the hand leaves the temple (burn ${s.set.burn}, hand ${s.set.hand})`);
+    await shot('room7-08-embers');
+  }
+  await p.waitForFunction(() => window.__eldom.state().room.done, null, { timeout: 25000 });
+  if (thorough) { await wait(2200); await shot('room7-09-solved'); }
+  return rmState();
+}
+
+/**
  * What is particular to each room's walkthrough (the `room` and `trials` scenarios read it; a floor with a room in ROOMS needs an entry):
  *   floor, chapter, minSegments (a sanity floor for the chalk lines), play(p, {check, shot, thorough}) → the room's state at the end,
  *   built(set) (what the set reports about itself), hots (labels on screen on arrival), afterSolve(state), solvedRoom(state) (after a
@@ -1425,6 +1577,22 @@ const ROOM_WALKS = {
       await p.locator('#rm-acts [data-act="capitulo"]').click(); await wait(500);
     },
     midOK: (s) => s.said === '4' && s.visual.v.bub[4] === 1 && s.stage === 0, midMsg: 'a reload keeps the bubble that was answered (and nothing else)',
+  },
+  'casi-perdido': {
+    floor: 7, chapter: 'cap-8', minSegments: 8000, play: playCasiPerdido,
+    built: (set) => set.contours > 12000 && set.thoughts === 10 && set.spots === 3 && set.spinners === 3 && set.gold > 40 && set.silver > 30,
+    tierBuilt: (set) => set.thoughts === 10 && set.spinners === 3,
+    hots: [/^Un pensamiento sube por las llamas/],
+    afterSolve: (s) => s.visual.v.fin === 1,
+    solvedRoom: (s) => s.visual.v.fin === 1 && s.visual.v.spun.every((x) => x === 1) && s.visual.v.said.every((x) => x === 1),
+    solvedHot: /no está mal/,
+    replayHot: 'Las brasas', replayView: 'brasas',
+    freshRoom: (s) => s.visual.v.fin === 0 && s.visual.v.said.every((x) => x === 0) && s.visual.v.spun.every((x) => x === 0) && s.said === '',
+    async midWalk(p) {
+      await ev(p, () => window.__eldom.ui.roomTap('rm-pensamiento')); await wait(1500);
+      await p.locator('#rm-acts [data-act="arder"]').click(); await wait(500);
+    },
+    midOK: (s) => s.said === '0' && s.visual.v.said[0] === 1 && s.stage === 0 && s.cur === 1, midMsg: 'a reload keeps the thought that was let burn (and nothing else)',
   },
 };
 
