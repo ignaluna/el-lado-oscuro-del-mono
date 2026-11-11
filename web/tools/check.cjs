@@ -757,11 +757,12 @@ async function playVacio(p, { check, shot, thorough = false }) {
     await ev(p, () => window.__eldom.dev.roamPush(1, 0, 2600)); await wait(1200); s = await rmState(); const side = (await state(p)).cam;
     check(s.steps === 0 && Math.abs(side.x) > 1.5, `walking to the side is not walking toward the star (steps ${s.steps}, ${Math.abs(side.x).toFixed(1)} m sideways)`);
     await ev(p, () => window.__eldom.dev.roamTo(0, 2.7, Math.PI)); await wait(300);
-    await ev(p, () => window.__eldom.dev.roamPush(0, 1, 2800)); s = await until((x) => x.steps >= 1, 4000); const fwd = (await state(p)).cam;
+    const pushed = Date.now(); await ev(p, () => window.__eldom.dev.roamPush(0, 1, 2800)); s = await until((x) => x.steps >= 1, 4000); const fwd = (await state(p)).cam;
     check(s.steps >= 1 && fwd.z > 3.9, `walking forward with the joystick advances the star step (steps ${s.steps}, ${(fwd.z - 2.7).toFixed(1)} m walked)`);
+    await wait(Math.max(0, 3200 - (Date.now() - pushed))); // (the push must be over: a walker still moving after the reset would count steps again and save them)
     await ev(p, () => window.__eldom.dev.roomReset()); await wait(400); await reload(); s = await rmState();
   }
-  check(s.here && s.view === 'wide' && s.stage === 0 && s.steps === 0 && s.open === '' && s.set.near.every((x) => x === 0), `the room: standing in it, stage ${s.stage}, the star ahead, no castle in sight`);
+  check(s.here && s.view === 'wide' && s.stage === 0 && s.steps === 0 && s.open === '' && s.set.near.every((x) => x === 0), `the room: standing in it, stage ${s.stage}, the star ahead, no castle in sight (${JSON.stringify({ here: s.here, view: s.view, steps: s.steps, open: s.open, near: s.set && s.set.near })})`);
   check((await castleHots()) === 0, 'the castles show only when the visitor is near: none can be touched from the arrival spot');
   // nothing can be done before its turn
   await ev(p, () => window.__eldom.ui.roomTap('rm-castillo-0')); await ev(p, () => window.__eldom.ui.roomTap('rm-vaso')); await wait(300); s = await rmState();
