@@ -73,6 +73,7 @@ ROOM_SETS['no-me-perdones'] = function buildVoid(ctx, kit, track) {
   // ---- where each layer is: the water is the floor (the depth at which a ray meets it), the standing things are sheets at their own depth ----
   const KW = (V.H - V.FY) * f, ZW = (px, py) => KW / Math.max(30, py - yh); // (the depth of the water at a cover row)
   const ZSP = ZW(0, NP_SPL_BASE); // the splashes stand at the far edge of the first ring
+  const foot = (row, Zs) => (px, py) => (py > row ? ZW(px, py) : Zs); // (a standing sheet whose lower part, below its foot, lies on the water: nothing of it is under the water)
 
   // ───────────────────────────── the tones: the photo's own contours, painted into textures ─────────────────────────────
   const { P, tonePts, region, gridMesh } = coverTones(ctx, { V, lens: { f, yh }, decode: naDecode, fill: NA_FILL, ts: [1.0, 1.7], root, rnd });
@@ -87,10 +88,10 @@ ROOM_SETS['no-me-perdones'] = function buildVoid(ctx, kit, track) {
   const RF_R = boxOf(NP_POLY.REFL, 6), refl = gridMesh(RF_R, lite ? 5 : 10, lite ? 7 : 14, ZW, region(RF_R, { ts: 1.15, masks: [['in', [NP_POLY.REFL], BM]] }), root, [0, 0, 0], [0.94, 0.98, 1.0]);
   // the splashes: one sheet that stands at the far edge of the first ring, swaying about its foot
   const SP_R = boxOf([].concat(...NP_POLY.SPL), 5), spFoot = P((SP_R[0] + SP_R[2]) / 2, NP_SPL_BASE, ZSP), spHost = grp(root, spFoot[0], spFoot[1], spFoot[2]);
-  const spl = gridMesh(SP_R, 1, 1, ZSP, region(SP_R, { ts: 1.3, masks: [['in', NP_POLY.SPL, BM]] }), spHost, spFoot, [0.94, 0.98, 1.0]);
+  const spl = gridMesh(SP_R, 1, 2, foot(NP_SPL_BASE, ZSP), region(SP_R, { ts: 1.3, masks: [['in', NP_POLY.SPL, BM]] }), spHost, spFoot, [0.94, 0.98, 1.0]);
   // the sinking shape: a sheet in the middle that bobs
-  const SH_R = boxOf(NP_POLY.SHAPE, 6), shC = P(...mid(SH_R), V.Z0), shHost = grp(root, shC[0], shC[1], shC[2]);
-  const shape = gridMesh(SH_R, 1, 1, V.Z0, region(SH_R, { ts: 1.5, masks: [['in', [NP_POLY.SHAPE], BM]] }), shHost, shC, [0.9, 0.96, 1.0]);
+  const SH_R = [411, 540, 553, 596], shC = P(...mid(SH_R), V.Z0), shHost = grp(root, shC[0], shC[1], shC[2]);
+  const shape = gridMesh(SH_R, 1, 4, foot(V.c[1], V.Z0), region(SH_R, { ts: 1.5, masks: [['in', [NP_POLY.SHAPE], BM]] }), shHost, shC, [0.9, 0.96, 1.0]);
   // the star: a sheet that stands in the dark, at the centre's depth
   const stC = P(...mid(NP_STAR_BOX), V.Z0), starHost = grp(root, stC[0], stC[1], 0);
   const star = gridMesh(NP_STAR_BOX, 1, 1, V.Z0, region(NP_STAR_BOX, { ts: 2.2, glow: 0.3 }), starHost, stC, [0.96, 0.98, 1.0]);
