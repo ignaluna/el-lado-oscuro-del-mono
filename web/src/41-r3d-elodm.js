@@ -67,30 +67,11 @@ const ELODM_KINDS = {
     return () => {};
   },
 
-  // 6 — Pato: a duck on the water beside a house that is built in turns
-  duck(F, ctx) {
-    const { THREE } = ctx, { pos: o, s } = elementSpot(F, ctx);
-    const duck = new THREE.Group(); F.group.add(duck);
-    const yellow = F.lineMat([0.96, 0.84, 0.45], 0.9);
-    const dl = F.line([[-0.2, 0], [0.12, 0], [0.18, 0.06], [0.1, 0.1], [0.1, 0.2], [0.16, 0.26], [0.24, 0.24], [0.16, 0.2], [0.1, 0.12], [-0.08, 0.12], [-0.2, 0.06], [-0.2, 0]].map(([x, y]) => F.V3(x * s, y * s, 0)), yellow, true);
-    F.group.remove(dl); duck.add(dl);
-    duck.position.set(o.x - 0.3 * s, Math.max(0.02, o.y - 0.5 * s), o.z);
-    const bricks = [];
-    for (let row = 0; row < 3; row++) for (let c = 0; c < (row === 2 ? 1 : 3); c++) {
-      const x = 0.12 + c * 0.14 + (row === 2 ? 0.14 : 0), y = -0.45 + row * 0.12;
-      bricks.push(shape(F, o, s, [[x - 0.06, y - 0.05], [x + 0.06, y - 0.05], [x + 0.06, y + 0.05], [x - 0.06, y + 0.05]], F.lineMat(F.accent, 0.8)));
-    }
-    const roof = shape(F, o, s, [[0.04, -0.12], [0.26, 0.08], [0.48, -0.12]], F.lineMat(F.accent, 0.8), false);
-    const fire = F.mesh(new THREE.CircleGeometry(s * 0.05, 16), F.basic([1, 0.6, 0.3], 0, { side: THREE.DoubleSide }), o.x + 0.26 * s, o.y - 0.42 * s, o.z - 0.02 * s);
-    F.light(F.V3(o.x, o.y, o.z - 1), 0.7, s * 5);
-    return (dt, t) => {
-      const tr = world.trial, built = Math.max(tr.solved, tr.progress);
-      duck.position.y = Math.max(0.02, o.y - 0.5 * s) + Math.sin(t * 1.4) * 0.02 * s;
-      duck.position.x = o.x - (0.3 - 0.12 * tr.solved) * s;
-      bricks.forEach((b, i) => { b.material.opacity = built * bricks.length > i ? 0.85 : 0.08; });
-      roof.material.opacity = tr.solved ? 0.85 : 0.08;
-      fire.material.opacity = tr.solved * (0.55 + 0.2 * Math.sin(t * 8));
-    };
+  // 6 — Pato: the cover, walkable, a smug duck smoking with five speech bubbles around him and a house to build. Its art is a room
+  // (49-r3d-room-6-pato.js) built beside the floor; the floor itself only keeps a faint light.
+  duck(F) {
+    F.light(F.V3(F.A.x, 2.4, F.A.z - 1), 0.25, 8);
+    return () => {};
   },
 
   // 7 — Casi Perdido: a hearth with weak embers

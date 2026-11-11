@@ -1140,6 +1140,156 @@ async function playExplotar(p, { check, shot, thorough = false }) {
 }
 
 /**
+ * Plays floor 6's room (the smug duck, five bubbles and a house) with real clicks: the five bubbles (reached by walking: they show only near, some behind him
+ * or at his sides; the chapter's reply empties one and drops its brick, the Pato's logic counts a try), the five bricks laid with CEDER and PEDIR as his
+ * eyelids ask (half closed, open; the plate says it too), the ring (the Pato says "pollerudo"; only the chapter's words lay the roof) and the heart that
+ * drifts into the house to light its fire. `thorough` adds saved states that must be rejected, things touched out of turn, the hint ladder of every stage,
+ * the wrong replies, a wrong CEDER / PEDIR and the visitor's walk to every bubble. Returns the room's state at the end.
+ */
+async function playPato(p, { check, shot, thorough = false }) {
+  const FLOOR = 6, KEY = 'eldom.room.pato.v1';
+  const MOODS = ['ceder', 'pedir', 'ceder', 'ceder', 'pedir'];
+  const VOICES = [
+    { name: 'el globo de arriba, a la izquierda de su cabeza', line: 'Estás ciego. No ves lo que hay detrás.', yes: 'Amar no es negocio.', no: 'Tenés razón: todo es un negocio.' },
+    { name: 'el globo de la derecha', line: 'Todos quieren algo.', yes: 'Amar es perder un poco de uno mismo para encontrarse en otro.', no: 'Entonces hay que sacar ventaja primero.' },
+    { name: 'el globito de la izquierda', line: 'No te conviene.', yes: 'Es elegir, una y otra vez.', no: 'Si no conviene, no se elige.' },
+    { name: 'el globo grande de abajo, a la izquierda', line: 'Tenés que ganar esa discusión.', yes: 'No me interesa ganar todas las discusiones, ni tener razón.', no: 'Tengo razón y la voy a ganar.' },
+    { name: 'el globo de abajo, a la derecha', line: 'Los números no cierran.', yes: 'Elegir cuidar, aunque no cierren los números, es mi forma de amar.', no: 'Si no cierran los números, no vale la pena.' },
+  ];
+  const ORDER = [2, 4, 1, 3, 0]; // (the bubbles are answered in any order: the bricks come out in the order they were answered)
+  const rmState = async () => (await state(p)).room;
+  const until = async (pred, ms = 15000) => { const t0 = Date.now(); let s; for (;;) { s = await rmState(); if (s && pred(s)) return s; if (Date.now() - t0 > ms) return s; await wait(120); } };
+  const act = (name) => p.locator(`#rm-acts [data-act="${name}"]`).first();
+  /** The camera has stopped (a close look gives way to the room over a second or more: a hotspot is looked for only once it is back). */
+  const settle = async () => { let last = null; for (let n = 0; n < 40; n++) { const c = (await state(p)).cam, key = [c.x, c.y, c.z, c.yaw, c.pitch, c.fov].map((v) => v.toFixed(3)).join(); if (key === last) return; last = key; await wait(250); } };
+  const tapHot = async (label) => { await settle(); await turnTo(p, label); await clickHot(p, label); };
+  const reload = async () => {
+    await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
+    await ev(p, () => window.__eldom.dev.released()); await ev(p, (f) => window.__eldom.dev.arrive(f), FLOOR); await waitFloor(p, FLOOR); await wait(2600);
+  };
+  const hintLadder = async (stage, rx, msg) => {
+    await p.locator('#rm-hint').click(); await wait(200); let s = await rmState(); const h1 = s.status;
+    check(h1.length > 20 && s.more && s.stage === stage, `${msg}: hint 1 "${h1}"`);
+    await p.locator('#rm-more').click(); await wait(200); const h2 = (await rmState()).status;
+    await p.locator('#rm-more').click(); await wait(200); s = await rmState();
+    check(h2 !== h1 && s.status !== h2 && rx.test(s.status) && !s.more, `${msg}: hint 3 gives the whole answer ("${s.status}") and there is no fourth`);
+    if (await p.locator('#rm-close').isVisible()) { await p.locator('#rm-close').click(); await wait(300); }
+  };
+  /** Stands the visitor `d` metres in front of a world point (on the side the visitor arrived from), facing it. */
+  const standAt = async (wx, wz, d) => { const x = wx, z = wz - d; await ev(p, ([x, z, y]) => window.__eldom.dev.roamTo(x, z, y), [x, z, Math.atan2(-(wx - x), -(wz - z))]); await wait(900); };
+  /** On a phone the line said when something shows itself ("cerca tuyo…") sits over the middle of the screen for a few seconds: a tap waits for it to go. */
+  const hintGone = async () => { await wait(700); await p.waitForFunction(() => { const e = document.querySelector('#cap-hint'); return !e || e.hidden || !e.textContent.trim(); }, null, { timeout: 9000 }).catch(() => {}); };
+  const home = async () => { await ev(p, () => window.__eldom.dev.roamTo(0, 2.7, Math.PI)); await wait(600); };
+  const bubHot = (k) => `Un globo de diálogo del Pato, ${VOICES[k].name}`;
+  const bubHots = () => p.locator('.hot:not([hidden])[aria-label^="Un globo de diálogo del Pato"]').count();
+  const ids = (str) => str.split(',').filter(Boolean);
+  /** Walks to bubble k, looks at it and answers it (wrongFirst: with the Pato's logic first). */
+  const answer = async (k, { wrongFirst = false, shotName = '' } = {}) => {
+    const set = (await rmState()).set, b = set.bubbleAt[k];
+    await settle(); await standAt(b.x, b.z, k === 0 ? 3.4 : 2.4); await hintGone();
+    await tapHot(bubHot(k)); let s = await until((x) => x.view === `globo-${k}` && x.panel, 8000); await wait(900);
+    check(s.acts.some((a) => a.act === 'capitulo') && s.acts.some((a) => a.act === 'pato') && s.status.includes(VOICES[k].line), `bubble ${k + 1}: the Pato says «${VOICES[k].line}» with the chapter's reply and his own ("${s.status}")`);
+    check(s.acts.find((a) => a.act === 'capitulo').text.toLowerCase() === VOICES[k].yes.toLowerCase() && s.acts.find((a) => a.act === 'pato').text.toLowerCase() === VOICES[k].no.toLowerCase(), `bubble ${k + 1}: the buttons are the chapter's words and the Pato's`);
+    if (shotName) await shot(shotName);
+    if (wrongFirst) { // the Pato's logic counts a try and the bubble stays
+      const t0 = s.tries; await act('pato').click(); s = await until((x) => x.tries === t0 + 1, 3000);
+      check(s.tries === t0 + 1 && !ids(s.said).includes(String(k)) && s.visual.v.bub[k] === 0 && /Eso lo diría el Pato/.test(s.status), `bubble ${k + 1}: the Pato's logic counts a try and the bubble stays full ("${s.status}")`);
+      s = await until((x) => x.visual.v.shake[k] === 1, 1500); check(s.visual.v.shake[k] === 1, 'the bubble shakes'); s = await until((x) => x.visual.v.shake[k] === 0, 4000); check(s.visual.v.shake[k] === 0, 'and settles again by itself');
+    }
+    const n0 = ids((await rmState()).said).length;
+    await act('capitulo').click(); s = await until((x) => ids(x.said).length === n0 + 1, 4000); await wait(400);
+    check(ids(s.said)[n0] === String(k) && s.visual.v.bub[k] === 1 && s.visual.v.drop[n0] === 1 && s.visual.v.said[n0] === k, `bubble ${k + 1}: the chapter's reply empties it and its brick drops ("${s.status}")`);
+    await until((x) => x.view === 'wide', 6000);
+  };
+  let s = await rmState();
+
+  if (thorough) {
+    // a saved state that makes no sense is rejected and what is valid is kept
+    const plant = async (raw) => { await ev(p, ([k, r]) => localStorage.setItem(k, typeof r === 'string' ? r : JSON.stringify(r)), [KEY, raw]); await reload(); return rmState(); };
+    s = await plant({ v: 1, stage: 3, said: [0, 1, 2, 3, 9], laid: 5, roof: true, done: true });
+    check(!s.done && s.said === '0,1,2,3' && s.laid === 0 && !s.roof && s.phase === 'voices' && s.stage === 0, `a bubble that does not exist: the valid prefix is kept, nothing after it (said "${s.said}")`);
+    s = await plant({ v: 1, said: [0, 1, 1, 3], laid: 2 });
+    check(s.said === '0,1' && s.laid === 0 && s.phase === 'voices', `a bubble answered twice: the valid prefix is kept (said "${s.said}")`);
+    s = await plant({ v: 1, said: [0, 1, 2], laid: 2, roof: true, done: true });
+    check(!s.done && s.laid === 0 && !s.roof && s.said === '0,1,2', 'bricks laid before the five dropped: refused');
+    s = await plant({ v: 1, said: [4, 3, 2, 1, 0], laid: 7, roof: true });
+    check(s.said === '4,3,2,1,0' && s.laid === 0 && !s.roof && s.phase === 'bricks' && s.stage === 1, 'a count of bricks that does not exist: refused, and a roof needs the five');
+    s = await plant({ v: 1, said: [0, 1, 2, 3, 4], laid: 3, roof: true, done: true });
+    check(!s.done && !s.roof && s.laid === 3 && s.phase === 'bricks' && s.stage === 1, 'a roof over three bricks: refused, the bricks are kept');
+    s = await plant({ v: 1, said: [0, 1, 2, 3, 4], laid: 5, roof: false, done: true });
+    check(!s.done && !s.roof && s.laid === 5 && s.phase === 'ring' && s.stage === 2, '"done" without the roof: refused');
+    s = await plant({ v: 1, said: [0, 1, 2, 3, 4], laid: 5, roof: true });
+    check(!s.done && s.roof && s.phase === 'finale' && s.stage === 3 && s.visual.v.roof === 1 && s.visual.v.fin === 0, 'a state play can reach is kept as it is (the roof on, the heart still in the smoke)');
+    s = await plant({ v: 2, said: [0, 1, 2, 3, 4] });
+    check(s.stage === 0 && s.said === '', 'a saved state of another version: a fresh room');
+    s = await plant('esto no es json{');
+    check(!s.done && s.stage === 0 && s.said === '', 'an unreadable saved state: a fresh room');
+    await ev(p, () => window.__eldom.dev.roomReset()); await wait(600);
+    s = await rmState();
+  }
+  check(s.here && s.view === 'wide' && s.stage === 0 && s.phase === 'voices' && s.said === '' && s.visual.v.bub.every((x) => x === 0), `the room: standing in it, stage ${s.stage}, five full bubbles`);
+  check((await bubHots()) === 0 && s.set.bubbleDist.every((d) => d > 4.2), `from the arrival spot no bubble can be touched: they show only near (${s.set.bubbleDist.join(', ')} m)`);
+  // nothing can be done before its turn
+  for (const id of ['rm-casa', 'rm-anillo', 'rm-corazon']) await ev(p, (i) => window.__eldom.ui.roomTap(i), id);
+  await ev(p, () => window.__eldom.ui.roomTap('rm-globo-0')); await wait(500); s = await rmState();
+  check(s.view === 'wide' && s.stage === 0 && s.said === '' && s.laid === 0 && !s.roof && !s.done && /demasiado lejos/i.test(await p.locator('#cap-hint').innerText()), 'the house, the ring, the heart and a bubble from afar cannot be used before their turn');
+
+  // 1. the voices
+  if (thorough) await hintLadder(0, /«Amar no es negocio»[\s\S]*«Es elegir, una y otra vez»/, 'stage 0');
+  for (const [i, k] of ORDER.entries()) await answer(k, { wrongFirst: thorough && (i === 0 || i === 3), shotName: thorough && i === 0 ? 'room6-02-bubble' : '' });
+  s = await until((x) => x.stage === 1, 4000);
+  check(ids(s.said).length === 5 && s.said === ORDER.join(',') && s.phase === 'bricks' && s.visual.v.bub.every((x) => x === 1) && s.visual.v.drop.every((x) => x === 1), `the five bubbles are empty and their five bricks lie at his feet, in the order they were answered (${s.said})`);
+  if (thorough) { await settle(); await home(); await wait(1800); await shot('room6-03-bricks'); }
+
+  // 2. the bricks: his eyelids are the mood
+  if (thorough) { await settle(); await home(); await hintLadder(1, /CEDER, PEDIR, CEDER, CEDER, PEDIR/, 'stage 1'); await ev(p, () => window.__eldom.ui.roomTap('rm-anillo')); await ev(p, () => window.__eldom.ui.roomTap('rm-corazon')); await wait(300); check((await rmState()).view === 'wide', 'the ring and the heart cannot be used before the bricks are laid'); }
+  await settle(); await home();
+  await tapHot('La casa de a dos'); s = await until((x) => x.view === 'casa' && x.panel, 8000); await wait(900);
+  check(s.acts.some((a) => a.act === 'ceder') && s.acts.some((a) => a.act === 'pedir') && /Ladrillo 1 de 5/.test(s.status) && /párpados a medio cerrar/.test(s.status) && s.mood === 'ceder' && s.visual.v.open === 0, `the house: his eyelids are half closed and the plate says it ("${s.status}")`);
+  for (let j = 0; j < 5; j++) {
+    const want = MOODS[j], other = want === 'ceder' ? 'pedir' : 'ceder';
+    s = await rmState();
+    check(s.mood === want && s.laid === j, `brick ${j + 1}: his mood is ${want} ("${s.status}")`);
+    s = await until((x) => x.visual.v.open === (want === 'pedir' ? 1 : 0), 6000);
+    check(s.visual.v.open === (want === 'pedir' ? 1 : 0), `brick ${j + 1}: his eyelids are ${want === 'pedir' ? 'open' : 'half closed'}`);
+    if (thorough && (j === 0 || j === 1)) { // the other word leaves the brick unset
+      const t0 = s.tries; await act(other).click(); s = await until((x) => x.tries === t0 + 1, 3000);
+      check(s.tries === t0 + 1 && s.laid === j && s.visual.v.lay[j] === 0 && /no asienta/.test(s.status), `brick ${j + 1}: ${other.toUpperCase()} when he asks for ${want.toUpperCase()} leaves it unset ("${s.status}")`);
+      if (j === 1) await shot('room6-04-open');
+    }
+    await act(want).click(); s = await until((x) => x.laid === j + 1, 4000); await wait(400);
+    check(s.laid === j + 1 && s.visual.v.lay[j] === 1, `brick ${j + 1}: ${want.toUpperCase()} lays it ("${s.status}")`);
+  }
+  s = await until((x) => x.stage === 2 && x.view === 'wide', 8000);
+  check(s.phase === 'ring' && s.laid === 5 && s.visual.v.lay.every((x) => x === 1), 'the five bricks are laid (three ceded, two asked): the roof is next');
+  if (thorough) { await settle(); await home(); await shot('room6-05-walls'); }
+
+  // 3. the ring
+  if (thorough) { await hintLadder(2, /«entonces sí, soy un pollerudo»/, 'stage 2'); await ev(p, () => window.__eldom.ui.roomTap('rm-corazon')); await wait(300); check((await rmState()).view === 'wide', 'the heart cannot be used before the roof'); }
+  await settle(); await home();
+  await tapHot('El anillo de brillo'); s = await until((x) => x.view === 'anillo' && x.panel, 8000); await wait(900);
+  check(s.acts.some((a) => a.act === 'aceptar') && s.acts.some((a) => a.act === 'negar') && /pollerudo/.test(s.status), `the ring: the Pato says «pollerudo» ("${s.status}")`);
+  s = await until((x) => x.visual.v.pol === 1, 3000); check(s.visual.v.pol === 1, 'and the word shows over him');
+  if (thorough) {
+    await shot('room6-06-ring');
+    const t0 = s.tries; await act('negar').click(); s = await until((x) => x.tries === t0 + 1, 3000);
+    check(s.tries === t0 + 1 && !s.roof && s.visual.v.roof === 0 && /defender/.test(s.status), `denying it counts a try and the roof stays off ("${s.status}")`);
+  }
+  await act('aceptar').click(); s = await until((x) => x.roof, 4000); await wait(500);
+  check(s.roof && s.visual.v.roof === 1 && /entonces sí, soy un pollerudo/.test(s.status), `accepting it with the chapter's words lays the roof ("${s.status}")`);
+  s = await until((x) => x.stage === 3 && x.view === 'wide', 8000);
+
+  // 4. the heart
+  await settle(); await home();
+  if (thorough) { await hintLadder(3, /Tocá el corazón del humo/, 'stage 3'); await shot('room6-07-roof'); }
+  await tapHot('El corazón que se enrosca');
+  if (thorough) { s = await until((x) => x.visual.v.fin === 1 && x.visual.v.open === 1, 4000); check(s.visual.v.fin === 1 && s.visual.v.open === 1 && !s.done, 'the heart drifts into the house and lights its fire; his eyes open (the chapter is a moment away)'); await wait(1800); await shot('room6-08-fire'); }
+  await p.waitForFunction(() => window.__eldom.state().room.done, null, { timeout: 25000 });
+  if (thorough) { await wait(2200); await shot('room6-09-solved'); }
+  return rmState();
+}
+
+/**
  * What is particular to each room's walkthrough (the `room` and `trials` scenarios read it; a floor with a room in ROOMS needs an entry):
  *   floor, chapter, minSegments (a sanity floor for the chalk lines), play(p, {check, shot, thorough}) → the room's state at the end,
  *   built(set) (what the set reports about itself), hots (labels on screen on arrival), afterSolve(state), solvedRoom(state) (after a
@@ -1256,6 +1406,25 @@ const ROOM_WALKS = {
       await p.locator('#rm-acts [data-act="no-heredar"]').click(); await wait(400);
     },
     midOK: (s) => s.rungs === '0' && s.visual.v.rung[0] === 1 && s.stage === 0, midMsg: 'a reload keeps the rung that was let go (and nothing else)',
+  },
+  'pato': {
+    floor: 6, chapter: 'cap-5', minSegments: 8000, play: playPato,
+    built: (set) => set.contours > 7000 && set.bubbles === 5 && set.bricks === 5 && set.places === 5,
+    tierBuilt: (set) => set.bubbles === 5 && set.bricks === 5,
+    hots: [], // (the bubbles show only near, and the house, the ring and the heart wait for their turn: nothing can be touched from the arrival spot)
+    afterSolve: (s) => s.visual.v.fin === 1 && s.visual.v.roof === 1 && s.visual.v.open === 1,
+    solvedRoom: (s) => s.visual.v.fin === 1 && s.visual.v.roof === 1 && s.visual.v.lay.every((x) => x === 1) && s.visual.v.bub.every((x) => x === 1),
+    solvedHot: /nuestro fuego/,
+    replayHot: 'La casa', replayView: 'casa',
+    freshRoom: (s) => s.visual.v.fin === 0 && s.visual.v.roof === 0 && s.visual.v.bub.every((x) => x === 0) && s.said === '',
+    async midWalk(p) {
+      const b = (await state(p)).room.set.bubbleAt[4];
+      await ev(p, ([x, z, y]) => window.__eldom.dev.roamTo(x, z, y), [b.x, b.z - 2.4, Math.atan2(0, -2.4)]); await wait(1500);
+      const label = 'Un globo de diálogo del Pato, el globo de abajo, a la derecha';
+      await turnTo(p, label); await clickHot(p, label); await wait(1500);
+      await p.locator('#rm-acts [data-act="capitulo"]').click(); await wait(500);
+    },
+    midOK: (s) => s.said === '4' && s.visual.v.bub[4] === 1 && s.stage === 0, midMsg: 'a reload keeps the bubble that was answered (and nothing else)',
   },
 };
 
@@ -1630,6 +1799,7 @@ const SCENARIOS = {
     await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 30000); await wait(500);
     await p.locator('.hot[aria-label="Mostrar los pisos"]').click(); await p.waitForFunction(() => !window.__eldom.state().panelDown && window.__eldom.state().phase === 'cabin', null, { timeout: 10000 }); await wait(400);
     // back up: a solved floor gives its chapter to reread; playing it again gives nothing twice
+    await ev(p, () => window.__eldom.dev.roomless(true)); // (this step reads the 2D plate, the fallback of a floor that has a room: build floor 6 as a plain world, dev only)
     await p.locator('.hot[aria-label^="Piso 6:"]').first().click({ timeout: 10000 }); await waitFloor(p, 6, 45000); await wait(2200);
     check(/^✓/.test(await p.locator('#tr-open').innerText()), `floor 6 remembers it was solved ("${await p.locator('#tr-open').innerText()}")`);
     await p.locator('#tr-open').click(); await wait(400);
@@ -1641,6 +1811,7 @@ const SCENARIOS = {
     await p.locator('#tr-read').click(); await p.waitForFunction(() => window.__eldom.state().overlay === 'book', null, { timeout: 8000 });
     check((await state(p)).book.leafIds[(await state(p)).book.at] === 'cap-5', 'LEER EL CAPÍTULO opens chapter 5 (Pato)');
     await p.locator('#bk-close').click(); await wait(500);
+    await ev(p, () => window.__eldom.dev.roomless(false));
     // all of it survives a reload; the reveal is not shown twice
     await p.reload(); await p.waitForFunction(() => window.__eldom && window.__eldom.ready, null, { timeout: 30000 }); await p.evaluate(() => window.__eldom.ready); await wait(1500);
     const after = await state(p);
