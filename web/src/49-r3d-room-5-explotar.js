@@ -19,8 +19,8 @@
 const EX = { H: 1.6, cx: 545, BOT: 935, Z0: 5.5, ZB: 6.4, ARR: 2.7 };
 /** Where the visitor stands when a floor opens is the eye; the walker is Z0 metres ahead of it. */
 const EX_SET = { x: 0, y: 1.6, z: EX.ARR + EX.Z0 };
-/** The lens depends on the screen: a wide screen fills the height at 1150 cover px of focal length, a phone's narrow view keeps the walker whole at 1950; row is the cover row the first view is centred on. The set's z never changes. */
-function exLens(a) { return coverLens(EX, a, { f: 1150, row: 694, sx: 0.42, sy: 0.53 }, { f: 1950, row: 719, sx: 0.5, sy: 0.5 }); }
+/** The lens depends on the screen: a wide screen fits the whole drawing between the title and the arrival line at 1250 cover px of focal length, a phone's narrow view at 2150; row is the cover row the first view is centred on. The set's z never changes. */
+function exLens(a) { return coverLens(EX, a, { f: 1250, row: 692, sx: 0.42, sy: 0.475 }, { f: 2150, row: 865, sx: 0.5, sy: 0.46 }); }
 /** The six rungs of the strand: three on the helix of the picture (px, py: the cover pixel of the rung), three beyond it, on the part of the strand that goes on past the edge (far: metres from the cover's middle). */
 const EX_RUNGS = [
   { id: 'puno', pain: 1, word: 'el puño cerrado', near: [335, 619] },
