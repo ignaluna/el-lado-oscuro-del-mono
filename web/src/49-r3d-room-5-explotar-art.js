@@ -2,9 +2,9 @@
 // sleeve, so it was first unwarped to a square (the paper's four corners, a homography), its uneven background removed, its luminance lightly blurred and cut at four levels
 // (marching squares), and every contour simplified (about a pixel). Each level is a list of closed loops, nested ones are holes (even-odd), in rectified cover pixels (the paper
 // is 1100 square), as half-pixel integers: "n x0 y0 dx dy dx dy …", every number a variable-length code of 5 bits per character (the characters A-Z a-z 0-9 + - : 0-31 end
-// a number, 32-63 continue it), deltas zig-zagged. Decoded by exDecode(): [{ l: level, pts: [[x, y] …], a: area }]. EX_FILL is the grey each level is painted with.
+// a number, 32-63 continue it), deltas zig-zagged. Decoded by exDecode(): [{ l: level, pts: [[x, y] …], a: area }]. EX_FILL is the grey each level is painted with (the stored value: nothing multiplies it).
 const EX_LEVELS = [40,80,120,165];
-const EX_FILL = [60,101,145,173];
+const EX_FILL = [78,131,189,225];
 const EX_TONE = [
   [
     'GznB6TJMEGICEBCLE5KsUBMOBBHH1K0UBEISIEKBEHDHFlOqVDIIGGBAJ-dtdyVhCQlBUNOTebyBAKEIuBSmBmBGBCbKbKBCNiBrBSLYBULWBQEyBEwBMkBYEKZCvBQrBPVATI1BmBHSpBJRAFWGM2',
@@ -254,20 +254,7 @@ const EX_TONE = [
     'CMDEUWeUQgBUQCFMBQQIJyBXMLFDQFpCSbS9BrCRPE4nB67BAIGGCLJ9zBg8BCGHEGEDECGMBCFBJKxzBs9BBEIGCMJHAGQOELDBAHGglBw9BHIEIKHFBGF',
   ].join(''),
 ];
-function exDecode() {
-  const AL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-', out = [];
-  EX_TONE.forEach((s, l) => {
-    let i = 0;
-    const num = () => { let v = 0, sh = 0, c; do { c = AL.indexOf(s[i++]); v += (c & 31) * 2 ** sh; sh += 5; } while (c >= 32); return v; };
-    const zg = () => { const v = num(); return v & 1 ? -(v + 1) / 2 : v / 2; };
-    while (i < s.length) {
-      const n = num(), pts = [[num() / 2, num() / 2]];
-      for (let k = 1; k < n; k++) { const p = pts[k - 1]; pts.push([p[0] + zg() / 2, p[1] + zg() / 2]); }
-      let a = 0; for (let k = 0; k < n; k++) { const p = pts[k], q = pts[(k + 1) % n]; a += p[0] * q[1] - q[0] * p[1]; }
-      out.push({ l, pts, a: Math.abs(a) / 2 });
-    }
-  });
-  return out;
-}
+/** The contour text → loops (the shared decoder of 49-r3d-room-0-tones.js). */
+const exDecode = () => decodeTones(EX_TONE);
 /** The walker's silhouette (the same photo, rectified): one closed polygon in cover pixels, cut by hand around the helix and the notes. The monkey layer is painted inside it; the other layers outside. */
 const EX_MONKEY = [[463,336],[436,344],[424,345],[405,354],[370,389],[365,398],[363,419],[357,428],[359,460],[365,465],[367,480],[374,484],[376,496],[380,500],[386,519],[395,526],[390,567],[391,607],[386,611],[387,641],[398,644],[414,658],[427,663],[441,686],[448,688],[448,735],[493,734],[504,753],[525,779],[528,789],[520,811],[518,832],[481,832],[479,853],[461,861],[448,862],[433,871],[412,873],[407,877],[406,884],[392,885],[387,888],[383,906],[384,945],[377,948],[356,949],[354,989],[357,994],[396,999],[398,1012],[412,1014],[429,1013],[431,1006],[454,1005],[489,994],[497,989],[501,983],[501,958],[495,950],[494,932],[504,925],[517,922],[585,928],[578,936],[578,967],[615,966],[617,941],[630,931],[639,929],[646,917],[694,882],[699,883],[703,889],[714,894],[721,903],[727,905],[728,912],[700,914],[697,927],[682,928],[666,935],[664,955],[667,968],[678,972],[684,983],[736,985],[739,976],[754,975],[774,960],[800,979],[774,981],[774,1013],[786,1017],[821,1022],[846,1020],[853,1017],[855,1007],[878,995],[890,982],[906,979],[954,949],[978,950],[977,900],[972,892],[942,875],[917,873],[903,877],[897,873],[875,872],[872,858],[835,861],[830,867],[827,878],[822,879],[810,870],[799,853],[788,846],[776,833],[757,802],[748,798],[745,792],[737,787],[716,762],[680,730],[601,671],[599,652],[588,642],[588,635],[603,631],[603,579],[575,579],[558,588],[551,570],[546,565],[546,538],[528,531],[531,518],[537,514],[543,504],[551,499],[564,475],[577,473],[577,437],[557,421],[567,417],[571,410],[570,384],[565,379],[549,375],[533,357],[504,340],[487,336]];

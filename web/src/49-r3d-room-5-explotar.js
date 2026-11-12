@@ -15,10 +15,12 @@
 //   From the arrival spot the room is the cover; walking in, it opens up. world.room.v holds the targets (the controller, 59-room-5-…,
 //   sets them whole); every value is damped here, so nothing needs a sequence and nothing is left half done.
 // ═══════════════════════════════════════════════════════════════════════════════════════════
-/** The eye that sees the cover: H its height (m), cx the column straight ahead, GR the cover row where his feet touch the ground, Z0 how far (m) that is from the eye, ZB the strand's depth. */
-const EX = { H: 1.6, cx: 545, GR: 975, Z0: 5.5, ZB: 6.4, ARR: 2.7 };
+/** The eye that sees the cover: H its height (m), cx the column straight ahead, BOT the cover row of the ground 0.15 m under the eye's horizon line (the lens' own), Z0 how far (m) the walker's plane is from the eye, ZB the strand's depth. */
+const EX = { H: 1.6, cx: 545, BOT: 935, Z0: 5.5, ZB: 6.4, ARR: 2.7 };
 /** Where the visitor stands when a floor opens is the eye; the walker is Z0 metres ahead of it. */
 const EX_SET = { x: 0, y: 1.6, z: EX.ARR + EX.Z0 };
+/** The lens depends on the screen: a wide screen fills the height at 1150 cover px of focal length, a phone's narrow view keeps the walker whole at 1950; row is the cover row the first view is centred on. The set's z never changes. */
+function exLens(a) { return coverLens(EX, a, { f: 1150, row: 694, sx: 0.42, sy: 0.53 }, { f: 1950, row: 719, sx: 0.5, sy: 0.5 }); }
 /** The six rungs of the strand: three on the helix of the picture (px, py: the cover pixel of the rung), three beyond it, on the part of the strand that goes on past the edge (far: metres from the cover's middle). */
 const EX_RUNGS = [
   { id: 'puno', pain: 1, word: 'el puño cerrado', near: [335, 619] },
@@ -36,8 +38,7 @@ const EX_EAR = [425, 418], EX_MOUTH = [570, 458];
 
 ROOM_SETS['explotar'] = function buildExplotar(ctx, kit, track) {
   const { THREE, V3 } = ctx, RU = kit.RU, lite = ctx.lite, V = EX;
-  // On a wide screen the cover fills the height; a phone's narrow view keeps the walker whole at a longer lens. The set's z never changes.
-  const wide = ctx.W / Math.max(1, ctx.H) >= 1.1, f = wide ? 1150 : 1950, yh = V.GR - (V.H * f) / V.Z0;
+  const { wide, f, yh } = exLens(ctx.W / Math.max(1, ctx.H));
   const root = new THREE.Group();
   root.position.set(0, 0, EX_SET.z);
   root.rotation.y = Math.PI; // the front (+z local) faces the arrival spot
@@ -50,87 +51,53 @@ ROOM_SETS['explotar'] = function buildExplotar(ctx, kit, track) {
 
   // ---- the cover's pixels → the set (x to the viewer's right, y up, z toward the visitor; the walker's plane at z = 0) ----
   const ground = (py) => (V.H * f) / Math.max(8, py - yh); // depth of a point lying on the ground at cover row py
-  const P = (px, py, Z = V.Z0) => [((px - V.cx) * Z) / f, V.H + ((yh - py) * Z) / f, V.Z0 - Z];
   const bump = (px, py, cx, cy, rx, ry) => Math.exp(-(((px - cx) / rx) ** 2 + ((py - cy) / ry) ** 2));
   /** How far the walker's body is from his plane: the head and shoulder forward, the near leg and shoe a little forward, the rear leg back. */
   const Zm = (px, py) => V.Z0 - 0.5 * bump(px, py, 470, 430, 150, 170) - 0.3 * bump(px, py, 860, 760, 130, 120) + 0.35 * bump(px, py, 430, 850, 90, 90);
-  const Pm = (px, py) => P(px, py, Zm(px, py));
 
   // ───────────────────────────── the tones: the photo's own contours, painted into textures ─────────────────────────────
-  const loops = exDecode().filter((lp) => lp.a >= (lite ? 70 : 0));
-  loops.forEach((lp) => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const p of lp.pts) { a = Math.min(a, p[0]); b = Math.min(b, p[1]); c = Math.max(c, p[0]); d = Math.max(d, p[1]); } lp.bb = [a, b, c, d]; });
-  const tonePts = loops.reduce((n, lp) => n + lp.pts.length, 0);
-  const TS = lite ? 1.05 : 1.85; // texture pixels per cover pixel
-  const GAIN = 1.3;
-  const monkeyPath = new Path2D(); EX_MONKEY.forEach((p, i) => (i ? monkeyPath.lineTo(p[0], p[1]) : monkeyPath.moveTo(p[0], p[1]))); monkeyPath.closePath();
-  const tones = (c, r) => {
-    for (let l = 0; l < EX_FILL.length; l++) {
-      const path = new Path2D(); let any = false;
-      for (const lp of loops) {
-        if (lp.l !== l || lp.bb[2] < r[0] || lp.bb[0] > r[2] || lp.bb[3] < r[1] || lp.bb[1] > r[3]) continue;
-        lp.pts.forEach((p, i) => (i ? path.lineTo(p[0], p[1]) : path.moveTo(p[0], p[1]))); path.closePath(); any = true;
-      }
-      if (!any) continue;
-      const g = Math.min(255, Math.round(EX_FILL[l] * GAIN)); c.fillStyle = `rgb(${g},${g},${g})`; c.fill(path, 'evenodd');
-    }
+  // (the cover's pixels → the set, the tones painted with a soft glow, the soft masks and the grid meshes are the shared helpers of 49-r3d-room-0-tones.js)
+  const { P, tonePts, region, gridMesh, mat } = coverTones(ctx, { V, lens: { f, yh }, decode: exDecode, fill: EX_FILL, ts: [1.05, 1.85], root, rnd });
+  const Pm = (px, py) => P(px, py, Zm(px, py));
+  // Every stroke is drawn once: the layers' soft masks add up to one. The walker is cut by his silhouette, each mover by tight polygons around its marks, and what is left
+  // is split at row 803 into the ground (the tiles) and the strand's plane; a polygon is blurred by the same amount wherever it is used.
+  const MB = 1.5, MKB = 2, GB = 3, SPLIT = 803;
+  const box = (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+  const MV = {
+    mouth: [[[565, 440], [575, 430], [592, 402], [612, 402], [640, 418], [690, 408], [705, 400], [728, 402], [726, 430], [700, 436], [698, 455], [702, 477], [708, 492], [700, 498], [684, 498], [660, 498], [630, 494], [600, 482], [575, 470], [566, 462]]],
+    left: [box(111, 382, 141, 442), box(158, 372, 194, 458), box(217, 336, 248, 373), box(226, 443, 259, 481)],
+    right: [box(794, 413, 822, 492), box(870, 442, 890, 497), box(933, 463, 952, 508)],
+    drop: [box(816, 709, 846, 766)],
   };
-  // The movers (small standing quads cut from the same tones): their rectangles in cover pixels; the layers behind them are cleared there.
-  const RECT = { mouth: [572, 385, 748, 514], left: [100, 335, 278, 498], right: [788, 405, 968, 506], drop: [806, 722, 858, 784] };
-  const RUNG_R = EX_RUNGS.map((r) => (r.near ? [r.near[0] - 30, r.near[1] - 52, r.near[0] + 30, r.near[1] + 52] : null));
-  const movers = [RECT.mouth, RECT.left, RECT.right, RECT.drop, ...RUNG_R.filter(Boolean)];
-  /** A texture painted from the tones inside a rectangle of the cover: clip (a Path2D), erase (rects and the walker's polygon), dash (breaks the bars and strands into dashes). */
-  const region = (r, o = {}) => ctx.canvasTex(Math.max(4, Math.round((r[2] - r[0]) * TS)), Math.max(4, Math.round((r[3] - r[1]) * TS)), (c, w, hh) => {
-    c.fillStyle = '#000'; c.fillRect(0, 0, w, hh);
-    c.save(); c.scale(w / (r[2] - r[0]), hh / (r[3] - r[1])); c.translate(-r[0], -r[1]);
-    if (o.clip) c.clip(o.clip);
-    tones(c, r);
-    c.fillStyle = '#000';
-    for (const e of o.erase || []) { if (e instanceof Path2D) c.fill(e); else c.fillRect(e[0], e[1], e[2] - e[0], e[3] - e[1]); }
-    if (o.dash) for (let y = r[1] + 4; y < r[3]; y += 17) c.fillRect(r[0], y, r[2] - r[0], 8);
-    c.restore();
-    if ('filter' in c) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.15; c.filter = `blur(${(2.6 * TS / 1.7).toFixed(1)}px)`; c.drawImage(c.canvas, 0, 0); c.restore(); } // a soft glow around every bright band
-  });
-  const mat = (tex, tint = [0.96, 0.95, 0.98]) => { const u = { uTex: { value: tex }, uAlpha: { value: 1 }, uReveal: { value: 1 }, uTint: { value: V3(...tint) } }; return { u, m: ctx.glowMat(TEXT_FRAG, u) }; };
-  /** A grid mesh over a cover rectangle whose every vertex sits on its pixel's ray at a depth `Zf(px, py)`; returns its geometry data. */
-  const gridMesh = (r, nx, ny, Zf, tex, host = root) => {
-    const n = (nx + 1) * (ny + 1), base = new Float32Array(n * 3), uv = new Float32Array(n * 2), idx = [];
-    for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) {
-      const px = r[0] + ((r[2] - r[0]) * i) / nx, py = r[1] + ((r[3] - r[1]) * j) / ny, k = j * (nx + 1) + i, Z = Zf(px, py), p = P(px, py, Z);
-      base.set(p, k * 3); uv[k * 2] = i / nx; uv[k * 2 + 1] = 1 - j / ny;
-    }
-    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const a = j * (nx + 1) + i, b = a + 1, c2 = a + nx + 1, d = c2 + 1; idx.push(a, c2, b, b, c2, d); }
-    const geo = ctx.keep(new THREE.BufferGeometry()), attr = new THREE.BufferAttribute(new Float32Array(base), 3);
-    geo.setAttribute('position', attr); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geo.setIndex(idx);
-    const M = mat(tex), mesh = new THREE.Mesh(geo, M.m); mesh.frustumCulled = false; mesh.layers.set(1); host.add(mesh);
-    return { mesh, attr, base, u: M.u, nx, ny, r };
-  };
-
+  /** The three rungs of the picture: the bars between the two strands (a hair into them, so they stay joined). */
+  const RUNG_P = EX_RUNGS.map((r) => (r.near ? [r.near[0] < 400 ? [[304, 598], [366, 604], [366, 640], [304, 644]] : r.near[0] < 700 ? [[598, 590], [650, 577], [650, 624], [598, 625]] : [[745, 578], [812, 566], [812, 628], [745, 618]]] : null));
+  const moverPolys = [MV.mouth, MV.left, MV.right, MV.drop, ...RUNG_P.filter(Boolean)];
+  const cutMovers = moverPolys.map((ps) => ['out', ps, MB]), cutWalker = ['out', [EX_MONKEY], MKB], below = [box(0, SPLIT, 1100, 1100)];
   // the ground: the tiles and the smudges lie on the floor (the tile rows are real ground rows); the walker is cut out of it
-  const GR_R = [20, 800, 1090, 1082], BA_L = [20, 330, 566, 806], BA_R = [566, 330, 1092, 806], MK_R = [340, 330, 990, 1022];
-  const eraseAll = [monkeyPath, ...movers];
-  const groundL = gridMesh(GR_R, lite ? 28 : 44, lite ? 10 : 16, (px, py) => ground(py) * 0.985, region(GR_R, { erase: [monkeyPath] }));
+  const GR_R = [20, SPLIT - 3 * GB - 8, 1090, 1082], BA_L = [20, 330, 566, SPLIT + 3 * GB + 2], BA_R = [566, 330, 1092, SPLIT + 3 * GB + 2], MK_R = [340, 326, 990, 1030];
+  const groundL = gridMesh(GR_R, lite ? 28 : 44, lite ? 10 : 16, (px, py) => ground(py) * 0.985, region(GR_R, { masks: [['in', below, GB], cutWalker] }));
   // the strand: two flat layers behind him, the one ahead of him is the part that can dissolve
-  const backL = gridMesh(BA_L, lite ? 14 : 22, lite ? 10 : 14, () => V.ZB, region(BA_L, { erase: eraseAll }));
-  const backR = gridMesh(BA_R, lite ? 14 : 22, lite ? 10 : 14, () => V.ZB, region(BA_R, { erase: eraseAll }));
-  groundL.mesh.layers.set(1); // (not mirrored by the water: the cover has no reflection)
+  const backL = gridMesh(BA_L, lite ? 14 : 22, lite ? 10 : 14, () => V.ZB, region(BA_L, { masks: [['out', below, GB], cutWalker, ...cutMovers] }));
+  const backR = gridMesh(BA_R, lite ? 14 : 22, lite ? 10 : 14, () => V.ZB, region(BA_R, { masks: [['out', below, GB], cutWalker, ...cutMovers] }));
   // the walker: a relief cut out by his silhouette
   const walker = grp(root);
-  const body = gridMesh(MK_R, lite ? 34 : 50, lite ? 38 : 56, Zm, region(MK_R, { clip: monkeyPath }), walker);
-  body.mesh.layers.set(1);
+  const body = gridMesh(MK_R, lite ? 34 : 50, lite ? 38 : 56, Zm, region(MK_R, { masks: [['in', [EX_MONKEY], MKB]] }), walker);
   segTotal += tonePts; // (every contour edge is a chalk line of the drawing)
 
   // ───────────────────────────── movers: small standing quads cut from the tones ─────────────────────────────
-  const mover = (rect, Zd, o = {}) => {
-    const w = rect[2] - rect[0], h = rect[3] - rect[1], c = P((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2, Zd), host = grp(root, c[0], c[1], c[2]);
+  const mover = (polys, Zd, o = {}) => {
+    const rect = boxOf(polys.flat(), 3 * MB + 1), w = rect[2] - rect[0], h = rect[3] - rect[1], c = P((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2, Zd), host = grp(root, c[0], c[1], c[2]);
     const geo = ctx.keep(new THREE.PlaneGeometry(w * mp(Zd), h * mp(Zd)));
     const mk = (tex) => { const M = mat(tex), m = new THREE.Mesh(geo, M.m); m.frustumCulled = false; m.layers.set(1); host.add(m); return { m, u: M.u }; };
-    const a = mk(region(rect, { erase: o.erase }));
-    const b = o.dash ? mk(region(rect, { dash: true, erase: o.erase })) : null;
+    const cut = [['in', polys, MB], cutWalker];
+    const dashGaps = []; for (let y = rect[1] + 4; y < rect[3]; y += 17) dashGaps.push(box(rect[0], y, rect[2], y + 8)); // (breaks the bars into dashes)
+    const a = mk(region(rect, { masks: cut }));
+    const b = o.dash ? mk(region(rect, { masks: [...cut, ['out', dashGaps, 0]] })) : null;
     return { host, a, b, home: c, w: w * mp(Zd), h: h * mp(Zd) };
   };
-  const mouthN = mover(RECT.mouth, V.Z0 - 0.35), floatL = mover(RECT.left, V.Z0 + 0.3), floatR = mover(RECT.right, V.Z0 + 0.55);
-  const dropM = mover(RECT.drop, V.ZB - 0.4);
-  const rungM = EX_RUNGS.map((r, k) => (r.near ? mover(RUNG_R[k], V.ZB, { dash: true }) : null));
+  const mouthN = mover(MV.mouth, V.Z0 - 0.35), floatL = mover(MV.left, V.Z0 + 0.3), floatR = mover(MV.right, V.Z0 + 0.55);
+  const dropM = mover(MV.drop, V.ZB - 0.4);
+  const rungM = EX_RUNGS.map((r, k) => (r.near ? mover(RUNG_P[k], V.ZB, { dash: true }) : null));
   // the squiggles on each side are a few pieces: they bob one by one (the left group and the right group are each one quad: bobbing as one, with different phases per group)
 
   // ───────────────────────────── chalk helpers ─────────────────────────────
@@ -227,18 +194,11 @@ ROOM_SETS['explotar'] = function buildExplotar(ctx, kit, track) {
     camino: { t: () => P(505, 590, V.Z0), w: 3.0, h: 3.4, up: 0 },
     ...Object.fromEntries(EX_RUNGS.map((r, k) => ['peldano-' + k, { t: () => (r.near ? P(r.near[0], r.near[1], V.ZB - 0.1) : [farPos[k][0], farPos[k][1], farPos[k][2]]), w: r.near ? 3.4 : 1.5, h: r.near ? 2.4 : 1.4, up: 0.05 }])),
   };
-  function aim(camL, tgtL, sx, sy, fov, a) {
-    root.updateMatrixWorld();
-    const cw = root.localToWorld(V3(...camL)), tw = root.localToWorld(V3(...tgtL));
-    const dx = tw.x - cw.x, dy = tw.y - cw.y, dz = tw.z - cw.z, tanV = Math.tan((fov * Math.PI) / 360), tanH = tanV * a;
-    return { x: cw.x, y: cw.y, z: cw.z, fov, yaw: Math.atan2(-dx, -dz) - Math.atan((0.5 - sx) * 2 * tanH), pitch: Math.atan2(dy, Math.hypot(dx, dz)) - Math.atan((0.5 - sy) * 2 * tanV) };
-  }
-  const fit = (w, h, fw, fh, fov, a) => { const tv = 2 * Math.tan((fov * Math.PI) / 360); return Math.max(h / (fh * tv), w / (fw * tv * a)); };
   function pose(view, a, free) {
     const L = LOOK[view]; if (!L) return null;
     const fr = free || { x0: 0.3, y0: 0.1, x1: 0.95, y1: 0.55 }, sx = (fr.x0 + fr.x1) / 2, sy = (fr.y0 + fr.y1) / 2, fw = (fr.x1 - fr.x0) * 0.9, fh = (fr.y1 - fr.y0) * 0.86, phone = a < 0.8, fov = phone ? 56 : 44;
-    const d = fit(L.w, L.h, fw, fh, fov, a), t = L.t();
-    return aim([t[0], t[1] + L.up + 0.1, t[2] + d * 0.97], t, sx, sy, fov, a);
+    const d = coverFit(L.w, L.h, fw, fh, fov, a), t = L.t();
+    return coverAim(root, V3, [t[0], t[1] + L.up + 0.1, t[2] + d * 0.97], t, sx, sy, fov, a);
   }
 
   // ───────────────────────────── every frame ─────────────────────────────

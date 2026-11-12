@@ -11,8 +11,8 @@
 // The words keep the book's own: clue and done are verbatim chapter text; the hints are new prose.
 ROOMS['explotar'] = {
   water: PLAIN_WATER, // the cover is plain black paper: no reflection, engraved rows, floor light, glints or horizon in the arrival view (see PLAIN_WATER)
-  /** The first view looks at the middle of the drawing: the horizon of the cover is the row of the walker's feet minus H·f / Z0 (see the set), so the middle row of the drawing sits at eye height on a wide screen and lower on a phone. */
-  get aim() { const wide = aspectNow() >= 1.1; return { x: EX_SET.x, y: wide ? 1.3 : 0.76, z: EX_SET.z, sx: wide ? 0.42 : 0.5, sy: wide ? 0.53 : 0.5 }; },
+  /** The first view looks at the middle of the drawing: the cover's rows are read at the lens of the screen (see the set). */
+  get aim() { const L = exLens(aspectNow()); return { x: EX_SET.x, y: EX.H + ((L.yh - L.row) * EX.Z0) / L.f, z: EX_SET.z, sx: L.sx, sy: L.sy }; }, // (the cover's row that is aimed at, by aspect; a phone ignores sy)
   intro: 'Un mono camina por un piso de baldosas, con auriculares y lentes, soplando notas. Detrás, una hebra de ADN: deshilachada a la izquierda, entera en el medio, rayada y desvaneciéndose a la derecha.',
   clue: 'Me arrepiento de no haberte abrazado más, de no haberte dicho te amo cuando todavía podía hacerlo.\nPero te juro que estoy tratando de ser mejor. De no callar lo que siento.',
   done: 'De no heredar la misma tristeza.',
