@@ -1582,7 +1582,7 @@ const ROOM_WALKS = {
   },
   'explotar': {
     floor: 5, chapter: 'cap-6', minSegments: 8000, play: playExplotar,
-    built: (set) => set.contours > 9000 && set.rungs === 6 && set.notes === 3 && set.hummers >= 4,
+    built: (set) => set.contours > 14000 && set.rungs === 6 && set.notes === 3 && set.hummers >= 4,
     tierBuilt: (set) => set.rungs === 6 && set.notes === 3,
     hots: [/^Un peldaño de la hebra/],
     afterSolve: (s) => s.visual.v.done === 1 && s.visual.v.step === 1,
