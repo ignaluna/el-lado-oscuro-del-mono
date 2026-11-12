@@ -81,7 +81,10 @@ ROOM_SETS['explotar'] = function buildExplotar(ctx, kit, track) {
   const backR = gridMesh(BA_R, lite ? 14 : 22, lite ? 10 : 14, () => V.ZB, region(BA_R, { masks: [['out', below, GB], cutWalker, ...cutMovers] }));
   // the walker: a relief cut out by his silhouette
   const walker = grp(root);
-  const body = gridMesh(MK_R, lite ? 34 : 50, lite ? 38 : 56, Zm, region(MK_R, { masks: [['in', [EX_MONKEY], MKB]] }), walker);
+  // the ear cup's glitter is warm (champagne, not white): the cup's inside is a layer of its own on the head, tinted, and the body is cut where it lies
+  const EAR = Array.from({ length: 28 }, (_, i) => [424 + Math.cos((i / 28) * TAU) * 27, 420 + Math.sin((i / 28) * TAU) * 22]), EB = 1.5, EAR_R = boxOf(EAR, 3 * EB + 1);
+  const body = gridMesh(MK_R, lite ? 34 : 50, lite ? 38 : 56, Zm, region(MK_R, { masks: [['in', [EX_MONKEY], MKB], ['out', [EAR], EB]] }), walker);
+  const earHost = grp(walker), earCup = gridMesh(EAR_R, 10, 8, (px, py) => Zm(px, py) - 0.01, region(EAR_R, { masks: [['in', [EAR], EB]] }), earHost, [0, 0, 0], [1.02, 0.93, 0.76]);
   segTotal += tonePts; // (every contour edge is a chalk line of the drawing)
 
   // ───────────────────────────── movers: small standing quads cut from the tones ─────────────────────────────
@@ -153,7 +156,7 @@ ROOM_SETS['explotar'] = function buildExplotar(ctx, kit, track) {
 
   // ───────────────────────────── the ear cup's glitter (the only glitter of this cover), the walker's breath of notes, rings, the finale ─────────────────────────────
   const earP = Pm(EX_EAR[0], EX_EAR[1]), ear = grp(walker, earP[0], earP[1], earP[2] + 0.06);
-  const glitter = kit.points(Array.from({ length: lite ? 16 : 34 }, () => { const a = rnd() * TAU, r = Math.sqrt(rnd()) * 27 * mp(V.Z0); return [Math.cos(a) * r, Math.sin(a) * r, 0.03, 0.035 + rnd() * 0.05, 0.6 + rnd() * 0.4, rnd(), 0]; }), { shape: 3, twinkle: 0.95, tint: [0.96, 0.97, 1.05] });
+  const glitter = kit.points(Array.from({ length: lite ? 16 : 34 }, () => { const a = rnd() * TAU, r = Math.sqrt(rnd()) * 27 * mp(V.Z0); return [Math.cos(a) * r, Math.sin(a) * r, 0.03, 0.022 + rnd() * 0.03, 0.5 + rnd() * 0.4, rnd(), 0]; }), { shape: 3, twinkle: 0.95, tint: [1.15, 0.97, 0.7] });
   ear.add(glitter.obj);
   const earRings = Array.from({ length: 3 }, (_, i) => { const R = kit.ribbons(120 + i); ring(R, 0.34 * mp(V.Z0) * 100, WC[1], 1); const L = lines(R, { glow: true }); ear.add(L.obj); return L; });
   const singN = kit.points(Array.from({ length: lite ? 8 : 16 }, (_, i) => [0, 0, 0.02, 0.09, 0.9, i * 0.37 % 1, 0]), { shape: 3, twinkle: 0.7, tint: [0.96, 0.97, 1] }); ear.add(singN.obj);
@@ -222,30 +225,33 @@ ROOM_SETS['explotar'] = function buildExplotar(ctx, kit, track) {
     }
     st.T += dt * m; RU.uTime.value = st.T;
     const T = st.T, solved = D.done;
+    const amb = m * smooth(3, 9, T); // the ambient motion fades in after the arrival: the first view is the cover as it is drawn
+    const walked = smooth(0.4, 2.4, Math.hypot(cp.x - EX_SET.x, cp.z - 2.7)); // how far the visitor has walked from the arrival spot: what the cover does not have comes with it
     // the whole drawing breathes a little
-    const br = 0.94 + 0.06 * Math.sin(T * 0.8) * m;
+    const br = 1 - 0.06 * amb * (0.5 - 0.5 * Math.sin(T * 0.8));
     groundL.u.uAlpha.value = br; body.u.uAlpha.value = br * (1 + 0.06 * D.strand);
     backL.u.uAlpha.value = (br + 0.1 * D.strand) * (1 - 0.15 * D.fray); backR.u.uAlpha.value = (br + 0.1 * D.strand) * (1 - 0.8 * solved) * (1 - 0.15 * D.fray);
     // the strand undulates (like turning), more when it frays; the walker sways as he walks, his feet planted
     if (m && (!lite || (st.tick++ & 1) === 0)) {
       for (const B of [backL, backR]) { // the helix band (cover rows 540..680) ripples; the rest is still
-        const arr = B.attr.array, A = 0.018 + 0.05 * D.fray;
+        const arr = B.attr.array, A = (0.018 + 0.05 * D.fray) * amb;
         for (let j = 0; j <= B.ny; j++) { const py = B.r[1] + ((B.r[3] - B.r[1]) * j) / B.ny, w = smooth(520, 580, py) * (1 - smooth(650, 700, py)); if (w < 0.01) continue; for (let i = 0; i <= B.nx; i++) { const k = (j * (B.nx + 1) + i) * 3; arr[k + 1] = B.base[k + 1] + Math.sin(T * 1.2 + B.base[k] * 2.3) * A * w; arr[k] = B.base[k] + Math.cos(T * 0.9 + B.base[k] * 1.7) * A * 0.4 * w; } }
         B.attr.needsUpdate = true;
       }
-      const arr = body.attr.array, sx = Math.sin(T * 2.2) * 0.03, sz = Math.sin(T * 1.1) * 0.05;
-      for (let j = 0; j <= body.ny; j++) { const py = body.r[1] + ((body.r[3] - body.r[1]) * j) / body.ny, w = smooth(1000, 470, py); for (let i = 0; i <= body.nx; i++) { const k = (j * (body.nx + 1) + i) * 3; arr[k] = body.base[k] + sx * w; arr[k + 1] = body.base[k + 1] + Math.sin(T * 4.4) * 0.012 * w; arr[k + 2] = body.base[k + 2] + sz * w * 0.4; } }
+      const arr = body.attr.array, sx = Math.sin(T * 2.2) * 0.03 * amb, sz = Math.sin(T * 1.1) * 0.05 * amb, sy = Math.sin(T * 4.4) * 0.012 * amb;
+      for (let j = 0; j <= body.ny; j++) { const py = body.r[1] + ((body.r[3] - body.r[1]) * j) / body.ny, w = smooth(1000, 470, py); for (let i = 0; i <= body.nx; i++) { const k = (j * (body.nx + 1) + i) * 3; arr[k] = body.base[k] + sx * w; arr[k + 1] = body.base[k + 1] + sy * w; arr[k + 2] = body.base[k + 2] + sz * w * 0.4; } }
       body.attr.needsUpdate = true;
+      earHost.position.set(sx, sy, sz * 0.4); // (the ear cup moves with the head: above row 470 the body's sway is one rigid shift)
     }
     walker.position.set(0.38 * D.step, 0.04 * Math.sin(D.step * Math.PI), 0);
     // movers: the notes from his mouth drift away and come back, the squiggles bob, the rungs, the drop
-    mouthN.host.position.set(mouthN.home[0] + 0.14 * Math.sin(T * 0.9) * m + 0.38 * D.step + 0.2 * D.song * Math.sin(T * 2) * m, mouthN.home[1] + 0.05 * Math.sin(T * 1.7) * m + 0.04 * D.song, mouthN.home[2]);
-    mouthN.a.u.uAlpha.value = 0.82 + 0.18 * Math.sin(T * 1.3) * m + 0.35 * D.song;
-    for (const [fl, ph] of [[floatL, 0], [floatR, 2.1]]) { fl.host.position.set(fl.home[0] + 0.05 * Math.sin(T * 0.6 + ph) * m, fl.home[1] + 0.09 * Math.sin(T * 0.8 + ph) * m, fl.home[2]); fl.host.rotation.z = 0.04 * Math.sin(T * 0.7 + ph) * m; fl.a.u.uAlpha.value = 0.8 + 0.2 * Math.sin(T * 1.9 + ph) * m; }
+    mouthN.host.position.set(mouthN.home[0] + 0.14 * Math.sin(T * 0.9) * amb + 0.38 * D.step + 0.2 * D.song * Math.sin(T * 2) * m, mouthN.home[1] + 0.05 * Math.sin(T * 1.7) * amb + 0.04 * D.song, mouthN.home[2]);
+    mouthN.a.u.uAlpha.value = 0.82 + 0.18 * (1 - amb) + 0.18 * Math.sin(T * 1.3) * amb + 0.35 * D.song;
+    for (const [fl, ph] of [[floatL, 0], [floatR, 2.1]]) { fl.host.position.set(fl.home[0] + 0.05 * Math.sin(T * 0.6 + ph) * amb, fl.home[1] + 0.09 * Math.sin(T * 0.8 + ph) * amb, fl.home[2]); fl.host.rotation.z = 0.04 * Math.sin(T * 0.7 + ph) * amb; fl.a.u.uAlpha.value = 0.8 + 0.2 * (1 - amb) + 0.2 * Math.sin(T * 1.9 + ph) * amb; }
     // the drop: it forms on the helix, falls and lands in the floor (a ring); in the finale it falls once more, whole, and the floor takes it
-    if (m || solved > 0.02) st.drop = (st.drop + dt * (solved > 0.02 ? 0.22 : 0.14)) % 1;
+    if ((m && T > 7) || solved > 0.02) st.drop = (st.drop + dt * (solved > 0.02 ? 0.22 : 0.14)) % 1; // (it hangs where the cover has it until the arrival line is gone)
     {
-      const p = st.drop, live = m || solved > 0.02;
+      const p = st.drop, live = (m && T > 7) || solved > 0.02;
       let y = dHome, a = 1, s = 1;
       if (live) { if (p < 0.2) { y = dTop; s = 0.4 + 0.6 * (p / 0.2); a = s; } else if (p < 0.75) { const q = (p - 0.2) / 0.55; y = dTop + (dFloor - dTop) * q * q; } else { y = dFloor; a = 0; } }
       dropM.host.position.set(dropM.home[0], y, dropM.home[2]); dropM.host.scale.setScalar(s); dropM.a.u.uAlpha.value = a;
@@ -257,19 +263,19 @@ ROOM_SETS['explotar'] = function buildExplotar(ctx, kit, track) {
       const done = D.rung[k], pain = r.pain, sh = D.shake[k] * Math.sin(T * 38) * 0.03 * m;
       if (r.near) {
         const M = rungM[k], dash = pain ? done : 0;
-        M.a.u.uAlpha.value = (1 - dash) * (0.9 + 0.1 * Math.sin(T * 2 + k) * m); M.b.u.uAlpha.value = dash * 0.9; M.host.position.set(M.home[0] + sh, M.home[1], M.home[2]);
+        M.a.u.uAlpha.value = (1 - dash) * (0.9 + 0.1 * (1 - amb) + 0.1 * Math.sin(T * 2 + k) * amb); M.b.u.uAlpha.value = dash * 0.9; M.host.position.set(M.home[0] + sh, M.home[1], M.home[2]);
       } else {
         const F = farK[k], vis = Math.min(1, Math.max(0, (6.2 - rungNear[k]) / 2.2)); // the far end of the strand shows up as the visitor comes near
         const dash = pain ? done : 0;
-        F.Ls.set((1 - dash) * (0.25 + 0.75 * vis)); F.Ld.set(dash * 0.9 * (0.3 + 0.7 * vis)); F.host.position.set(F.pos[0] + sh, F.pos[1], F.pos[2]);
+        F.Ls.set((1 - dash) * (0.06 + 0.19 * walked + 0.75 * vis)); F.Ld.set(dash * 0.9 * (0.08 + 0.22 * walked + 0.7 * vis)); F.host.position.set(F.pos[0] + sh, F.pos[1], F.pos[2]);
         F.Lr.set(vis * (1 - done) * (0.35 + 0.35 * Math.sin(T * 2.4 + k) * m)); F.Lr.obj.scale.setScalar(1 + 0.12 * Math.sin(T * 2.4 + k) * m);
       }
     });
-    ext.L.set(0.45 + 0.4 * D.strand * 0.5);
+    ext.L.set(0.1 + 0.35 * walked + 0.2 * D.strand);
     // the strand ahead of him dissolves into dashes in the finale
     dashAhead.L.set(solved * (0.7 + 0.2 * Math.sin(T * 1.5) * m)); dashAhead.host.visible = solved > 0.02;
     // the notes: hummers drift; the carriers show near and are collected
-    hummers.forEach((hm, i) => { hm.host.position.set(hm.p[0] + 0.25 * Math.sin(T * 0.4 + hm.ph) * m, hm.p[1] + 0.18 * Math.sin(T * 0.7 + hm.ph * 1.3) * m, hm.p[2] + 0.2 * Math.cos(T * 0.35 + hm.ph) * m); faceCam(hm.host, hm.wx, hm.wz); hm.L.set((0.38 + 0.15 * Math.sin(T * 1.6 + hm.ph) * m) * (1 - 0.5 * solved)); });
+    hummers.forEach((hm, i) => { hm.host.position.set(hm.p[0] + 0.25 * Math.sin(T * 0.4 + hm.ph) * m, hm.p[1] + 0.18 * Math.sin(T * 0.7 + hm.ph * 1.3) * m, hm.p[2] + 0.2 * Math.cos(T * 0.35 + hm.ph) * m); faceCam(hm.host, hm.wx, hm.wz); hm.L.set((0.38 + 0.15 * Math.sin(T * 1.6 + hm.ph) * m) * (1 - 0.5 * solved) * walked); hm.host.visible = walked > 0.01; });
     carriers.forEach((c, i) => {
       const n = c.n, d = dist2(cp, noteW[i]); noteNear[i] = d;
       const collected = D.note[i], vis = (1 - collected) * Math.min(1, Math.max(0, (NEAR_N + 1.2 - d) / 1.4));
@@ -277,7 +283,7 @@ ROOM_SETS['explotar'] = function buildExplotar(ctx, kit, track) {
       const sc = 1 + 0.06 * Math.sin(T * 3 + i) * m, ph = T + i * 2;
       c.host.position.set(c.p[0] + 0.12 * Math.sin(ph * 0.8) * m, c.p[1] + 0.12 * Math.sin(ph * 1.1) * m, c.p[2]); c.host.scale.setScalar(sc);
       faceCam(c.host, n.x, n.z);
-      c.L.set(0.18 * (1 - collected) + c.a * 0.9); c.Lr.set(c.a * (0.5 + 0.3 * Math.sin(T * 3 + i) * m));
+      c.L.set(0.18 * (0.4 + 0.6 * walked) * (1 - collected) + c.a * 0.9); c.Lr.set(c.a * (0.5 + 0.3 * Math.sin(T * 3 + i) * m));
       c.host.visible = collected < 0.98;
       const q = c.sparks.pos, qd = c.sparks.dat; for (let k = 0; k < q.length / 3; k++) { const a = ph * 0.9 + (k / (q.length / 3)) * TAU; q[k * 3] = Math.cos(a) * 0.45; q[k * 3 + 1] = 0.15 + Math.sin(a * 1.3) * 0.3; q[k * 3 + 2] = 0.05; qd[k * 4 + 1] = 0.5 + 0.5 * Math.sin(ph * 2 + k); }
       c.sparks.geo.attributes.position.needsUpdate = true; c.sparks.geo.attributes.aData.needsUpdate = true; c.sparks.set(c.a);
@@ -292,7 +298,7 @@ ROOM_SETS['explotar'] = function buildExplotar(ctx, kit, track) {
     glitter.set(0.8 + 0.2 * Math.sin(T * 2.6) * m); ear.rotation.z = 0;
     earRings.forEach((L, i) => { const ph = (T * 0.5 + i / 3) % 1, on = D.song > 0.05 || D.sung > 0.05 || D.note[0] + D.note[1] + D.note[2] > 2.5; L.obj.scale.setScalar(0.5 + ph * 1.6); L.set((on ? 0.8 : 0) * (1 - ph) * Math.max(D.song, 0.4 * (D.note[0] + D.note[1] + D.note[2]) / 3)); L.obj.visible = on; });
     { const q = singN.pos, qd = singN.dat; for (let k = 0; k < q.length / 3; k++) { const p = (T * 0.35 + k / (q.length / 3)) % 1; q[k * 3] = 0.1 + p * 1.2; q[k * 3 + 1] = 0.1 * Math.sin(p * 9 + k) + p * 0.35; q[k * 3 + 2] = 0.04; qd[k * 4 + 1] = Math.sin(p * Math.PI) * D.song; } singN.geo.attributes.position.needsUpdate = true; singN.geo.attributes.aData.needsUpdate = true; singN.set(1); }
-    dust.set(0.7); sig.set(0.5);
+    dust.set(0.15 + 0.55 * walked); sig.set(0.5);
     // the page flying to the book
     const pg = world.room.page;
     sheet.mesh.visible = pg > 0.001 && pg < 0.999;
