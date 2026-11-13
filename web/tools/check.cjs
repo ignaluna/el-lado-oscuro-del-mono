@@ -2332,13 +2332,25 @@ const SCENARIOS = {
           await startIfStill('youtube');
           const tPlay = Date.now();
           let s1 = await until((s) => s.playing && s.diag.currentTime > t.youtubeStartSeconds, 12000);
-          if (!(s1.playing && s1.diag.currentTime > t.youtubeStartSeconds)) { // probably an ad first: skip it when YouTube allows
-            const skip = p.frameLocator('iframe[src*="youtube.com/embed"]').locator('.ytp-ad-skip-button, .ytp-skip-ad-button, .ytp-ad-skip-button-modern, button[id^="skip-button"]');
-            for (let k = 0; k < 8 && !(s1.playing && s1.diag.currentTime > t.youtubeStartSeconds); k++) { await skip.first().click({ timeout: 1500 }).catch(() => {}); s1 = await until((s) => s.playing && s.diag.currentTime > t.youtubeStartSeconds, 4000); }
-            log(`piso ${t.floor} youtube: the song started after ${((Date.now() - tPlay) / 1000).toFixed(0)} s (an ad played first)`);
+          let adSeconds = 0, adTimedOut = false, sawAd = false;
+          if (!(s1.playing && s1.diag.currentTime > t.youtubeStartSeconds)) { // an ad may play first: wait for it to end (bounded), skipping it whenever YouTube offers
+            const yt = p.frameLocator('iframe[src*="youtube.com/embed"]');
+            const skip = yt.locator('.ytp-ad-skip-button, .ytp-skip-ad-button, .ytp-ad-skip-button-modern, button[id^="skip-button"]');
+            const adShowing = async () => (await yt.locator('.html5-video-player.ad-showing, .ytp-ad-player-overlay, .ytp-ad-text').count().catch(() => 0)) > 0;
+            const tAd = Date.now();
+            for (;;) {
+              s1 = await until((s) => s.playing && s.diag.currentTime > t.youtubeStartSeconds, 3000);
+              if (s1.playing && s1.diag.currentTime > t.youtubeStartSeconds) break;
+              if (await adShowing()) { sawAd = true; await skip.first().click({ timeout: 1000 }).catch(() => {}); }
+              else if (!sawAd && Date.now() - tAd > 15000 && !(await adShowing())) { await playYouTube().catch(() => {}); } // no ad and still not playing: a click starts it
+              if (Date.now() - tAd > 150000) { adTimedOut = true; break; }
+            }
+            adSeconds = Math.round((Date.now() - tAd) / 1000);
+            log(adTimedOut ? `piso ${t.floor} youtube: still not playing after ${adSeconds} s (${sawAd ? 'an ad is still showing' : 'no ad showing'})` : `piso ${t.floor} youtube: the song started ${((Date.now() - tPlay) / 1000).toFixed(0)} s after the load (${sawAd ? 'an ad played first, ' + adSeconds + ' s waited' : 'no ad'})`);
           }
           const ct = s1.diag.currentTime || 0;
-          check(!!s1.playing && ct >= t.youtubeStartSeconds - 1 && ct < t.youtubeStartSeconds + 20, `piso ${t.floor} youtube: playing at ${ct.toFixed ? ct.toFixed(1) : ct}s (song starts at ${t.youtubeStartSeconds}s)`);
+          if (adTimedOut && sawAd) log(`piso ${t.floor} youtube: ENVIRONMENTAL, an ad outlasted the 150 s wait; the song start is not verified here (not counted as a pass)`);
+          else check(!!s1.playing && ct >= t.youtubeStartSeconds - 1 && ct < t.youtubeStartSeconds + 20, `piso ${t.floor} youtube: playing at ${ct.toFixed ? ct.toFixed(1) : ct}s (song starts at ${t.youtubeStartSeconds}s)`);
         } else {
           const id = t.spotifyTrackUri ? t.spotifyTrackUri.split(':').pop() : null;
           check(id ? src.includes('/embed/track/' + id) : src.includes('/embed/album/' + t.spotifyAlbumId), `piso ${t.floor} spotify: embed ${id ? 'track ' + id : 'album'}`);
