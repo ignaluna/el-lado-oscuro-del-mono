@@ -41,6 +41,8 @@ El álbum y el libro se unen por identificadores estables (`tracks[].chapter`), 
 
 **"Quedarse" (pisos 1, 3 y 7).** (En el piso 1 es el último paso de la sala; en el piso 2 son las tres respiraciones del final, sin cuenta; en el piso 3 es TRAGAR LA PALABRA.) Con un toque empieza una cuenta lenta, de 4 a 5 segundos, que se ve en el mismo botón. No hace falta mantener el dedo apretado. Otro toque, o cualquier otro botón, la interrumpe.
 
+**Límite conocido (celulares).** La línea de llegada (el texto que describe la sala al entrar) queda 6 segundos sobre la parte baja del dibujo en los pisos 4, 6 y 7, y en pantallas de 360 × 740 también en los pisos 5 y 9. Pasados los 6 segundos desaparece y el dibujo se ve entero; se aceptó así.
+
 ## Los nueve desafíos
 
 ### Piso 1 · En una · capítulo 1 · una realidad simulada por computadora
@@ -229,6 +231,8 @@ Se respetaron tal cual; quedan anotadas para revisar con el autor.
 ```bash
 node web/tools/build.cjs
 node web/tools/check.cjs --scenario trials,book,basements --viewport both
+node web/tools/check.cjs --scenario room --viewport both           # cada sala, con clics reales (agregar --floors 5 para una sola)
+node web/tools/check.cjs --scenario room --dist --viewport both    # lo mismo sobre un build de release (corre primero build.cjs --release --site <url>)
 node web/tools/check.cjs --scenario smoke,cabin,mini --viewport both
 ```
 
