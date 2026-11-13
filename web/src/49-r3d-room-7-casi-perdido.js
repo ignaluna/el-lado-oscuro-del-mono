@@ -281,7 +281,7 @@ ROOM_SETS['casi-perdido'] = function buildCasiPerdido(ctx, kit, track) {
     G.geo.attributes.position.needsUpdate = true;
   }
   function update(dt, t) {
-    const v = world.room.v || {}, ok = Array.isArray(v.said), m = world.reduced ? 0 : 1, rate = world.reduced ? 9 : 3, cam = ctx.camera, cp = world.cam;
+    const v = world.room.v || {}, ok = Array.isArray(v.said) && Array.isArray(v.spun) && typeof v.fin === 'number', m = world.reduced ? 0 : 1, rate = world.reduced ? 9 : 3, cam = ctx.camera, cp = world.cam;
     const said = ok ? v.said : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], spun = ok && Array.isArray(v.spun) ? v.spun : [0, 0, 0], curId = ok && Number.isInteger(v.cur) ? v.cur : -1;
     if (ok && !st.init) { // the saved state is shown as it is: what is resolved is where it landed, nothing flies
       D.burn = v.fin; D.hand = v.fin; D.spun = spun.slice(); const pl3 = placed(said); D.glyph = pl3.map((n) => (n > 0 ? 1 : 0)); D.extra = pl3.map((n) => (n > 1 ? 1 : 0)); D.ring = spun.slice();
