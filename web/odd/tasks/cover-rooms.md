@@ -608,3 +608,42 @@ checks across several files. Writers run one at a time.
   **Accepted known gap.** On phones the 6 s arrival line covers part of the drawing on floors 4, 6 and 7, and on 360x740 also floors 5 and 9. It disappears after 6 s; accepted as is.
 
   **Not verified:** a real phone, real screen-reader speech, frame rate on a real GPU, and the ad wait of the integrations check against a real ad (the rerun had none).
+
+## Reviews (2026-11-17)
+
+The gentle-ai reviews ran per floor, from the last reviewed boundary 0734062 to 640d67d. The candidates were contiguous committed slices, reviewed from a detached worktree moved to each slice's end. The user granted each slice; from slice 9 on, the user granted all the rest at once. Every slice ran the `review-reliability` lens only (medium risk). Every slice was approved, acknowledged and burned, and none opened a correction. Docs-only slices assessed as passive.
+
+| Slice | Content | Outcome | Non-blocking findings |
+|---|---|---|---|
+| 0734062..42e2570 | C9 floor 9, floor 8 walk fix | approved | 2 suggestions |
+| ..2e5cb96 | C5 floor 5 | approved | 2 warnings, 2 suggestions |
+| ..0eba483 | C6 floor 6 | approved | 2 warnings |
+| ..285b293 | C7 floor 7 | approved | 1 warning, 2 suggestions |
+| ..37463bc | CY1 + CY2 floor 3 (CY1 alone was under budget) | approved | 2 warnings, 1 suggestion |
+| ..ffac53e | CY3 floor 2 | approved | 1 warning, 2 suggestions |
+| ..2b7038e | CY4 floor 4 + shared tone module | approved | 2 warnings, 1 suggestion |
+| ..e574b4f | CY5 floor 8 | approved | 1 warning, 1 suggestion |
+| ..3263646 | CY6 floor 1 | approved | 1 warning, 2 suggestions |
+| ..f80c576 | CY7a refactor (split: the whole CY7a exceeded the lens context budget) | approved | 3 warnings, 1 suggestion |
+| ..882767e | CY7a retrace | approved | 1 suggestion |
+| ..60273d6 | CY7a docs | passive | — |
+| ..d30fc1d | CY7b floor 6 | approved | 2 suggestions |
+| ..518d038 | CY7c refactor (split: the whole CY7c exceeded the lens context budget) | approved | 2 warnings, 2 suggestions |
+| ..6bd48fe | CY7c retrace | approved | 1 warning, 2 suggestions |
+| ..e459e71 | CY7c docs | passive | — |
+| ..640d67d | CY7d floor 5 + CX | approved | 1 warning, 1 suggestion |
+
+**Recurring follow-ups (not done, none blocks):**
+- **Reach gate fails open (floors 5, 6, 7).** `dist(k)` returns 0 when `R.roomInfo` is unavailable or before the first frame, so a far tap passes. Unknown distance should read as out of reach. No check taps a far rung, note, bubble or spinner from the arrival spot during its stage.
+- **Lens chosen at build time vs the `aim` getter (floors 1, 2, 3, 4, 5, 8).** The set fixes `f`/`yh` from `ctx.W/ctx.H` once, but `ROOMS[id].aim` re-reads `aspectNow()`. A rotation or resize across the 1.1 threshold without a rebuild desyncs the arrival view. Fix: rebuild the set on a threshold cross, or have `aim` use the build-time lens. A `built` check could also assert `set.wide`/`set.f` per viewport.
+- **Integrations ad wait (`check.cjs:2341-2352`).** The ENVIRONMENTAL skip is keyed on a latched `sawAd`, not on an ad still showing at the timeout. An ad that ended, followed by a song that never starts, is skipped instead of failed, and the log wrongly says the ad is still showing.
+- **Floor 3 `roundRect` has no feature guard.** Safari before 16 and Firefox before 112 throw while building the set.
+- **Smaller items:**
+  - `check.cjs` `turnTo` yaw-wrap sweep;
+  - pato bubble `b.line` unguarded;
+  - portales `pullT` timers not cleared on `visual()`;
+  - roam leaves a planted floor 8 localStorage state;
+  - casi-perdido `rot` not saved and `tries`/`hints` accept Infinity;
+  - shared `tones()` paints NaN for levels of 5 or more without `o.grey`;
+  - portales sparkle dimming assumes two sparkles with gold first;
+  - half-cut visual states unproved.
