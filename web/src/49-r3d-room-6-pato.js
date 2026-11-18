@@ -263,7 +263,7 @@ ROOM_SETS['pato'] = function buildPato(ctx, kit, track) {
   const D = { bub: [0, 0, 0, 0, 0], shake: [0, 0, 0, 0, 0], drop: [0, 0, 0, 0, 0], lay: [0, 0, 0, 0, 0], roof: 0, open: 0, fin: 0, pol: 0, near: [0, 0, 0, 0, 0] };
   const st = { T: 0, init: false, tick: 0, nextBlink: 7, blinkAt: -9, from: [0, 1, 2, 3, 4].map(() => [0, 0, 0]) };
   const tmpV = V3(), tmpQ = V3();
-  const bubNear = [0, 0, 0, 0, 0];
+  const bubNear = [Infinity, Infinity, Infinity, Infinity, Infinity]; // (a distance not measured yet reads as out of reach: the first frame fills them in)
   const fromOf = (v, j) => (v.said && v.said[j] >= 0 ? bubbleP[v.said[j]] : null);
   const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
   function update(dt, t) {

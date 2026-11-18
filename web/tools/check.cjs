@@ -1024,6 +1024,30 @@ async function playPortales(p, { check, shot, thorough = false }) {
 }
 
 /**
+ * The reach gate of a walking room (floors 5, 6 and 7): from where the visitor stands, a tap on a thing that is live but out of reach says it is
+ * too far and changes nothing; the same while the room's distances are unknown (dev-only `roomBlind`), which must read as out of reach too.
+ * `read` returns the state that must stay as it is; `dist` returns the thing's measured distance; `whileBlind` runs while the distances are unknown.
+ */
+async function reachGate(p, check, { id, what, read, dist, reach = 4.8, whileBlind = null }) {
+  const rm = async () => (await state(p)).room;
+  const blindTo = (on) => p.evaluate((b) => { const u = location.href; if (b) history.replaceState(null, '', location.pathname + location.search + '#dev'); window.__eldom.dev.roomBlind(b); history.replaceState(null, '', u); }, on); // (the dev hook is inert in a release build unless #dev is in the address: say it is, only for this call, without firing a hashchange)
+  const tap = async () => {
+    await wait(700); await p.waitForFunction(() => { const e = document.querySelector('#cap-hint'); return !e || e.hidden || !e.textContent.trim(); }, null, { timeout: 9000 }).catch(() => {});
+    await ev(p, () => { const e = document.querySelector('#cap-hint'); if (e) e.textContent = ''; }); // (so the line read below is the one this tap says)
+    const before = await read(); await ev(p, (i) => window.__eldom.ui.roomTap(i), id); await wait(500);
+    return { before, after: await read(), line: await p.locator('#cap-hint').innerText().catch(() => '') };
+  };
+  const d = await dist(); check(d > reach, `${what}: from here it is out of reach (${d} m, reach ${reach} m)`);
+  let r = await tap(); check(r.before === r.after && /demasiado lejos/i.test(r.line), `${what}: a tap from afar says it is too far and changes nothing ("${r.line}")`);
+  try {
+    await blindTo(true); const b = await rm(); check(b.blind === true, `${what}: the room's distances can be made unknown (dev only)`);
+    r = await tap(); check(r.before === r.after && /demasiado lejos/i.test(r.line), `${what}: with the distance unknown the tap is refused too ("${r.line}")`);
+    if (whileBlind) await whileBlind();
+  } finally { await blindTo(false); }
+  check((await rm()).blind === false, `${what}: the distances are known again`);
+}
+
+/**
  * Plays floor 5's room (the walking monkey and the strand) with real clicks: the six rungs (three on the helix of the picture, three beyond its
  * edge that show only near: NO HEREDAR on the pain, CONSERVAR on what is kept), the three notes that carry the unsaid words (walked to), the song
  * sung at the headphones in the letter's order, and the slow SEGUIR CAMINANDO. `thorough` adds saved states that must be rejected, wrong choices
@@ -1119,6 +1143,14 @@ async function playExplotar(p, { check, shot, thorough = false }) {
   for (const id of ['rm-peldano-3', 'rm-nota-0', 'rm-auriculares', 'rm-mono']) await ev(p, (i) => window.__eldom.ui.roomTap(i), id);
   await wait(400); s = await rmState();
   check(s.view === 'wide' && s.stage === 0 && s.rungs === '' && s.notes === '' && s.sung === '' && !s.done, 'a far rung, a note, the headphones and the walker cannot be used before their turn');
+  const readEx = async () => { const x = await rmState(); return JSON.stringify([x.view, x.stage, x.rungs, x.notes, x.sung, x.tries, x.hints, x.done]); };
+  if (thorough) { // the far rung is live (the strand stage) and out of reach: refused, and refused while its distance is unknown; a rung of the picture stays touchable from anywhere
+    await reachGate(p, check, { id: 'rm-peldano-3', what: 'far rung', read: readEx, dist: async () => (await rmState()).set.rungDist[3], whileBlind: async () => {
+      await ev(p, () => window.__eldom.ui.roomTap('rm-peldano-0')); const x = await until((y) => y.view === 'peldano-0', 6000);
+      check(x.view === 'peldano-0', 'with the distance unknown a rung of the picture is still touchable');
+      await ev(p, () => window.__eldom.ui.roomGo('wide')); await until((y) => y.view === 'wide', 6000); await settle();
+    } });
+  }
 
   // 1. the strand
   if (thorough) await hintLadder(0, /«el puño cerrado»[\s\S]*«la fuerza»/, 'stage 0');
@@ -1136,7 +1168,7 @@ async function playExplotar(p, { check, shot, thorough = false }) {
 
   // 2. the notes
   if (thorough) await hintLadder(1, /«te», «amo» y «abuela»/, 'stage 1');
-  if (thorough) { await settle(); await home(); check((await noteHots()) === 0, 'from the arrival spot no note can be touched'); await ev(p, () => window.__eldom.ui.roomTap('rm-auriculares')); await wait(300); check((await rmState()).view === 'wide', 'the headphones cannot be used before the three words are taken'); }
+  if (thorough) { await settle(); await home(); await reachGate(p, check, { id: 'rm-nota-0', what: 'far note', read: readEx, dist: async () => (await rmState()).set.noteDist[0] }); check((await noteHots()) === 0, 'from the arrival spot no note can be touched'); await ev(p, () => window.__eldom.ui.roomTap('rm-auriculares')); await wait(300); check((await rmState()).view === 'wide', 'the headphones cannot be used before the three words are taken'); }
   for (const k of [0, 1, 2]) await collect(k, thorough && k === 0 ? 'room5-06-note' : '');
   s = await until((x) => x.stage === 2, 3000);
   check(s.phase === 'song' && ids(s.notes).length === 3 && /auriculares/i.test(await p.locator('#cap-hint').innerText()), `the three words are yours: "${await p.locator('#cap-hint').innerText()}"`);
@@ -1270,6 +1302,10 @@ async function playPato(p, { check, shot, thorough = false }) {
   for (const id of ['rm-casa', 'rm-anillo', 'rm-corazon']) await ev(p, (i) => window.__eldom.ui.roomTap(i), id);
   await ev(p, () => window.__eldom.ui.roomTap('rm-globo-0')); await wait(500); s = await rmState();
   check(s.view === 'wide' && s.stage === 0 && s.said === '' && s.laid === 0 && !s.roof && !s.done && /demasiado lejos/i.test(await p.locator('#cap-hint').innerText()), 'the house, the ring, the heart and a bubble from afar cannot be used before their turn');
+  if (thorough) { // the voices stage is live and the bubble is out of reach: refused, and refused while its distance is unknown
+    const read = async () => { const x = await rmState(); return JSON.stringify([x.view, x.stage, x.said, x.laid, x.roof, x.tries, x.hints, x.done]); };
+    await reachGate(p, check, { id: 'rm-globo-0', what: 'far bubble', read, dist: async () => (await rmState()).set.bubbleDist[0] });
+  }
 
   // 1. the voices
   if (thorough) await hintLadder(0, /«Amar no es negocio»[\s\S]*«Es elegir, una y otra vez»/, 'stage 0');
@@ -1392,6 +1428,10 @@ async function playCasiPerdido(p, { check, shot, thorough = false }) {
     check(s.stage === 0 && s.said === '', 'a saved state of another version: a fresh room');
     s = await plant('esto no es json{');
     check(!s.done && s.stage === 0 && s.said === '', 'an unreadable saved state: a fresh room');
+    // the spinners stage is live and a spinner is out of reach: refused, and refused while its distance is unknown
+    s = await plant({ v: 1, said: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] });
+    check(s.phase === 'spinners' && s.spun === '' && s.stage === 1 && s.set.spotDist.every((d) => d > 4.8), `the ten thoughts decided: the spinners are live and all out of reach from the arrival spot (${s.set.spotDist.join(', ')} m)`);
+    await reachGate(p, check, { id: 'rm-giro-0', what: 'far spinner', read: async () => { const x = await rmState(); return JSON.stringify([x.view, x.stage, x.said, x.spun, x.tries, x.hints, x.done]); }, dist: async () => (await rmState()).set.spotDist[0] });
     await ev(p, () => window.__eldom.dev.roomReset()); await wait(600);
     s = await rmState();
   }

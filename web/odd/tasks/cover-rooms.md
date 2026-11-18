@@ -254,6 +254,7 @@ checks across several files. Writers run one at a time.
     - [x] CY7c Floor 9: shared module, the retrace on the paper's own tone (dark greys back, not bright and flat), the whole tree between the title and the arrival line (route: single writer, direct; commits: 518d038 "refactor(web): move the Portales room onto the shared tone helpers", 6bd48fe "feat(web): retrace the Portales cover on the paper's own tone and fit the whole tree between the title and the arrival line" and the docs commit)
     - [x] CY7d Floor 5: shared module, the retrace on the paper's own tone (the fur's greys back, strokes as white as the paint), the arrival view that is the cover as drawn, the whole drawing between the title and the arrival line (route: single writer, direct; commits: 9a5252d "refactor(web): move the Explotar room onto the shared tone helpers", 8b44a55 "feat(web): retrace the Explotar cover on the paper's own tone", 61cba7a "feat(web): make Explotar's arrival view the cover as drawn", 34db070 "fix(web): fit the whole Explotar drawing between the title and the arrival line" and the docs commit)
 - [x] CX Full check run and `RECORRIDO.md` (route: single writer, direct; commits: 7da27e3 "test(web): wait for a YouTube ad to end before judging the song start in the integrations check", 071bbbd "fix(web): read the burning monkey room's own state, not the previous floor's, so its flames never get NaN positions" and the docs commit)
+- [x] CR Reach gate fails closed on floors 5, 6 and 7 (user request 2026-11-17, from the review follow-ups). The gate now fails open: `dist()` in each controller returns 0 when `R.roomInfo` is unavailable, and each set's near array starts at 0 until its first `update()`. So a far rung, note, bubble or spinner can be touched from anywhere, and the walker can announce "cerca tuyo" falsely. An unknown distance must read as out of reach. Picture rungs on floor 5 stay touchable from anywhere. Add checks that a far tap during the right stage, from the arrival spot, shows the `far` line and leaves the state unchanged, including while the distance is unknown. (route: delegated writer; commits: 634ca35 "fix(web): treat an unknown distance as out of reach in the walking rooms" and the docs commit; trigger: 3 controllers, 3 sets and `check.cjs`. Checks: `--syntax`, then `room` and `trials` on floors 5, 6 and 7 with `--viewport both`, then the `--dist` room run for those floors.)
 
 ## Acceptance (per floor)
 
@@ -610,6 +611,27 @@ checks across several files. Writers run one at a time.
 
   **Not verified:** a real phone, real screen-reader speech, frame rate on a real GPU, and the ad wait of the integrations check against a real ad (the rerun had none).
 
+- CR done. The reach gate of floors 5, 6 and 7 fails closed: an unknown distance reads as out of reach (from the review follow-up "Reach gate fails open").
+  **What changed** (one work unit, 634ca35, 9 files, +61/-16):
+  - Each controller's `dist()` goes through the new `Room.info()` and returns `Infinity` when the set's measures are missing or the value is not a finite number (it used to return 0). The three walkers read `Room.info()` too, so they never announce from an unknown distance (`null` info or `Infinity < near` is false).
+  - The sets' near arrays start at `Infinity` instead of 0 (floor 5's notes and far rungs, floor 6's bubbles, floor 7's spinners), so nothing reads as 0 m away before the first frame. Floor 5's picture rungs keep 0, and `look()` now gates only the far rungs (`EX_RUNGS[k].far`), so a picture rung stays touchable from anywhere even when the distance is unknown.
+  - Nothing else reads the arrays with arithmetic that `Infinity` breaks: the far strand's visibility `(6.2 - rungNear[k]) / 2.2` clamps to 0, `+Infinity.toFixed(2)` is `Infinity` in `info()`, hotspot anchors compare `d < NEAR` (false), and `check.cjs` reads `info()` through Playwright's `evaluate`, which passes `Infinity` (the only `JSON.stringify` of a set is in check messages, where it prints `null`).
+  - Dev only: `Room.blind` and `window.__eldom.dev.roomBlind(on)` make `Room.info()` return `null`. It is gated like `roomless` (`SHOW_DEV_TOOLS` or `#dev`), so it is inert for a visitor of a release build, and a reload ends it. `Room.debug()` reports `blind`.
+  - `check.cjs`: a shared `reachGate` helper, used in the thorough paths. From the arrival spot, during the stage where the thing is live, a tap on a far one must show the `far` line and leave the state unchanged, and the same with the distance unknown. Floor 5: a far rung (strand stage; while blind a picture rung must still open) and a note (notes stage). Floor 6: a bubble (voices stage). Floor 7: a spinner (spinners stage, seeded with a saved state of the ten decided thoughts, inside the saved-state block). In `--dist` the helper sets `#dev` with `history.replaceState` for the one call (no hashchange), so the unknown-distance checks also run on the release build.
+  **Verification** (from the worktree, logs in `scratchpad`; the thorough room checks run on both viewports):
+
+  | Command | Result | Time |
+  |---|---|---|
+  | `build.cjs` | exit 0 | 0 s |
+  | `check.cjs --syntax` | syntax OK, 17486 lines | 1 s |
+  | `check.cjs --scenario room,trials --floors 5,6,7 --viewport both` | all checks passed (desktop and mobile, room and trials), exit 0 | 2072 s (room 765 s and 773 s, trials 265 s and 264 s) |
+  | `build.cjs --release --site https://example.netlify.app`, then `check.cjs --scenario room --dist --floors 5,6,7 --viewport both` | all checks passed (desktop 772 s, mobile 740 s), no CSP violation reported | 1516 s |
+  | `build.cjs` (normal artifact restored) | exit 0 | 0 s |
+
+  - Distances at the arrival spot used by the new checks: far rung 4 at 8.5 m, far note 1 at 5.7 m, bubble 1 at 8.0 m, spinner 1 at 6.8 m; all above the 4.8 m reach.
+  - Not proved by a failing run: following the task's "TDD off" mode, no RED step was run, so the new checks were not shown failing against the old code (the old `dist()` returned 0 with no measures, which the blind check would have let through).
+  - Not verified: the very first frame itself (before the set's first `update()`): the arrays start at `Infinity` by construction, but no check taps in that window (the dev-only blind read stands in for it); a real phone and real screen-reader speech; the other floors (nothing they read changed: `Room.info()` is used only by floors 5, 6 and 7); `--scenario all`.
+
 ## Reviews (2026-11-17)
 
 The gentle-ai reviews ran per floor, from the last reviewed boundary 0734062 to 640d67d. The candidates were contiguous committed slices, reviewed from a detached worktree moved to each slice's end. The user granted each slice; from slice 9 on, the user granted all the rest at once. Every slice ran the `review-reliability` lens only (medium risk). Every slice was approved, acknowledged and burned, and none opened a correction. Docs-only slices assessed as passive.
@@ -635,7 +657,7 @@ The gentle-ai reviews ran per floor, from the last reviewed boundary 0734062 to 
 | ..640d67d | CY7d floor 5 + CX | approved | 1 warning, 1 suggestion |
 
 **Recurring follow-ups (not done, none blocks):**
-- **Reach gate fails open (floors 5, 6, 7).** `dist(k)` returns 0 when `R.roomInfo` is unavailable or before the first frame, so a far tap passes. Unknown distance should read as out of reach. No check taps a far rung, note, bubble or spinner from the arrival spot during its stage.
+- **Reach gate fails open (floors 5, 6, 7). Fixed in 634ca35 (task CR).** `dist(k)` returns 0 when `R.roomInfo` is unavailable or before the first frame, so a far tap passes. Unknown distance should read as out of reach. No check taps a far rung, note, bubble or spinner from the arrival spot during its stage.
 - **Lens chosen at build time vs the `aim` getter (floors 1, 2, 3, 4, 5, 8).** The set fixes `f`/`yh` from `ctx.W/ctx.H` once, but `ROOMS[id].aim` re-reads `aspectNow()`. A rotation or resize across the 1.1 threshold without a rebuild desyncs the arrival view. Fix: rebuild the set on a threshold cross, or have `aim` use the build-time lens. A `built` check could also assert `set.wide`/`set.f` per viewport.
 - **Integrations ad wait (`check.cjs:2341-2352`), fixed in cd8e94f:** only an ad still on screen at the timeout excuses the check now, a click retries play 15 s after an ad ends, and the log names the real case. Desktop `integrations` passed after it (53.7 s, no ad shown, so the ad path itself is still unexercised). The finding was: The ENVIRONMENTAL skip is keyed on a latched `sawAd`, not on an ad still showing at the timeout. An ad that ended, followed by a song that never starts, is skipped instead of failed, and the log wrongly says the ad is still showing.
 - **Floor 3 `roundRect` has no feature guard.** Safari before 16 and Firefox before 112 throw while building the set.

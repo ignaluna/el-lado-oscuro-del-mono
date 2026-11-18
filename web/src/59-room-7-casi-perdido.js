@@ -120,7 +120,7 @@ ROOMS['casi-perdido'] = {
     this.heard = [false, false, false]; this.nearKey = '';
     const tick = () => {
       if (!room.id || room.def() !== this) return; // (the floor was left: a new arrival starts its own)
-      const s = room.s, info = R && R.roomInfo ? R.roomInfo() : null;
+      const s = room.s, info = Room.info();
       if (s && info && room.here() && !room.busy && !App.overlay && this.phase(s) === 'spinners') {
         const key = [0, 1, 2].map((k) => (!s.spun.includes(k) && info.spotDist[k] < this.near ? 1 : 0)).join(''); // (a hotspot shows only when the UI syncs: it does when one comes within reach or goes out of it)
         if (key !== this.nearKey) { this.nearKey = key; syncUI(); }
@@ -183,8 +183,8 @@ ROOMS['casi-perdido'] = {
   },
 
   // ---- the moves ----
-  /** The distance (m) from the walker to a spinner, as the set measures it. */
-  dist(k) { const info = R && R.roomInfo ? R.roomInfo() : null; return info ? info.spotDist[k] : 0; },
+  /** The distance (m) from the walker to a spinner, as the set measures it. Infinity when it is not known: unknown is out of reach. */
+  dist(k) { const info = Room.info(), d = info ? info.spotDist[k] : NaN; return Number.isFinite(d) ? d : Infinity; },
   /** A look at a spinner: it must be near (the hotspot is shown only near, and the tap is gated too). */
   look(room, k) {
     if (!this.spinOn(room.s, k)) return;

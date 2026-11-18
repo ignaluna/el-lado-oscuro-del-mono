@@ -139,7 +139,7 @@ ROOMS['pato'] = {
     this.heard = [false, false, false, false, false];
     const tick = () => {
       if (!room.id || room.def() !== this) return; // (the floor was left: a new arrival starts its own)
-      const s = room.s, info = R && R.roomInfo ? R.roomInfo() : null;
+      const s = room.s, info = Room.info();
       if (s && info && room.here() && !room.busy && !App.overlay && this.phase(s) === 'voices') {
         for (let k = 0; k < 5; k++) if (!s.said.includes(k) && !this.heard[k] && info.bubbleDist[k] < this.near) { this.heard[k] = true; hint(this.lines.near, 4600); live(this.lines.near); break; }
       }
@@ -201,8 +201,8 @@ ROOMS['pato'] = {
   },
 
   // ---- the moves ----
-  /** The distance (m) from the walker to a bubble, as the set measures it. */
-  dist(k) { const info = R && R.roomInfo ? R.roomInfo() : null; return info ? info.bubbleDist[k] : 0; },
+  /** The distance (m) from the walker to a bubble, as the set measures it. Infinity when it is not known: unknown is out of reach. */
+  dist(k) { const info = Room.info(), d = info ? info.bubbleDist[k] : NaN; return Number.isFinite(d) ? d : Infinity; },
   /** A look at a bubble: it must be near (the hotspot is shown only near, and the tap is gated too). */
   look(room, k) {
     if (!this.bubbleOn(room.s, k)) return;
