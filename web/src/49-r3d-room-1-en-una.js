@@ -1,48 +1,86 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════
-// FLOOR 1 · «EN UNA»  (the cover, walkable: a computer that dreams two sleepers, drawn in white chalk on black)
-//   Centre: a monitor and a tower under two brains, an antenna with orbit rings and sparks, a keyboard on a desk, a cup,
-//   a cable down the right side. Left: the sleeper (night cap, silver glitter). Right: the one with the gold visor, looking
-//   into a cone of dots and binary digits. Hands with jagged sleeves rise from below. Signed 11:11 on the floor.
-//   Ambient movement while the machine runs: hands type, data falls from the antenna, sparks, steam, the sleeper breathes.
-//   The puzzle lives in the cone: its dots line up into the code only from the visor's own eyes (real perspective).
+// FLOOR 1 · «EN UNA»  (the cover, walkable: a computer that dreams two sleepers, white chalk on black, gold and silver glitter)
+//   The drawing: a tall machine under two big brains, an antenna with orbit rings and a burst of sparks on top, an asterisk of eight spokes on its screen, a side panel, a keyboard, a cup with
+//   steam and jagged electric scribbles at its base. On the left the sleeper, a night cap on a brain, its cap covered in silver glitter, a small star at its side. On the right the one with the gold
+//   glitter visor and a party hat, looking into a wide cone of dots and binary digits that spreads from the machine, with sparkle stars below it. "11:11" in a corner. The photo is a black paper
+//   taped on an orange graffiti heart, so the tones were traced from a rectified copy (49-r3d-room-1-en-una-art.js): the white and grey tones as contours at five levels, the gold and the silver
+//   glitter apart, painted into textures (the shared tone helpers, 49-r3d-room-0-tones.js).
+//   The visitor arrives at the eye that sees the cover (1.6 m high) and every point stands where it projects onto the cover's own pixels from there. Layers share that eye and each one sits at the
+//   depth that suits it; the cover's pixels are split among them with soft masks that add up to one, so from the arrival spot the sum is the cover, seen frontally, and walking in opens it up:
+//     · the base layer is everything that stays still (the machine, the brains, the desk, the keyboard, the scribbles, the cone of dots and the stars),
+//     · the screen's eight spokes are eight layers of their own, cut from the tones; a spoke the puzzle lit is drawn again, brighter and with a glow; the clock and the mono are planes on the glass,
+//     · the sleeper (with its silver cap) and the one with the visor (with the gold visor) stand a little forward of the machine; the sleeper breathes,
+//     · the cup (it turns over), its steam, the antenna (it sways) and the sparks (they flicker) are patches cut from the same tones,
+//     · the code is not painted: its dots are real points in the cone. From the arrival spot they scatter among the cone's own dots; only from the visor's eyes do they line up in a ring.
+//   world.room holds the targets (the controller, 59-room-1-en-una.js, sets them whole); every value is damped here.
 // ═══════════════════════════════════════════════════════════════════════════════════════════
-/** Local frame of the set (metres): +x to the viewer's right, +z toward the visitor, y up; the floor is the water. */
-const EN_UNA_SET = {
-  x: 0.4, z: 10,                                     // world position of the local origin (x: the cast's centre falls at the middle)
-  eye: [2.8, 1.93, 0.0],                             // the visor's eyes (the camera of "mirar por su visor")
-  look: [-1, 0, 0.04],                               // where they look: toward the machine
-  code: [1, 0, 1, 1, 0, 0, 1, 0],                    // clockwise from the top spoke
-  screen: { c: [-0.05, 1.68, 0.345], w: 0.9, h: 1.08 },
-  cup: [-1.22, 0.92, -0.22],
-  head: [3.1, 2.0, 0.0],
-};
+/** The eye that sees the cover: H its height (m), cx the column straight ahead, Z0 how far (m) the drawing's plane is from the eye, ARR where the visitor arrives (z), BOT the cover row that stands 0.15 m above the floor. */
+const EU = { H: 1.6, cx: 500, Z0: 7.5, ARR: 2.7, BOT: 985 };
+/** Where the visitor stands when a floor opens is the eye; the drawing is Z0 metres ahead of it. */
+const EU_SET = { x: 0, z: EU.ARR + EU.Z0, look: [-1, 0, 0.04], code: [1, 0, 1, 1, 0, 0, 1, 0] }; // look: where the visor's eyes look (toward the machine); code: clockwise from the top spoke
 const GLYPH_PATTERN = { 0: ['111', '101', '101', '101', '111'], 1: ['010', '110', '010', '010', '111'] };
+/** The lens depends on the screen: a wide one fits the whole paper at 1300 cover px of focal length, a phone's narrow view at 1850. The set's z never changes. */
+function euLens(a) { return coverLens(EU, a, { f: 1300, row: 500, sx: 0.42, sy: 0.48 }, { f: 1850, row: 620, sx: 0.5, sy: 0.46 }); }
+/** The cover's regions (rectified cover pixels, the paper is 1000 square): the screen's glass, the sleeper, the one with the visor, the cup with its saucer and handle, the steam, the antenna's rings and ball, the five sparks. */
+const EU_POLY = {
+  SCR: [[321, 377], [419, 433], [417, 562], [315, 492]],
+  SLP: [[96, 358], [130, 358], [160, 380], [205, 385], [245, 392], [270, 412], [272, 470], [266, 498], [250, 512], [236, 528], [222, 548], [200, 566], [180, 566], [170, 548], [150, 528], [120, 528], [98, 508], [94, 420]],
+  VIS: [[712, 440], [722, 405], [760, 385], [790, 370], [830, 378], [858, 408], [868, 445], [880, 480], [880, 520], [866, 545], [850, 575], [848, 600], [780, 602], [720, 585], [705, 560], [720, 520], [708, 480]],
+  CUP: [[258, 509.5], [300, 509.5], [322, 512], [324, 524], [320, 540], [312, 556], [300, 566], [280, 568], [262, 560], [256, 545], [256, 520]],
+  STEAM: [[281, 446], [298, 446], [298, 509.5], [281, 509.5]],
+  ANT: [[420, 165], [518, 165], [522, 176], [545, 176], [545, 222], [524, 255], [470, 263], [440, 259], [420, 236], [415, 195]],
+  SPK: [[[462, 118], [560, 118], [560, 166], [462, 166]], [[528, 178], [562, 178], [562, 195], [528, 195]], [[521, 198], [541, 198], [541, 219], [521, 219]]],
+};
+/** The cover rectangle that holds the drawing, and the one that holds "11:11". */
+const EU_ALL = [88, 105, 945, 838], EU_SIG = [872, 944, 996, 1000];
+/** The asterisk on the screen: its centre and the tip of each of its eight spokes, from the top, clockwise (the order of the code). */
+const EU_ASTER = { c: [362, 463], tips: [[367, 414], [408, 443], [412, 491], [407, 549], [357, 514], [323, 476], [319, 444], [325, 387]] };
+/** Cover pixels the hotspots and the close looks aim at (and how much each look shows, metres). */
+const EU_PX = { screen: [368, 468], visor: [790, 482], cup: [290, 537], eye: [762, 478], looks: { screen: { w: 0.62, h: 0.95 }, visor: { w: 1.1, h: 1.35 }, cup: { w: 0.34, h: 0.4 } } };
+/** The three four-point stars under the cone, and the grains of glitter that get a bigger sparkle. */
+const EU_STARS = [[545, 550], [583, 570], [597, 597]], EU_BIG_GOLD = [[729, 468], [798, 479], [818, 498]], EU_BIG_SIL = [[259, 453], [213, 483], [189, 471]];
 
-/** What the monitor shows: the asterisk (8 spokes, lit or not), or the digits of the clock. */
-function drawEnUnaScreen(ctx, w, h, st) {
+/** The part of a convex polygon `subject` that is inside the convex polygon `clip` (Sutherland-Hodgman). */
+function euClip(subject, clip) {
+  const area = clip.reduce((s, p, i) => { const q = clip[(i + 1) % clip.length]; return s + p[0] * q[1] - q[0] * p[1]; }, 0), sg = area > 0 ? 1 : -1;
+  let out = subject;
+  for (let i = 0; i < clip.length && out.length; i++) {
+    const a = clip[i], b = clip[(i + 1) % clip.length], inside = (p) => sg * ((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])) >= 0, inp = out;
+    out = [];
+    inp.forEach((p, k) => {
+      const q = inp[(k + inp.length - 1) % inp.length], pi = inside(p), qi = inside(q);
+      if (pi !== qi) { const d1 = [p[0] - q[0], p[1] - q[1]], d2 = [b[0] - a[0], b[1] - a[1]], t = ((a[0] - q[0]) * d2[1] - (a[1] - q[1]) * d2[0]) / (d1[0] * d2[1] - d1[1] * d2[0]); out.push([q[0] + d1[0] * t, q[1] + d1[1] * t]); }
+      if (pi) out.push(p);
+    });
+  }
+  return out;
+}
+/** The eight wedges of the asterisk (cover pixels, each clipped to the glass): wedge i holds spoke i and ends halfway to the next spoke on each side. */
+function euWedges() {
+  const c = EU_ASTER.c, ang = EU_ASTER.tips.map((t) => (Math.atan2(t[0] - c[0], c[1] - t[1]) * 180) / Math.PI), n = ang.length;
+  const a = ang.map((v) => (v + 360) % 360), cut = a.map((v, i) => { const w = a[(i + 1) % n] + (i === n - 1 ? 360 : 0); return ((v + w) / 2) % 360; });
+  const dir = (d) => [c[0] + 400 * Math.sin((d * Math.PI) / 180), c[1] - 400 * Math.cos((d * Math.PI) / 180)];
+  return a.map((_, i) => {
+    const from = cut[(i + n - 1) % n], span = (cut[i] - from + 360) % 360, pts = [c];
+    for (let k = 0; k <= 4; k++) pts.push(dir(from + (span * k) / 4));
+    return euClip(pts, EU_POLY.SCR);
+  });
+}
+
+/** What the monitor shows when it is a clock (the asterisk and the mono are layers of their own). */
+function drawEnUnaClock(ctx, w, h, clock) {
   ctx.globalCompositeOperation = 'source-over'; // (the chalk draws additively: clear with the plain mode)
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
-  const S = w, k = makeChalk(ctx, { op: 'lighter', bg: '#000' }, S, 31);
-  if (st.mode === 'clock') {
-    ctx.save();
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = FONT_DISPLAY(h * 0.3, '', 500);
-    ctx.shadowColor = 'rgba(255,255,255,0.7)'; ctx.shadowBlur = 26; ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    const txt = `${st.clock[0]}${st.clock[1]}:${st.clock[2]}${st.clock[3]}`;
-    ctx.fillText(txt, w / 2, h * 0.5);
-    ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.fillText(txt, w / 2, h * 0.5);
-    ctx.restore();
-    k.rect(w * 0.1, h * 0.31, w * 0.8, h * 0.38, 0.012, 'g', 1, 0.5);
-    return;
-  }
-  const cx = w / 2, cy = h / 2, len = [h * 0.43, w * 0.39, h * 0.4, w * 0.36];
-  for (let i = 0; i < 8; i++) {
-    const a = (i * Math.PI) / 4, dx = Math.sin(a), dy = -Math.cos(a), on = st.spokes[i] > 0.5, L = i % 2 ? Math.min(len[2], len[3]) * 1.08 : i % 4 === 0 ? len[0] : len[1];
-    const x2 = cx + dx * L, y2 = cy + dy * L;
-    if (on) { k.line(cx, cy, x2, y2, 0.036, 'g', 3, 1); k.line(cx, cy, x2, y2, 0.075, 'g', 1, 0.22); }
-    else k.line(cx, cy, x2, y2, 0.013, 'g', 1, 0.32);
-  }
-  k.arc(cx, cy, w * 0.035, 0, TAU, 0.02, 'g', 2, 0.9);
+  const k = makeChalk(ctx, { op: 'lighter', bg: '#000' }, w, 31);
+  ctx.save();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = FONT_DISPLAY(h * 0.3, '', 500);
+  ctx.shadowColor = 'rgba(255,255,255,0.7)'; ctx.shadowBlur = 26; ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  const txt = `${clock[0]}${clock[1]}:${clock[2]}${clock[3]}`;
+  ctx.fillText(txt, w / 2, h * 0.5);
+  ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.fillText(txt, w / 2, h * 0.5);
+  ctx.restore();
+  k.rect(w * 0.1, h * 0.31, w * 0.8, h * 0.38, 0.012, 'g', 1, 0.5);
 }
 
 /** The mono, as the mirror keeps him (the same one of the old plate: round face, two ears, a muzzle). */
@@ -64,198 +102,91 @@ function drawEnUnaMono(ctx, w, h) {
 }
 
 ROOM_SETS['en-una'] = function buildEnUna(ctx, kit, track) {
-  const { THREE, V3 } = ctx, RU = kit.RU, S = EN_UNA_SET, lite = ctx.lite;
-  const fold = lite ? 0.7 : 1, rnd = mulberry32(11);
+  const { THREE, V3 } = ctx, RU = kit.RU, lite = ctx.lite, V = EU, Z0 = EU.Z0, POLY = EU_POLY;
+  const { wide, f, yh } = euLens(ctx.W / Math.max(1, ctx.H));
+  const rnd = mulberry32(11);
   const root = new THREE.Group();
-  root.position.set(S.x, 0, S.z);
-  root.rotation.y = Math.atan2(-S.x, 2.7 - S.z); // the front (+z local) faces the place where the visitor stands
+  root.position.set(EU_SET.x, 0, EU_SET.z);
+  root.rotation.y = Math.PI; // the front (+z local) faces the arrival spot
   const grp = (parent = root, x = 0, y = 0, z = 0) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
-  let segTotal = 0;
-  const bgLines = []; // every group that fades when the visitor looks through the visor (the rest is handled one by one)
-  const lines = (rib, o = {}) => { segTotal += rib.count; const L = kit.lines(rib, o); if (!o.own) bgLines.push(L); return L; };
-  const IV = [0.93, 0.9, 0.82];
 
-  // ---- the floor: the paper's edge and the signature ----
-  const frameR = kit.ribbons(3);
-  { const x0 = -3.6, x1 = 4.3, z0 = -1.3, z1 = 2.1, y = 0.012;
-    frameR.poly([[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]], 1.6, 0.5, true); }
-  const frameL = lines(frameR, { own: true }); root.add(frameL.obj);
-  const sig = kit.plane(ctx.canvasTex(256, 96, (c, w, h) => { c.fillStyle = '#000'; c.fillRect(0, 0, w, h); c.font = FONT_DISPLAY(70, '', 500); c.textAlign = 'center'; c.textBaseline = 'middle'; c.shadowColor = 'rgba(255,255,255,.5)'; c.shadowBlur = 10; c.fillStyle = '#fff'; c.fillText('11:11', w / 2, h / 2 + 4); }), 0.8, 0.3, { alpha: 0.8 });
-  sig.mesh.position.set(3.6, 0.015, 1.65); sig.mesh.rotation.x = -Math.PI / 2; root.add(sig.mesh);
+  // ---- how far each layer is from the eye (each layer is a flat sheet on the cover's rays): the two heads stand forward of the machine, the cup and the glass a little ----
+  const ZB = Z0, ZS = Z0 - 0.12, ZF = Z0 - 0.35, ZC = Z0 - 0.3, ZST = Z0 - 0.25, ZA = Z0 + 0.05, ZSG = Z0 - 0.3;
 
-  // ---- the desk, the computer, the brains, the antenna, the cable (one static group) ----
-  const M = kit.ribbons(7), W2 = 3.3, W1 = 2.1, W0 = 1.5;
-  RG.box(M, -1.55, 0.86, -0.55, 1.45, 0.92, 0.6, W2, 0.95);                                  // desk top
-  for (const x of [-1.5, 1.4]) { // the two side panels, shaded with a few chalk strokes
-    M.poly([[x, 0.0, -0.5], [x, 0.86, -0.5], [x, 0.86, 0.55], [x, 0.0, 0.55]], W1, 0.8, true);
-    for (let i = 0; i < 3; i++) M.seg([x, 0.12 + i * 0.22, 0.46 - i * 0.05], [x, 0.3 + i * 0.22, 0.3 - i * 0.05], W0, 0.4);
-  }
-  RG.box(M, -0.62, 0.98, -0.3, 0.52, 2.38, 0.34, W2, 1);                                     // monitor body
-  { const z = 0.345; // the screen's bezel, two outlines
-    M.poly([[-0.5, 1.14, z], [0.4, 1.14, z], [0.4, 2.22, z], [-0.5, 2.22, z]], W2, 1, true);
-    M.poly([[-0.54, 1.1, z], [0.44, 1.1, z], [0.44, 2.26, z], [-0.54, 2.26, z]], W1, 0.7, true);
-    for (const x of [0.28, 0.36]) M.poly(RG.arc([x, 1.04, z], [1, 0, 0], [0, 1, 0], 0.018, 0.018, 10), W0, 0.9);
-    for (let i = 0; i < 6; i++) M.seg([0.52, 1.1 + i * 0.2, 0.28 - i * 0.02], [0.52, 1.28 + i * 0.2, 0.02 - i * 0.02], W0, 0.45); }
-  RG.box(M, 0.64, 0.98, -0.45, 1.34, 2.1, 0.3, W2, 1);                                       // tower
-  for (let i = 0; i < 7; i++) M.seg([0.72, 1.55 + i * 0.07, 0.3], [1.26, 1.55 + i * 0.07, 0.3], W0, 0.8);
-  M.poly([[0.72, 1.2, 0.3], [1.26, 1.2, 0.3], [1.26, 1.34, 0.3], [0.72, 1.34, 0.3]], W1, 0.9, true);
-  M.poly(RG.arc([0.99, 1.08, 0.3], [1, 0, 0], [0, 1, 0], 0.03, 0.03, 12), W1, 0.9);
-  for (let i = 0; i < 6; i++) M.seg([1.34, 1.02 + i * 0.17, 0.22 - i * 0.03], [1.34, 1.18 + i * 0.17, 0.02 - i * 0.03], W0, 0.45);
-  { const a = [-0.06, 2.38, -0.04], b = [0.52, 2.30, 0.04]; // two big brains on top, B in front of A
-    for (const [c, rx, ry, rz, n, sd] of [[a, 0.66, 0.42, 0.42, 46, 3], [b, 0.62, 0.44, 0.46, 52, 8]]) {
-      RG.folds(M, c, rx, ry, rz, Math.round(n * fold), sd, 1.8, 0.95, 32);
-      M.poly(RG.arc(c, [1, 0, 0], [0, 1, 0], rx, ry, 40, 0, Math.PI), W2, 1);                // front outline
-      M.poly(RG.arc(c, [0, 0, 1], [0, 1, 0], rz, ry, 30, 0, Math.PI), W1, 0.7);              // side outline
-      M.poly(RG.arc([c[0], c[1], c[2]], [1, 0, 0], [0, 0, 1], rx, rz, 40), W1, 0.55, true);   // base
-      const r = mulberry32(sd + 90), fis = []; for (let i = 0; i <= 20; i++) { const u = i / 20 * Math.PI; fis.push([c[0] + 0.03 * Math.sin(i * 1.7), c[1] + ry * Math.sin(u) * 1.02, c[2] + rz * Math.cos(u)]); } M.poly(fis, W1, 0.7); r();
-    }
-    for (const x of [0.86, 0.96, 1.04]) { const y0 = 2.08 + (x - 0.86) * 0.2; M.seg([x, y0, 0.22], [x - 0.01, y0 - 0.16 - (x - 0.86) * 0.5, 0.22], W1, 0.9); M.poly(RG.arc([x - 0.01, y0 - 0.19 - (x - 0.86) * 0.5, 0.22], [1, 0, 0], [0, 1, 0], 0.012, 0.016, 8), W0, 0.9); }
-  }
-  M.seg([0.2, 2.74, 0], [0.2, 3.66, 0], W2, 1);                                              // antenna pole
-  M.poly(RG.arc([0.2, 3.7, 0], [1, 0, 0], [0, 1, 0], 0.05, 0.05, 14), W1, 1, true);
-  { const pts = []; for (let i = 0; i <= 60; i++) { const y = 1.75 - (i / 60) * 1.72; pts.push([1.5 + 0.06 * Math.sin(y * 30), y, 0.05 + 0.04 * Math.cos(y * 30)]); }   // the cable, coiled, down the right side
-    M.poly([[1.34, 1.75, 0.04], [1.44, 1.75, 0.05], ...pts], W1, 0.95);
-    M.poly(RG.arc([1.74, 0.03, 0.1], [1, 0, 0], [0, 0, 1], 0.2, 0.12, 24, 3.14, 7.2), W0, 0.8);
-    const c2 = []; for (let i = 0; i <= 8; i++) c2.push([0.52 + i * 0.015, 1.42 + 0.03 * Math.sin(i * 2.2), 0.0]); M.poly(c2, W1, 0.9); }
-  const machine = lines(M, { glow: true, own: true }); root.add(machine.obj);
-  const solidsLocal = [];
+  // ───────────────────────────── the tones: the photo's own contours, painted into textures ─────────────────────────────
+  const { P, tonePts, region, mat, gridMesh, glitterRows } = coverTones(ctx, { V, lens: { f, yh }, decode: euDecode, fill: EU_FILL, grey: { 5: 150, 6: 215, 7: 255, 8: 88, 9: 225 }, ts: [0.9, 1.5], root, rnd: mulberry32(44) }); // (the greys: what each glitter group is painted with, its layer's tint makes it gold or silver)
+  const BM = 1.0; // blur of a cut-out's soft edge (cover px)
+  const segTotal = tonePts; // (every contour edge is a chalk line of the drawing)
+  const hostAt = (px, py, Z) => { const p = P(px, py, Z); return { host: grp(root, p[0], p[1], p[2]), p }; };
+  /** Moves a sprite group's points into the frame of a host at p, so that they travel with it. */
+  const onHost = (pts, h) => { for (let k = 0; k < pts.pos.length / 3; k++) { pts.pos[k * 3] -= h.p[0]; pts.pos[k * 3 + 1] -= h.p[1]; pts.pos[k * 3 + 2] -= h.p[2]; } pts.geo.attributes.position.needsUpdate = true; h.host.add(pts.obj); };
+  const GOLD = [1.28, 0.93, 0.38], SILVER = [0.9, 0.95, 1.02];
 
-  // ---- antenna rings (they turn) and sparks (they flicker) ----
-  const rings = grp(root, 0.2, 0, 0), ringL = [];
-  [[2.98, 0.26], [3.12, 0.22], [3.26, 0.18]].forEach(([y, r], i) => {
-    const R = kit.ribbons(20 + i), g = grp(rings, 0, y, 0), u = [Math.cos(0.4), Math.sin(0.4), 0];
-    R.poly(RG.arc([0, 0, 0], u, [0, 0, 1], r, r * 0.9, 36), W1, 0.95, true);
-    const L = lines(R); g.add(L.obj); g.rotation.z = (i - 1) * 0.12; ringL.push(g);
+  // the base: everything that stays still, with the moving parts cut out of it along their outlines
+  const cuts = [POLY.SCR, POLY.SLP, POLY.VIS, POLY.CUP, POLY.STEAM, POLY.ANT, ...POLY.SPK];
+  const base = gridMesh(EU_ALL, 2, 2, ZB, region(EU_ALL, { masks: [['out', cuts, BM]] }));
+  // "11:11", in front of the floor line
+  const SG = gridMesh(EU_SIG, 1, 1, ZSG, region(EU_SIG, { ts: 1.8, glow: 0.25 }));
+
+  // the screen: eight spokes, each cut from the tones inside the glass; a lit one is drawn again, brighter and with a glow
+  const wedges = euWedges(), spoke = [], lit = [];
+  wedges.forEach((wg) => {
+    const R = boxOf(wg, 3);
+    spoke.push(gridMesh(R, 1, 1, ZS, region(R, { ts: 2, masks: [['in', [wg], BM]] })));
+    lit.push(gridMesh(R, 1, 1, ZS - 0.02, region(R, { ts: 1.4, gain: 1.5, glow: 1.3, masks: [['in', [wg], BM]] }), root, [0, 0, 0], [1.1, 1.0, 0.82]));
   });
-  const sparkR = kit.ribbons(30);
-  for (let i = 0; i < 7; i++) { const a = -1.15 + i * 0.38, d = [Math.sin(a), Math.cos(a), 0], l0 = 0.1, l1 = i % 2 ? 0.26 : 0.34; sparkR.seg([0.2 + d[0] * l0, 3.7 + d[1] * l0, 0], [0.2 + d[0] * l1, 3.7 + d[1] * l1, 0], W1, 1); }
-  const sparks = lines(sparkR, { glow: true, own: true }); root.add(sparks.obj);
-
-  // ---- the keyboard (rows of keys that dip) ----
-  const kb = grp(root, 0, 0, 0), keyRows = [];
-  { const K = kit.ribbons(40); RG.box(K, -1.45, 0.92, 0.12, -0.2, 0.965, 0.58, W1, 0.95); const L = lines(K); kb.add(L.obj); }
-  for (let r = 0; r < 4; r++) {
-    const K = kit.ribbons(41 + r), z0 = 0.15 + r * 0.1, row = grp(kb, 0, 0, 0);
-    const n = r === 3 ? 6 : 12; for (let i = 0; i < n; i++) { const x0 = r === 3 ? -1.25 + i * 0.17 : -1.41 + i * 0.1, wk = r === 3 ? 0.15 : 0.08; K.poly([[x0, 0.967, z0], [x0 + wk, 0.967, z0], [x0 + wk, 0.967, z0 + 0.07], [x0, 0.967, z0 + 0.07]], 1.4, 0.9, true); }
-    const L = lines(K); row.add(L.obj); keyRows.push(row);
-  }
-
-  // ---- hands with jagged sleeves rising from below ----
-  const handLines = (flip, seed) => { // the back of a hand: wrist, knuckles, four fingers and a thumb; a jagged cuff
-    const H = kit.ribbons(seed), s = flip ? -1 : 1, P = (x, y) => [x * s, y, 0];
-    H.poly([P(-0.045, 0), P(-0.07, 0.08), P(-0.078, 0.15)], W1, 1); H.poly([P(0.045, 0), P(0.07, 0.08), P(0.078, 0.15)], W1, 1);
-    H.poly([P(-0.078, 0.15), P(-0.04, 0.165), P(0, 0.17), P(0.04, 0.165), P(0.078, 0.15)], W1, 0.9);
-    [[-0.058, 0.07], [-0.02, 0.095], [0.02, 0.1], [0.058, 0.085]].forEach(([x, l]) => {
-      H.poly([P(x - 0.016, 0.16), P(x - 0.016, 0.15 + l), P(x - 0.008, 0.16 + l), P(x + 0.008, 0.16 + l), P(x + 0.016, 0.15 + l), P(x + 0.016, 0.16)], W0, 0.95);
-      H.poly(RG.arc([x * s, 0.165, 0], [1, 0, 0], [0, 1, 0], 0.012, 0.012, 8), 1.1, 0.6);
-    });
-    H.poly([P(0.07, 0.06), P(0.115, 0.1), P(0.135, 0.16), P(0.12, 0.18)], W1, 0.95);
-    const cuff = []; for (let i = 0; i <= 8; i++) cuff.push([(-0.1 + i * 0.025) * s, -0.03 - (i % 2) * 0.07, 0]);
-    H.poly(cuff, W1, 1);
-    return H;
-  };
-  const makeHand = (x, y, z, flip, seed, tilt) => {
-    const g = grp(root, x, y, z), h = grp(g, 0, 0, 0); h.rotation.x = tilt; h.scale.setScalar(2.3);
-    const L = lines(handLines(flip, seed), { glow: true }); h.add(L.obj);
-    const SL = kit.ribbons(seed + 5);
-    const s = flip ? -1 : 1;
-    const out = flip ? 1 : -1; // the arm slopes down and outward, toward the visitor
-    for (const e of [-0.1, 0.1]) { const pts = []; for (let i = 0; i <= 6; i++) { const k = i / 6; pts.push([e * (1 + k * 1.4) + out * k * 0.3 + (i % 2 ? 0.012 : 0), -0.07 - k * (y - 0.09), 0.1 + k * 0.8]); } SL.poly(pts, W1, 0.85); }
-    for (let i = 0; i < 6; i++) { const k = i / 6, yy = -0.09 - k * (y - 0.12) * 0.9, xx = out * k * 0.3; SL.seg([-0.1 * (1 + k * 1.4) + xx, yy, 0.1 + k * 0.8], [-0.03 + xx, yy + 0.06, 0.1 + k * 0.8 + 0.02], W0, 0.4); }
-    const SLL = lines(SL); g.add(SLL.obj);
-    return { g, h, base: y };
-  };
-  const handA = makeHand(-0.8, 1.0, 0.3, false, 50, -0.78);   // typing
-  const handB = makeHand(1.0, 0.95, 0.5, true, 60, -1.1);        // resting on the desk
-
-  // ---- the cup, its steam; turned over it shows 11:11 on its base ----
-  const cupG = grp(root, S.cup[0], S.cup[1], S.cup[2]), cupBody = grp(cupG, 0, 0.085, 0);
-  { const C = kit.ribbons(70), r1 = 0.1, r0 = 0.075;
-    C.poly(RG.arc([0, 0.085, 0], [1, 0, 0], [0, 0, 1], r1, r1, 28), W1, 1, true);           // rim (local y = 0 is the cup's middle)
-    C.poly(RG.arc([0, -0.085, 0], [1, 0, 0], [0, 0, 1], r0, r0, 24), W1, 0.9, true);
-    C.seg([-r1, 0.085, 0], [-r0, -0.085, 0], W1, 1); C.seg([r1, 0.085, 0], [r0, -0.085, 0], W1, 1);
-    C.poly(RG.arc([r1 * 0.92, 0, 0], [1, 0, 0], [0, 1, 0], 0.05, 0.055, 14, -1.3, 1.3), W1, 1);   // the handle
-    C.poly(RG.arc([0, 0.07, 0], [1, 0, 0], [0, 0, 1], r1 * 0.86, r1 * 0.86, 20), W0, 0.5, true);
-    const L = lines(C); cupBody.add(L.obj);
-    const sa = kit.ribbons(71); sa.poly(RG.arc([0, 0.0, 0], [1, 0, 0], [0, 0, 1], 0.16, 0.16, 30), W1, 0.85, true); const SA = lines(sa); cupG.add(SA.obj);
-    SA.obj.position.y = -0.0;
-    const base = kit.plane(ctx.canvasTex(256, 128, (c, w, h) => { c.fillStyle = '#000'; c.fillRect(0, 0, w, h); c.font = FONT_DISPLAY(78, '', 500); c.textAlign = 'center'; c.textBaseline = 'middle'; c.shadowColor = 'rgba(255,255,255,.55)'; c.shadowBlur = 12; c.fillStyle = '#fff'; c.fillText('11:11', w / 2, h / 2 + 4); }), 0.13, 0.065, { alpha: 0.95, side: THREE.FrontSide });
-    base.mesh.rotation.x = Math.PI / 2; base.mesh.position.y = -0.087; cupBody.add(base.mesh); // faces down while the cup is upright
-    cupBody.userData.base = base;
-  }
-  const steam = kit.points(Array.from({ length: lite ? 9 : 22 }, (_, i) => [S.cup[0] + (rnd() - 0.5) * 0.06, S.cup[1] + 0.18, S.cup[2] + (rnd() - 0.5) * 0.04, 0.03, 0.6, (i / (lite ? 9 : 22)) % 1, 0]), { mode: 1, rise: [0.04, 0.55, 0.02], speed: 0.16, spread: 0.07, tint: [0.88, 0.9, 0.95] });
-  root.add(steam.obj);
-
-  // ---- the cast: the sleeper (left) and the one with the visor (right) ----
-  const bust = (parent, seed, o) => {
-    const B = kit.ribbons(seed), c = [0, o.cy, 0];
-    B.poly(RG.arc([0, o.cy - 0.18, 0], [1, 0, 0], [0, 1, 0], 0.3, 0.36, 30, Math.PI + 0.15, TAU - 0.15), W1, 0.95);         // the head below the brain
-    RG.folds(B, [0, o.cy + 0.16, 0], 0.38, 0.28, 0.3, Math.round(26 * fold), seed + 1, 1.6, 0.95, 28);
-    B.poly(RG.arc([0, o.cy + 0.16, 0], [1, 0, 0], [0, 1, 0], 0.38, 0.28, 30, 0, Math.PI), W2, 1);
-    B.poly(RG.arc([0, o.cy + 0.16, 0], [0, 0, 1], [0, 1, 0], 0.3, 0.28, 24, 0, Math.PI), W1, 0.6);
-    for (const s of [-1, 1]) B.poly([[s * 0.1, o.cy - 0.5, 0], [s * 0.11, o.cy - 0.7, 0]], W1, 0.9);                      // neck
-    B.poly([[-0.11, o.cy - 0.7, 0], [-0.5, o.cy - 0.82, 0], [-0.78, o.cy - 1.0, 0]], W2, 0.9); B.poly([[0.11, o.cy - 0.7, 0], [0.5, o.cy - 0.82, 0], [0.78, o.cy - 1.0, 0]], W2, 0.9);
-    B.poly([[-0.78, o.cy - 1.0, 0], [-0.84, o.cy - 1.3, 0]], W1, 0.45); B.poly([[0.78, o.cy - 1.0, 0], [0.84, o.cy - 1.3, 0]], W1, 0.45);
-    const f = o.face; // facing: +1 to the right (the sleeper), −1 to the left (the visor)
-    return { B, f, c };
-  };
-  // the sleeper
-  const sl = grp(root, -2.4, 0, 0), slBody = grp(sl, 0, 1.2, 0), sleeper = { g: slBody };
-  { const b = bust(sl, 80, { cy: 1.9, face: 1 }), B = b.B, y = 1.9;
-    B.poly([[0.11, y - 0.08, 0.02], [0.17, y - 0.1, 0.02], [0.22, y - 0.07, 0.02]], W0, 1); B.poly([[0.11, y - 0.07, 0.02], [0.14, y - 0.045, 0.02], [0.2, y - 0.05, 0.02]], W0, 0.8); // a closed eye and a brow
-    B.poly([[0.26, y - 0.06, 0], [0.3, y - 0.2, 0], [0.24, y - 0.22, 0]], W0, 0.95); B.poly(RG.arc([0.18, y - 0.34, 0], [1, 0, 0], [0, 1, 0], 0.07, 0.03, 10, 3.5, 5.9), W0, 0.95);
-    B.poly(RG.arc([-0.3, y - 0.15, 0], [1, 0, 0], [0, 1, 0], 0.045, 0.07, 10), W0, 0.8);                               // an ear
-    B.poly(RG.arc([0, y + 0.18, 0], [1, 0, 0], [0, 0, 1], 0.41, 0.33, 36), W1, 0.95, true); B.poly(RG.arc([0, y + 0.25, 0], [1, 0, 0], [0, 0, 1], 0.4, 0.32, 36), W1, 0.8, true); // the cap's rolled brim
-    const tip = [-0.66, y + 0.78, 0], bez = (p0, p1, p2, n = 14) => { const o = []; for (let i = 0; i <= n; i++) { const t = i / n, u = 1 - t; o.push([u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0], u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1], 0.0]); } return o; };
-    B.poly(bez([0.39, y + 0.27, 0], [0.34, y + 0.82, 0], tip), W2, 1); B.poly(bez([-0.39, y + 0.27, 0], [-0.52, y + 0.52, 0], tip), W2, 1);
-    B.poly(RG.arc([tip[0] - 0.02, tip[1] + 0.03, 0], [1, 0, 0], [0, 1, 0], 0.05, 0.05, 12), W1, 1, true);
-    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; B.seg([tip[0] - 0.02 + Math.cos(a) * 0.055, tip[1] + 0.03 + Math.sin(a) * 0.055, 0], [tip[0] - 0.02 + Math.cos(a) * 0.085, tip[1] + 0.03 + Math.sin(a) * 0.085, 0], W0, 0.8); }
-    for (const [dx, dy, r] of [[-0.74, y + 0.55, 0.05]]) { B.seg([dx - r, dy, 0], [dx + r, dy, 0], W0, 1); B.seg([dx, dy - r, 0], [dx, dy + r, 0], W0, 1); B.seg([dx - r * 0.5, dy - r * 0.5, 0], [dx + r * 0.5, dy + r * 0.5, 0], W0, 0.8); B.seg([dx - r * 0.5, dy + r * 0.5, 0], [dx + r * 0.5, dy - r * 0.5, 0], W0, 0.8); } // the star
-    const L = lines(B, { glow: true, own: true }); sl.add(L.obj); sleeper.L = L;
-    const nG = lite ? 34 : 86, rows = [];
-    for (let i = 0; i < nG; i++) { const th = (rnd() - 0.5) * 2.7, ph = 0.1 + rnd() * 0.75, q = RG.ell([0, y + 0.18, 0], 0.4, 0.3, 0.33, th, ph); rows.push([q[0], q[1], q[2], 0.028 + rnd() * 0.03, 0.55 + rnd() * 0.45, rnd(), 0]); }
-    sleeper.glitter = kit.points(rows, { shape: 3, twinkle: 0.85, tint: [0.82, 0.88, 1] }); sl.add(sleeper.glitter.obj);
-  }
-  // the visor
-  const vg = grp(root, S.head[0], 0, 0), visor = {};
-  { const b = bust(vg, 100, { cy: 1.9, face: -1 }), B = b.B, y = 1.9;
-    B.poly([[-0.26, y + 0.0, 0.02], [-0.37, y - 0.1, 0.02], [-0.28, y - 0.14, 0.02]], W0, 0.95);                          // the nose
-    B.poly(RG.arc([-0.18, y - 0.3, 0], [1, 0, 0], [0, 1, 0], 0.07, 0.03, 10, 3.5, 5.9), W0, 0.95);                       // the lips
-    B.poly([[-0.2, y - 0.34, 0], [-0.17, y - 0.46, 0]], W0, 0.6);
-    B.poly(RG.arc([0.3, y - 0.15, 0], [1, 0, 0], [0, 1, 0], 0.045, 0.07, 10), W0, 0.8);
-    for (const dy of [0.0, 0.12]) B.poly(RG.arc([0.02, y + dy, 0], [1, 0, 0], [0, 0, 1], 0.36, 0.3, 36), W1, 0.95, true); // the visor band wraps the head
-    B.poly([[-0.34, y, 0.2], [-0.37, y + 0.06, 0.12], [-0.34, y + 0.12, 0.2]], W1, 0.8);
-    const hat = (x0, tilt) => { const base = [0.04, y + 0.46, 0], tip = [0.04 + tilt, y + 1.12, 0]; // a party hat, with stripes and a pompom
-      B.poly([[base[0] - 0.17, base[1], 0], tip, [base[0] + 0.17, base[1], 0]], W2, 1); B.poly(RG.arc(base, [1, 0, 0], [0, 0, 1], 0.17, 0.14, 24), W1, 0.8, true);
-      for (let i = 1; i < 4; i++) { const k = i / 4, xl = lerp(base[0] - 0.17, tip[0], k), xr = lerp(base[0] + 0.17, tip[0], k), yy = lerp(base[1], tip[1], k); B.seg([xl, yy, 0], [xr, yy + 0.04, 0], W0, 0.7); }
-      B.poly(RG.arc([tip[0], tip[1] + 0.03, 0], [1, 0, 0], [0, 1, 0], 0.045, 0.045, 12), W1, 1, true); };
-    hat(0, -0.05);
-    const L = lines(B, { glow: true, own: true }); vg.add(L.obj); visor.L = L;
-    const nG = lite ? 50 : 130, rows = [];
-    for (let i = 0; i < nG; i++) { const th = (rnd() - 0.5) * 6.0, yy = y + 0.01 + rnd() * 0.11, x = 0.02 + 0.355 * Math.sin(th), z = 0.295 * Math.cos(th); rows.push([x, yy, z, 0.022 + rnd() * 0.03, 0.6 + rnd() * 0.4, rnd(), 0]); }
-    visor.glitter = kit.points(rows, { shape: 3, twinkle: 0.8, tint: [1, 0.78, 0.28] }); vg.add(visor.glitter.obj);
-  }
-
-  // ---- the screen (the asterisk, then the clock; dark, then the mono) ----
-  const scrState = { mode: 'code', spokes: [0, 0, 0, 0, 0, 0, 0, 0], clock: [0, 3, 4, 7], key: '' };
-  const scrTex = ctx.canvasTex(450, 540, (c, w, h) => drawEnUnaScreen(c, w, h, scrState));
-  const scr = kit.plane(scrTex, S.screen.w, S.screen.h); scr.mesh.position.set(...S.screen.c); root.add(scr.mesh);
-  const monoPlane = kit.plane(ctx.canvasTex(450, 540, (c, w, h) => drawEnUnaMono(c, w, h)), S.screen.w, S.screen.h, { alpha: 0 }); monoPlane.mesh.position.set(S.screen.c[0], S.screen.c[1], S.screen.c[2] + 0.002); root.add(monoPlane.mesh);
-  const redraw = () => { const c = scrTex.image.getContext('2d'); drawEnUnaScreen(c, scrTex.image.width, scrTex.image.height, scrState); scrTex.needsUpdate = true; };
-
-  // ---- the cone: the visor looks into dots, circles and binary digits; the code is in it ----
-  const E = S.eye, Dn = (() => { const d = S.look, n = Math.hypot(...d); return d.map((v) => v / n); })();
-  const cone = grp(root, 0, 0, 0);
-  const nRays = lite ? 12 : 24, rayRows = [], ringRows = [], rr = mulberry32(77);
-  { const up = [0, 1, 0], right = [Dn[1] * up[2] - Dn[2] * up[1], Dn[2] * up[0] - Dn[0] * up[2], Dn[0] * up[1] - Dn[1] * up[0]]; // right = D × up
-    for (let i = 0; i < nRays; i++) {
-      const a = (i / nRays) * TAU + 0.2, rad = 0.2 + rr() * 0.3;
-      for (let t = 0.3; t <= 2.5; t += 0.2) { const k = t * rad; const p = [E[0] + Dn[0] * t + right[0] * Math.cos(a) * k, E[1] + Dn[1] * t + Math.sin(a) * k, E[2] + Dn[2] * t + right[2] * Math.cos(a) * k]; rayRows.push([p[0], p[1], p[2], 0.02 + t * 0.008, 0.6, rr(), 0]); }
+  // a quad of the glass (cover pixels TL, TR, BR, BL) on the cover's rays, showing a canvas
+  const quad = (cn, Z, tex, tint) => {
+    const nx = 4, ny = 4, n = (nx + 1) * (ny + 1), pos = new Float32Array(n * 3), uv = new Float32Array(n * 2), idx = [], lp = (a, b, t) => a + (b - a) * t;
+    for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) {
+      const u = i / nx, v = j / ny, k = j * (nx + 1) + i, x = lp(lp(cn[0][0], cn[1][0], u), lp(cn[3][0], cn[2][0], u), v), y = lp(lp(cn[0][1], cn[1][1], u), lp(cn[3][1], cn[2][1], u), v);
+      pos.set(P(x, y, Z), k * 3); uv[k * 2] = u; uv[k * 2 + 1] = 1 - v;
     }
-    for (let i = 0; i < (lite ? 22 : 46); i++) { const t = 0.7 + rr() * 1.9, a = rr() * TAU, rad = 0.1 + rr() * 0.55, k = t * rad; ringRows.push([E[0] + Dn[0] * t + right[0] * Math.cos(a) * k, E[1] + Dn[1] * t + Math.sin(a) * k, E[2] + Dn[2] * t + right[2] * Math.cos(a) * k, 0.1 + rr() * 0.12, 0.7, rr(), 0]); }
-  }
-  const rays = kit.points(rayRows, { shape: 0 }); cone.add(rays.obj);
-  const circles = kit.points(ringRows, { shape: 2 }); cone.add(circles.obj);
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const a = j * (nx + 1) + i, b = a + 1, c2 = a + nx + 1, d = c2 + 1; idx.push(a, c2, b, b, c2, d); }
+    const geo = ctx.keep(new THREE.BufferGeometry());
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geo.setIndex(idx);
+    const M = mat(tex, tint), mesh = new THREE.Mesh(geo, M.m); mesh.frustumCulled = false; mesh.layers.set(1); root.add(mesh);
+    return { mesh, u: M.u };
+  };
+  const GLASS = [[323, 382], [414, 436], [413, 556], [323, 489]];
+  const scrState = { clock: [0, 3, 4, 7], key: '' };
+  const clockTex = ctx.canvasTex(360, 450, (c, w, h) => drawEnUnaClock(c, w, h, scrState.clock));
+  const clockQ = quad(GLASS, ZS - 0.04, clockTex, [1.0, 0.97, 0.92]);
+  const monoQ = quad(GLASS, ZS - 0.04, ctx.canvasTex(360, 450, (c, w, h) => drawEnUnaMono(c, w, h)), [0.95, 0.94, 0.97]);
+  const redraw = () => { const c = clockTex.image.getContext('2d'); drawEnUnaClock(c, clockTex.image.width, clockTex.image.height, scrState.clock); clockTex.needsUpdate = true; };
+
+  // the sleeper (left): breathes about its neck; its cap is covered in silver glitter
+  const SLR = boxOf(POLY.SLP, 6), SL = hostAt(183, 566, ZF);
+  const sleeper = gridMesh(SLR, 2, 2, ZF, region(SLR, { masks: [['in', [POLY.SLP], BM]] }), SL.host, SL.p);
+  const silver = gridMesh(SLR, 2, 2, ZF - 0.02, region(SLR, { groups: [8, 9], ts: 1.4, glow: 0.2, masks: [['in', [POLY.SLP], BM]] }), SL.host, SL.p, SILVER);
+  // the one with the visor (right): the gold glitter visor and the party hat
+  const VSR = boxOf(POLY.VIS, 6), VS = hostAt(790, 600, ZF);
+  const visorFig = gridMesh(VSR, 2, 2, ZF, region(VSR, { masks: [['in', [POLY.VIS], BM]] }), VS.host, VS.p);
+  const gold = gridMesh(VSR, 2, 2, ZF - 0.02, region(VSR, { groups: [5, 6, 7], ts: 1.4, glow: 0.2, masks: [['in', [POLY.VIS], BM]] }), VS.host, VS.p, GOLD);
+  // the cup turns over; the steam rises from it; the antenna sways about its stem; the sparks flicker
+  const CPR = boxOf(POLY.CUP, 4), CP = hostAt(EU_PX.cup[0], EU_PX.cup[1], ZC);
+  const cup = gridMesh(CPR, 2, 2, ZC, region(CPR, { ts: 2.2, masks: [['in', [POLY.CUP], BM]] }), CP.host, CP.p);
+  const STR = boxOf(POLY.STEAM, 3), ST = hostAt(289, 509, ZST);
+  const steam = gridMesh(STR, 1, 1, ZST, region(STR, { ts: 2.4, masks: [['in', [POLY.STEAM], BM]] }), ST.host, ST.p);
+  const ANR = boxOf(POLY.ANT, 3), AN = hostAt(446, 262, ZA);
+  const antenna = gridMesh(ANR, 2, 2, ZA, region(ANR, { ts: 1.6, masks: [['in', [POLY.ANT], BM], ['out', POLY.SPK, BM]] }), AN.host, AN.p);
+  const SKR = boxOf(POLY.SPK.flat(), 3);
+  const sparks = gridMesh(SKR, 1, 1, ZA, region(SKR, { ts: 2, masks: [['in', POLY.SPK, BM]] }));
+  // "11:11" written in the cup's base: it shows above the cup once it is upside down
+  const cupLabel = kit.plane(ctx.canvasTex(256, 128, (c, w, h) => { c.fillStyle = '#000'; c.fillRect(0, 0, w, h); c.font = FONT_DISPLAY(78, '', 500); c.textAlign = 'center'; c.textBaseline = 'middle'; c.shadowColor = 'rgba(255,255,255,.55)'; c.shadowBlur = 12; c.fillStyle = '#fff'; c.fillText('11:11', w / 2, h / 2 + 4); }), 0.22, 0.11, { alpha: 0 });
+  { const q = P(EU_PX.cup[0], 497, ZC - 0.05); cupLabel.mesh.position.set(q[0], q[1], q[2]); root.add(cupLabel.mesh); }
+
+  // glitter: sparkle points on the brightest grains of the gold and of the silver, twinkling; they travel with their figure
+  const goldPts = EU_GOLD_PTS.filter((_, i) => !lite || i % 2 === 0), silPts = EU_SIL_PTS.filter((_, i) => !lite || i % 2 === 0);
+  const goldG = kit.points(glitterRows(goldPts, 0.045, ZF - 0.06), { shape: 3, twinkle: 0.95, tint: [1.2, 0.9, 0.42] }); onHost(goldG, VS);
+  const silG = kit.points(glitterRows(silPts, 0.04, ZF - 0.05), { shape: 3, twinkle: 0.95, tint: [0.9, 0.97, 1.1] }); onHost(silG, SL);
+  const bigSpark = (list, gd, h) => { const s = kit.points(list.map(([x, y], i) => { const p = P(x, y, ZF - 0.1); return [p[0], p[1], p[2], gd ? 0.2 : 0.13, 0.9, i * 0.27, 0]; }), { shape: 3, twinkle: 0.95, tint: gd ? [1, 0.85, 0.45] : [0.85, 0.92, 1] }); onHost(s, h); return s; };
+  const goldGlit = bigSpark(EU_BIG_GOLD, true, VS), silGlit = bigSpark(EU_BIG_SIL, false, SL);
+  const starPts = kit.points(EU_STARS.map(([x, y], i) => { const p = P(x, y, ZB - 0.1); return [p[0], p[1], p[2], 0.2, 0.7, i * 0.31, 0]; }), { shape: 3, twinkle: 0.9, tint: [0.92, 0.96, 1] }); root.add(starPts.obj);
+
+  // ---- the cone: the visor's eyes look into it, and the code is in it (real points: the cone's dots are painted, these are not) ----
+  const E = P(EU_PX.eye[0], EU_PX.eye[1], ZF - 0.1), Dn = (() => { const d = EU_SET.look, n = Math.hypot(...d); return d.map((v) => v / n); })();
+  const cone = grp(root, 0, 0, 0);
   const NCODE = 8 * 12 + 3;
   const codeRows = Array.from({ length: NCODE }, (_, i) => [E[0] + Dn[0] * (0.8 + (i % 7) * 0.08), E[1] + (rnd() - 0.5) * 0.5, E[2] + (rnd() - 0.5) * 0.5, 0.03, 0.95, rnd(), 0]);
   const code = kit.points(codeRows, { shape: 0 }); cone.add(code.obj);
@@ -282,7 +213,7 @@ ROOM_SETS['en-una'] = function buildEnUna(ctx, kit, track) {
       cd.exp.push([2 * cx - 1 + ox / tanH, 1 - 2 * cy + oy / tanV]); n++;
     };
     const dr = mulberry32(5);
-    S.code.forEach((bit, i) => {
+    EU_SET.code.forEach((bit, i) => {
       const ang = (i * Math.PI) / 4, ox = Math.sin(ang) * Rr, oy = Math.cos(ang) * Rr, pat = GLYPH_PATTERN[bit];
       pat.forEach((row, r) => { for (let q = 0; q < 3; q++) if (row[q] === '1' && n < NCODE - 3) put(ox + (q - 1) * wD / 2, oy + (2 - r) * cell, dot, 1, dr()); });
     });
@@ -293,102 +224,95 @@ ROOM_SETS['en-una'] = function buildEnUna(ctx, kit, track) {
   }
   layoutCode({ yaw: Math.PI, pitch: 0, fov: 44 }, 1.7, null); // a first layout, aligned to a default eye; the controller re-lays it for the real pose
 
-  // ---- the data: binary digits fall from the antenna into the cone ----
-  const streamN = lite ? 16 : 44;
-  const streamCurve = [[0.2, 3.75, 0.1], [0.9, 3.3, 0.35], [2.3, 3.3, 0.2], [E[0] - 0.4, E[1] + 0.1, 0.05]];
-  const stream = kit.points(Array.from({ length: streamN }, (_, i) => [0, 0, 0, 0.085, 0.95, i / streamN, Math.floor(rnd() * 2)]), { shape: 1, mode: 2, curve: streamCurve, speed: 0.09, spread: 0.14 });
-  root.add(stream.obj);
-  const columnRows = []; for (let i = 0; i < (lite ? 14 : 36); i++) { const cI = i % 3, rI = Math.floor(i / 3); columnRows.push([1.52 + cI * 0.09, 2.5 - rI * 0.09, 0.28, 0.07, 0.8, rnd(), Math.floor(rnd() * 2)]); }
-  const column = kit.points(columnRows, { shape: 1, twinkle: 0.5 }); root.add(column.obj);
-
   // ---- hotspots (world positions) and what the visitor bumps into ----
   root.updateMatrixWorld(true);
-  const W3 = (x, y, z) => root.localToWorld(V3(x, y, z));
-  ctx.anchors['rm-screen'] = { pos: W3(S.screen.c[0], S.screen.c[1], 0.36), w: 1.0, h: 1.2 };
-  ctx.anchors['rm-visor'] = { pos: W3(S.head[0] - 0.1, S.head[1] - 0.05, 0.2), w: 0.9, h: 0.95 };
-  ctx.anchors['rm-cup'] = { pos: W3(S.cup[0], S.cup[1] + 0.1, S.cup[2]), w: 0.36, h: 0.34 };
-  const solids = [{ kind: 'box', cx: 0, cz: 0, hw: 1.6, hd: 0.62 }, { kind: 'circle', cx: -2.4, cz: 0, r: 0.5 }, { kind: 'circle', cx: S.head[0], cz: 0, r: 0.5 }].map((s) => {
-    const p = W3(s.cx, 0, s.cz);
+  const W3 = (p) => root.localToWorld(V3(p[0], p[1], p[2]));
+  // (metres: they scale with the focal length on a phone; the screen's centre is 0.45 m from the cup's, the sleeper and the visor are 3.4 m apart)
+  const anchorSpec = { 'rm-screen': [EU_PX.screen, ZS, 0.62, 0.9], 'rm-visor': [EU_PX.visor, ZF, 0.9, 0.95], 'rm-cup': [EU_PX.cup, ZC, 0.36, 0.34] };
+  for (const [id, [at, Z, w, hh]] of Object.entries(anchorSpec)) ctx.anchors[id] = { pos: W3(P(at[0], at[1], Z)), w, h: hh };
+  const lx = (px) => ((px - V.cx) * Z0) / f;
+  const solids = [{ kind: 'box', cx: lx(405), cz: 0, hw: 1.4, hd: 0.6 }, { kind: 'circle', cx: lx(183), cz: Z0 - ZF, r: 0.5 }, { kind: 'circle', cx: lx(790), cz: Z0 - ZF, r: 0.5 }].map((s) => {
+    const p = W3([s.cx, 0, s.cz]);
     return s.kind === 'box' ? { kind: 'box', x: p.x, z: p.z, hw: s.hw, hd: s.hd, ry: root.rotation.y } : { kind: 'circle', x: p.x, z: p.z, r: s.r };
   });
 
   // ---- the sheet that flies to the book when the floor is solved ----
   const sheet = kit.plane(ctx.canvasTex(256, 352, (c, w, h) => BookArt.drawSheet(c, w, h)), 0.16, 0.22, { alpha: 0 }); sheet.mesh.visible = false; ctx.scene.add(sheet.mesh);
 
-  // ---- camera poses (like the level's: from a point to a target in the set's frame, the target landing on screen at (sx, sy)) ----
-  function aim(camL, tgtL, sx, sy, fov, a) {
-    root.updateMatrixWorld(true);
-    const cw = root.localToWorld(V3(...camL)), tw = root.localToWorld(V3(...tgtL));
-    const dx = tw.x - cw.x, dy = tw.y - cw.y, dz = tw.z - cw.z, tanV = Math.tan((fov * Math.PI) / 360), tanH = tanV * a;
-    return { x: cw.x, y: cw.y, z: cw.z, fov, yaw: Math.atan2(-dx, -dz) - Math.atan((0.5 - sx) * 2 * tanH), pitch: Math.atan2(dy, Math.hypot(dx, dz)) - Math.atan((0.5 - sy) * 2 * tanV) };
-  }
-  const fit = (w, h, fw, fh, fov, a) => { const tv = 2 * Math.tan((fov * Math.PI) / 360); return Math.max(h / (fh * tv), w / (fw * tv * a)); };
+  // ---- camera poses: straight in front of the part of the drawing that is looked at (the visor's own eyes for "through") ----
+  const aim = (camL, tgtL, sx, sy, fov, a) => coverAim(root, V3, camL, tgtL, sx, sy, fov, a);
+  const fit = coverFit;
   function pose(view, a, free) {
-    const f = free || { x0: 0.3, y0: 0.1, x1: 0.95, y1: 0.55 }, sx = (f.x0 + f.x1) / 2, sy = (f.y0 + f.y1) / 2, fw = (f.x1 - f.x0) * 0.9, fh = (f.y1 - f.y0) * 0.86, phone = a < 0.8;
-    const fov = phone ? 56 : 44;
-    if (view === 'screen') { const d = fit(1.0, 1.22, fw, fh, fov, a), c = S.screen.c; return aim([c[0], c[1] + d * 0.03, c[2] + d], [c[0], c[1], c[2]], sx, sy, fov, a); }
-    if (view === 'cup') { const d = fit(0.4, 0.34, fw, fh, fov, a), c = [S.cup[0], S.cup[1] + 0.07, S.cup[2]]; return aim([c[0] + d * 0.15, c[1] + d * 0.42, c[2] + d * 0.9], c, sx, sy, fov, a); }
-    if (view === 'visor') { const d = fit(1.2, 1.25, fw, fh, fov, a), c = [S.head[0], S.head[1] - 0.02, 0]; return aim([c[0] - d * 0.45, c[1] + d * 0.05, c[2] + d * 0.9], c, sx, sy, fov, a); }
+    const fr = free || { x0: 0.3, y0: 0.1, x1: 0.95, y1: 0.55 }, sx = (fr.x0 + fr.x1) / 2, sy = (fr.y0 + fr.y1) / 2, fw = (fr.x1 - fr.x0) * 0.9, fh = (fr.y1 - fr.y0) * 0.86, phone = a < 0.8, fov = phone ? 56 : 44;
     if (view === 'through') {
       const fv = phone ? 62 : 48, p = aim(E, [E[0] + Dn[0], E[1] + Dn[1], E[2] + Dn[2]], sx, sy, fv, a);
-      layoutCode(p, a, f);
+      layoutCode(p, a, fr);
       return p;
     }
-    return null;
+    const look = EU_PX.looks[view];
+    if (!look) return null;
+    const Z = view === 'screen' ? ZS : view === 'cup' ? ZC : ZF, t = P(EU_PX[view][0], EU_PX[view][1], Z), d = fit(look.w, look.h, fw, fh, fov, a);
+    return aim([t[0], t[1] + 0.05, t[2] + d * 0.97], t, sx, sy, fov, a);
   }
 
   // ---- every frame ----
-  const st = { ph: 0, ph2: 0, run: 1, T: 0 };
+  // D holds what is shown: each value follows its target (world.room) at its own rate, so a state change is always a smooth one.
+  const D = { code: 1, clock: 0, spoke: Array(8).fill(0) };
+  const st = { T: 0, run: 1 };
   const tmpV = V3(), tmpF = V3(), tmpU = V3();
   function update(dt, t) {
-    const w = world.room, m = world.reduced ? 0 : 1;
+    const w = world.room, m = world.reduced ? 0 : 1, rate = world.reduced ? 9 : 3;
     st.T += dt * m; RU.uTime.value = st.T;
+    const T = st.T;
     st.run = damp(st.run, 1 - w.shut, 3, dt);
-    const on = st.run, bg = 1 - 0.9 * w.through;
-    // the screen: what it shows now
-    const key = w.mode + '|' + w.spokes.join('') + '|' + w.clock.join('');
-    if (key !== scrState.key) { scrState.key = key; scrState.mode = w.mode; scrState.spokes = w.spokes.slice(); scrState.clock = w.clock.slice(); redraw(); }
-    const flick = 1 - 0.14 * m * on * Math.max(0, Math.sin(t * 23) * Math.sin(t * 3.1)) * 2;
-    scr.set((w.mode === 'dark' ? 0 : 0.9 * flick) * (1 - 0.8 * w.flash));
-    monoPlane.set(w.mono * (0.82 + 0.1 * m * Math.sin(t * 0.8)));
-    // the running machine
-    st.ph += dt * 9 * on * m; st.ph2 += dt * 0.5 * on * m;
-    keyRows.forEach((row, i) => { row.position.y = -0.011 * Math.max(0, Math.sin(st.ph * (0.9 + i * 0.37) + i * 1.9)) * on; });
-    handA.h.rotation.x = -0.78 + 0.05 * Math.sin(st.ph * 0.55) * on; handA.g.position.y = handA.base - 0.012 * Math.max(0, Math.sin(st.ph * 1.1)) * on; handA.g.position.x = -0.8 + 0.03 * Math.sin(st.ph * 0.21) * on;
-    handB.g.position.y = handB.base + 0.004 * Math.sin(t * 1.3) * m; handB.h.rotation.x = -1.1 + 0.025 * Math.sin(st.ph * 0.3 + 1) * on;
-    rings.rotation.y += dt * 0.7 * on * m; ringL.forEach((g, i) => { g.rotation.z = (i - 1) * 0.12 + Math.sin(st.T * (0.8 + i * 0.3)) * 0.1 * on; g.rotation.x = Math.sin(st.T * 0.6 + i) * 0.12 * on; });
-    sparks.set((0.25 + 0.75 * Math.max(0, Math.sin(st.T * 13) * Math.sin(st.T * 4.7) * 0.5 + 0.55)) * on * (m ? 1 : 0.6) * bg);
-    stream.set(on * bg); column.set((0.8 * on + 0.15) * bg);
-    for (const L of bgLines) L.set(bg);
-    machine.set((1 - 0.4 * w.shut) * bg);
-    // the cup turns over
-    const ck = w.cup; cupBody.rotation.x = ck * Math.PI; cupG.position.y = S.cup[1] + Math.sin(ck * Math.PI) * 0.07; steam.set(0.6 * (1 - ck) * (1 - 0.5 * w.shut) * bg);
-    // breathing
-    slBody.scale.y = 1 + 0.014 * Math.sin(t * 1.15) * m; sleeper.L.set(1 - 0.5 * w.through); sleeper.glitter.set(1 - 0.7 * w.through); visor.L.set(1 - 0.85 * w.through); visor.glitter.set(1 - 0.8 * w.through);
-    // the cone: decoys step back when the visitor looks from the visor; the code is bright there
-    rays.set(0.9 * (1 - 0.8 * w.through) * (0.35 + 0.65 * on)); circles.set(0.85 * (1 - 0.82 * w.through) * (0.35 + 0.65 * on));
-    code.set(0.95);
-    frameL.set(0.5 * bg); sig.set(0.8 * bg);
+    const on = st.run, bg = 1 - 0.85 * w.through;
+    // the screen: the asterisk (a lit spoke is drawn again, brighter), then the clock; dark, then the mono
+    const key = w.clock.join(''); if (key !== scrState.key) { scrState.key = key; scrState.clock = w.clock.slice(); redraw(); }
+    D.code = damp(D.code, w.mode === 'code' ? 1 : 0, rate * 2, dt); D.clock = damp(D.clock, w.mode === 'clock' ? 1 : 0, rate * 2, dt);
+    const flick = 1 - 0.14 * m * on * Math.max(0, Math.sin(t * 23) * Math.sin(t * 3.1)) * 2, fl = 1 - 0.7 * w.flash;
+    for (let i = 0; i < 8; i++) {
+      D.spoke[i] = damp(D.spoke[i], w.spokes[i] ? 1 : 0, rate * 2.4, dt);
+      spoke[i].u.uAlpha.value = D.code * fl * bg; lit[i].u.uAlpha.value = D.spoke[i] * D.code * (0.85 + 0.15 * flick) * bg;
+    }
+    clockQ.u.uAlpha.value = D.clock * 0.9 * flick * (1 - 0.8 * w.flash) * bg;
+    monoQ.u.uAlpha.value = w.mono * (0.82 + 0.1 * m * Math.sin(t * 0.8));
+    // the machine that runs: the antenna sways, the sparks flicker, the steam wavers, the sleeper breathes; it all stops when the machine does
+    base.u.uAlpha.value = (1 - 0.4 * w.shut) * bg;
+    antenna.u.uAlpha.value = (1 - 0.4 * w.shut) * bg; AN.host.rotation.z = (0.035 * Math.sin(T * 0.9) + 0.02 * Math.sin(T * 1.7 + 1)) * on * m;
+    sparks.u.uAlpha.value = (m ? 0.3 + 0.7 * Math.max(0, Math.sin(T * 13) * Math.sin(T * 4.7) * 0.5 + 0.6) : 0.9) * on * bg;
+    SG.u.uAlpha.value = 0.9 * bg;
+    // the cup turns over; 11:11 shows on its base
+    const ck = w.cup; CP.host.rotation.x = ck * Math.PI; CP.host.position.y = CP.p[1] + Math.sin(ck * Math.PI) * 0.07;
+    cup.u.uAlpha.value = (1 - 0.4 * w.shut) * bg; cupLabel.set(smooth(0.6, 1, ck) * 0.9 * bg);
+    ST.host.rotation.z = 0.06 * Math.sin(T * 0.8) * m; steam.u.uAlpha.value = (0.85 + 0.15 * Math.sin(T * 1.3) * m) * (1 - ck) * (1 - 0.5 * w.shut) * bg;
+    // the two heads
+    SL.host.scale.y = 1 + 0.014 * Math.sin(t * 1.15) * m;
+    sleeper.u.uAlpha.value = 1 - 0.5 * w.through; silver.u.uAlpha.value = 1 - 0.5 * w.through; silG.set(1 - 0.7 * w.through); silGlit.set(0.9 - 0.7 * w.through);
+    visorFig.u.uAlpha.value = 1 - 0.85 * w.through; gold.u.uAlpha.value = 1 - 0.8 * w.through; goldG.set(0.95 - 0.8 * w.through); goldGlit.set(0.9 - 0.8 * w.through);
+    starPts.set(bg * 0.9);
+    // the code's dots: dim among the cone's own from the arrival spot, bright where they line up
+    code.set(0.6 + 0.4 * w.through);
     // the page flying to the book
     const pg = w.page;
     sheet.mesh.visible = pg > 0.001 && pg < 0.999;
     if (sheet.mesh.visible) {
       const cam = ctx.camera; cam.updateMatrixWorld();
       tmpF.set(0, 0, -1).applyQuaternion(cam.quaternion); tmpU.set(0, 1, 0).applyQuaternion(cam.quaternion);
-      const mid = tmpV.copy(cam.position).addScaledVector(tmpF, 0.62).addScaledVector(tmpU, 0.02);
-      const k1 = smooth(0, 0.45, pg), k3 = smooth(0.62, 1, pg), from = root.localToWorld(V3(S.screen.c[0], S.screen.c[1], 0.4)), icon = ctx.bookIconPoint ? ctx.bookIconPoint(0.62) : mid.clone();
-      sheet.mesh.position.lerpVectors(from, mid, k1).lerp(icon, k3);
+      const md = tmpV.copy(cam.position).addScaledVector(tmpF, 0.62).addScaledVector(tmpU, 0.02);
+      const k1 = smooth(0, 0.45, pg), k3 = smooth(0.62, 1, pg), from = root.localToWorld(V3(...P(EU_PX.screen[0], EU_PX.screen[1], ZS - 0.1))), icon = ctx.bookIconPoint ? ctx.bookIconPoint(0.62) : md.clone();
+      sheet.mesh.position.lerpVectors(from, md, k1).lerp(icon, k3);
       sheet.mesh.quaternion.copy(cam.quaternion); sheet.mesh.rotateZ(Math.sin(pg * 9) * 0.08 * (1 - k3));
       sheet.mesh.scale.setScalar(Math.max(0.001, k1 * (1 - 0.75 * k3) * 2.6));
       sheet.set(k1 * (1 - smooth(0.85, 1, pg)) * 0.95);
     }
   }
 
+  const texSize = (g) => g.mesh.material.uniforms.uTex.value.image.width + 'x' + g.mesh.material.uniforms.uTex.value.image.height;
   return {
     root, update, pose,
     solids: () => solids,
     extra: [sheet.mesh],
-    info: () => ({ segments: segTotal, lite, code: S.code.join(''), codeDots: cd.count, aligned: cd.ready }),
+    info: () => ({ segments: segTotal, lite, contours: tonePts, ribbons: segTotal - tonePts, code: EU_SET.code.join(''), codeDots: cd.count, aligned: cd.ready, gold: goldPts.length, silver: silPts.length, wide, f, texture: [base, spoke[0], lit[0], sleeper, silver, visorFig, gold, cup, steam, antenna, sparks, SG].map(texSize).join(' + ') }),
     alignError() {
       const cam = ctx.camera; cam.updateMatrixWorld(true);
       let worst = 0;

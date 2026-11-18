@@ -8,7 +8,8 @@
 //      the page and the chapter, once (Trial.finish).
 // The words keep the book's own: clue and done are verbatim chapter text; the hints are new prose.
 ROOMS['en-una'] = {
-  aim: { x: 0, y: 2.2, z: 10, sx: 0.42, sy: 0.4 },
+  water: PLAIN_WATER, // the cover is plain black paper: no reflection, engraved rows, floor light, glints or horizon in the arrival view (see PLAIN_WATER)
+  get aim() { const L = euLens(aspectNow()); return { x: EU_SET.x, y: EU.H + ((L.yh - L.row) * EU.Z0) / L.f, z: EU_SET.z, sx: L.sx, sy: L.sy }; }, // (the cover's row that is aimed at, by aspect: the whole paper fits between the title and the arrival line)
   intro: 'La data baja desde arriba. La ilusión de elegir. El algoritmo ya está escrito.',
   clue: 'La data baja desde arriba. La ilusión de elegir.\nEl algoritmo ya está escrito.\nEl mono te observa desde adentro del vidrio.',
   done: 'Lo miraste de nuevo. Te acordaste de quién eras.',
@@ -43,6 +44,9 @@ ROOMS['en-una'] = {
   // ---- state ----
   fresh() { return { v: 1, stage: 0, spokes: [0, 0, 0, 0, 0, 0, 0, 0], clock: [0, 3, 4, 7], cupTurned: false, done: false, tries: 0, hints: 0 }; },
   solvedState() { return { ...this.fresh(), stage: 3, done: true, spokes: this.code.slice(), clock: this.time.slice() }; },
+  /** The machine already stopped, only the last look left (the dev panel and the checks). */
+  almost(s) { s.stage = 2; s.spokes = this.code.slice(); s.clock = this.time.slice(); return s; },
+  debug(s) { return { spokes: s.spokes.join(''), clock: s.clock.join(''), cupTurned: s.cupTurned }; },
   normalize(raw) {
     const f = this.fresh();
     if (!raw || raw.v !== 1) return f;

@@ -8,9 +8,25 @@
 //   Everything is reachable with buttons (hotspots, the plate's controls), the keyboard and a screen reader; nothing needs
 //   speed, hover, dragging or sound. The room's own state lives in localStorage ("eldom.room.<id>.v1").
 //   A room definition: { aim, intro, clue, done, hints: [[tier…] per stage], hots: { id: { label(room), view } },
-//     fresh(), normalize(raw), solvedState(), visual(state), panel(room, view) → { title, status, cls, build(actsEl, room) } }
+//     fresh(), normalize(raw), solvedState(), almost(state) → the state at the last step (dev panel, checks),
+//     visual(state), panel(room, view) → { title, status, cls, build(actsEl, room) }, debug(state) → extra fields for the checks,
+//     onSolved(state) (optional: the state is final, show it), onArrive(room) (optional: the visitor just arrived; use room.later for timers) }
+//   A hotspot may also carry on(room) → false while it must not show, and tap(room) in place of a view (an action without a close look).
+//   The saved state is { v, stage, done, tries, hints, … } (the framework reads stage, done and hints; a room adds what it needs).
+//   The ids of every room's hotspots ("rm-…") are collected from ROOMS by the director (ROOM_HOTS); a hotspot only shows
+//   where the set registered its anchor (ctx.anchors[id]) and the room's own definition lists it. A set reads world.room.v.
 // ═══════════════════════════════════════════════════════════════════════════════════════════
 const ROOMS = {};
+
+/**
+ * What of the world's water a room keeps (ROOMS[id].water). The world is a dark pool with engraved lines, a reflection of whatever
+ * stands on it, a tinted light pool of the floor and a few glints. A cover on plain black paper has none of that, so each room says
+ * what stays; a ripple's crest always stays, because the water still answers to a ripple. Every value is 0..1 and omitted ones keep
+ * the world's own (1): lines (the engraved rows), mirror (the reflection), pool (the floor's tinted light and the light the cabin spills), glints, tone (the water's
+ * own dark tone and the paler horizon where it fades: 0 makes the floor the same black as the sky).
+ */
+const WORLD_WATER = { lines: 1, mirror: 1, pool: 1, glints: 1, tone: 1 };
+const PLAIN_WATER = { lines: 0, mirror: 0, pool: 0, glints: 0, tone: 0 }; // the cover is plain black paper: the arrival view is too
 
 const Room = {
   id: null,          // track id of the room being visited (null elsewhere, and always null without the 3D world)
@@ -26,7 +42,10 @@ const Room = {
 
   def() { return this.id ? ROOMS[this.id] : null; },
   track() { return this.id ? trackById(this.id) : null; },
-  hosts(track) { return !!(track && ROOMS[track.id]); },
+  roomless: false,   // evaluation only (Dev.actions.roomless): every floor is built as a plain world, as if it had no room
+  hosts(track) { return !this.roomless && !!(track && ROOMS[track.id]); },
+  /** The water this floor shows (see PLAIN_WATER): the world's own unless the room says otherwise. */
+  waterStyle(track) { const d = track && this.hosts(track) ? ROOMS[track.id] : null; return d && d.water ? { ...WORLD_WATER, ...d.water } : WORLD_WATER; },
   /** The room needs the 3D world (the 2D fallback keeps the plate of Trial). */
   available() { return !!(R && R.kind === '3d' && R.roomPose && this.id); },
   here() { return this.available() && world.phase === 'floor' && !!this.track() && world.floor === this.track().floor; },
@@ -45,6 +64,7 @@ const Room = {
     if (port && window.innerWidth >= 640) { Roam.docked = true; port.setDock('compact'); } // the room is the floor: the player waits in its corner
     const d = this.def();
     if (d.intro) hint(d.intro, 6200);
+    if (d.onArrive) d.onArrive(this); // (a room that watches the walker starts its own timer here; leaving clears every timer)
     syncUI();
   },
   leave() {
@@ -131,14 +151,15 @@ const Room = {
 
   // ---- what can be touched now ----
   hotOn(id) {
-    const d = this.def();
-    return !!(d && this.here() && d.hots && d.hots[id] && this.view === 'wide' && !this.busy);
+    const d = this.def(), h = d && d.hots && d.hots[id];
+    return !!(h && this.here() && this.view === 'wide' && !this.busy && (!h.on || h.on(this)));
   },
   label(id) { const d = this.def() || Object.values(ROOMS)[0]; const h = d && d.hots && d.hots[id]; return h ? (typeof h.label === 'function' ? h.label(this) : h.label) : id; },
   tap(id) {
     if (!this.hotOn(id)) return;
     Sound.unlock();
-    this.go(this.def().hots[id].view);
+    const h = this.def().hots[id];
+    if (h.tap) h.tap(this); else this.go(h.view);
   },
 
   // ---- the plate: title, a line of text, the controls of the view ----
@@ -242,7 +263,9 @@ const Room = {
     if (!d || !s || s.done || !this.here()) return;
     this.cancelHold();
     const first = !Progress.solved(this.id);
-    s.stage = 3; s.done = true; this.save();
+    s.stage = 3; s.done = true;
+    if (d.onSolved) d.onSolved(s); // the state is final: the set shows it
+    this.save();
     Sound.ding();
     if (first) {
       Trial.finish(); // Progress.solve, the chapter into the book, the book opens on it
@@ -256,7 +279,7 @@ const Room = {
   /** The dev panel and the checks: the machine already stopped, the last look given. */
   solveNow() {
     if (!this.here() || this.s.done) return;
-    this.s.stage = 2; this.s.spokes = ROOMS[this.id].code.slice(); this.save(); this.applyVisual();
+    this.s = this.def().almost(this.s); this.save(); this.applyVisual(); // the definition brings its state to the last step
     this.solve();
   },
   /** Two taps (the first one asks), unless forced by the checks or the dev panel. */
@@ -284,9 +307,11 @@ const Room = {
   /** For the checks. */
   debug() {
     const d = this.def(), s = this.s, panel = !$('#rm-panel').hidden;
-    return { id: this.id, here: this.here(), view: this.view, busy: this.busy, stage: s ? s.stage : null, done: s ? s.done : null, spokes: s ? s.spokes.join('') : null, clock: s ? s.clock.join('') : null, cupTurned: s ? s.cupTurned : null,
+    const visual = {}; // (arrays read as strings of digits: the checks compare them as such)
+    for (const [k, v] of Object.entries(world.room)) visual[k] = Array.isArray(v) ? v.join('') : v && typeof v === 'object' ? { ...v } : v;
+    return { id: this.id, here: this.here(), view: this.view, busy: this.busy, stage: s ? s.stage : null, done: s ? s.done : null, ...(d && d.debug && s ? d.debug(s) : {}),
       tries: s ? s.tries : null, hints: s ? s.hints : null, clue: d ? d.clue : null, done_line: d ? d.done : null, panel, title: panel ? $('#rm-title').textContent : '', status: $('#rm-status').textContent,
-      more: !$('#rm-more').hidden, saved: this.id ? store.local.json(this.key(), null) : null, visual: { ...world.room, spokes: world.room.spokes.join(''), clock: world.room.clock.join('') },
+      more: !$('#rm-more').hidden, saved: this.id ? store.local.json(this.key(), null) : null, visual,
       acts: [...document.querySelectorAll('#rm-acts [data-act]')].map((b) => ({ act: b.dataset.act, text: b.textContent, pressed: b.getAttribute('aria-pressed'), label: b.getAttribute('aria-label') })),
       set: R && R.roomInfo ? R.roomInfo() : null, align: this.view === 'through' && R && R.roomAlignError ? R.roomAlignError() : null };
   },

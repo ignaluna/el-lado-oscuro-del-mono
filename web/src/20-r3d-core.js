@@ -398,6 +398,7 @@ function createRenderer3D(THREE) {
     uRip: { value: Array.from({ length: 6 }, () => new THREE.Vector4(0, 0, -100, 0)) },
     uAccent: { value: vecHex('#ebe5d5') }, uAccentAmt: { value: 0 },
     uSpill: { value: 0 }, uPool: { value: 1 }, uTremor: { value: 0 }, uMirror: { value: 1 }, uLamp: { value: 0 },
+    uStyle: { value: new THREE.Vector4(1, 1, 1, 1) }, // what of the world's water shows (lines, floor light, glints, tone): a cover room on plain black paper turns it down
   };
   const water = new THREE.Mesh(keep(new THREE.CircleGeometry(90, 72).rotateX(-Math.PI / 2)),
     new THREE.ShaderMaterial({ vertexShader: WATER_VERT, fragmentShader: WATER_FRAG, uniforms: waterU, extensions: { derivatives: true } }));
@@ -440,7 +441,7 @@ function createRenderer3D(THREE) {
   const postU = {
     tScene: { value: sceneRT.texture }, uRes: { value: new THREE.Vector2(1, 1) }, uTime: { value: 0 }, uExposure: { value: 1 },
     uReduced: { value: 0 }, uSpeed: { value: 0 }, uPrism: { value: 0 }, uPrismT: { value: 0.5 }, uFlick: { value: 1 },
-    uVoid: { value: vecHex(PAPER) }, uBoot: { value: 1 },
+    uVoid: { value: vecHex(PAPER) }, uBoot: { value: 1 }, uClean: { value: 0 },
   };
   const postScene = new THREE.Scene();
   const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -746,6 +747,7 @@ const aspectM = portrait ? 2048 / 300 : 2048 / 150;
     postU.uTime.value = t; postU.uExposure.value = w.exposure; postU.uReduced.value = w.reduced ? 1 : 0;
     postU.uSpeed.value = w.reduced ? 0 : w.speed; postU.uPrism.value = w.prism; postU.uFlick.value = w.reduced ? 0 : 1;
     postU.uPrismT.value = 0.5 + 0.5 * Math.sin(t * 2.1);
+    postU.uClean.value = roomObj.built() ? 1 : 0; // a cover room has painted white masses: they get no static (see POST_FRAG)
     // light wall behind the DOM player
     const gl = w.glow;
     if (gl.rect && gl.amount > 0.001) placeWall(gl.rect, gl.accent, gl.amount); else wall.visible = false;
@@ -809,7 +811,7 @@ const aspectM = portrait ? 2048 / 300 : 2048 / 150;
     get dpr() { return dpr; },
     lite,
     /** What the tier is doing now (shown by the DEV chip, read by the checks). */
-    perf: () => ({ tier: lite ? 'lite' : 'full', dpr, mirror: mirrorOff && !mirrorNeeded ? 'off' : '1/' + mirrorDiv, samples: lite ? 0 : 4, particles: PSCALE, renders, avgMs: api.avgMs }),
+    perf: () => ({ tier: lite ? 'lite' : 'full', dpr, mirror: mirrorOff && !mirrorNeeded ? 'off' : '1/' + mirrorDiv, samples: lite ? 0 : 4, particles: PSCALE, renders, avgMs: api.avgMs, water: { style: waterU.uStyle.value.toArray(), mirror: waterU.uMirror.value } }),
     /** For the checks: feeds the adaptive step frames of `ms` milliseconds for `seconds` of frame time. */
     adaptTest(ms, seconds) { frameAcc = 0; frameN = 0; for (let t = 0; t < seconds; t += ms / 1000) adapt(ms / 1000); return api.perf(); },
     resize,
@@ -820,8 +822,11 @@ const aspectM = portrait ? 2048 / 300 : 2048 / 150;
       const seesWater = !(world.inside && world.doors < 0.004);
       water.visible = seesWater;
       // the level's clue lives only in the reflection: its world keeps the (quarter size) mirror at every level
-      const mirror = !mirrorOff || mirrorNeeded;
-      waterU.uMirror.value = mirror ? 1 : 0;
+      // a room whose cover is plain black paper says how much of the world's water it keeps (Room.waterStyle: lines, floor light, glints, tone, mirror)
+      const ws = Room.waterStyle(roomObj.built() ? trackOf(world.env) : null);
+      waterU.uStyle.value.set(ws.lines, ws.pool, ws.glints, ws.tone);
+      const mirror = (!mirrorOff || mirrorNeeded) && ws.mirror > 0;
+      waterU.uMirror.value = mirror ? ws.mirror : 0;
       if (seesWater && mirror) renderMirror();
       renders++;
       renderer.setRenderTarget(sceneRT);

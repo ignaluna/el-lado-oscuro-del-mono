@@ -118,16 +118,33 @@ function syncUI() {
   Dev.refresh();
 }
 function setPhase(p) { world.phase = p; if (p !== 'cabin') SpNotice.close(); syncUI(); }
-const ROOM_HOTS = ['rm-screen', 'rm-visor', 'rm-cup'];
+const ROOM_HOTS = [...new Set(Object.values(ROOMS).flatMap((d) => Object.keys(d.hots)))]; // every room's hotspots (each shows only in its own room)
 const LEVEL_HOTS = ['lv-wall', 'lv-stones', 'lv-painting', 'lv-hatch', 'lv-box', 'lv-dial-0', 'lv-dial-1', 'lv-dial-2', 'lv-latch', 'lv-object'];
-let hintTimer = 0;
+let hintTimer = 0, hintPlacer = 0, hintPadded = false;
+/**
+ * Keeps the line clear of what shares the bottom of the screen. On a wide screen the floor's row of buttons sits at the bottom left
+ * and the corner player at the right: the line rises above the row and keeps to the left of the player (a long line wraps, it is
+ * never cut). On a phone the player waits at the bottom (the row is at the top): the line sits just above it.
+ */
+function placeHint(again) {
+  const caps = $('#captions'), port = PlayerPortal.current, W = window.innerWidth, H = window.innerHeight;
+  const box = (el) => { if (!el || el.hidden) return null; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? r : null; };
+  let bottom = 0, right = 0;
+  const row = box($('#floor-actions')), pr = port && box(port.el);
+  if (again && !row) return; // (off a floor the lobby lays its own captions out)
+  if (row && row.top > H / 2) bottom = H - row.top + 6;
+  if (pr) { if (W < 640) bottom = Math.max(bottom, H - pr.top + 8); else if (row && pr.left > W * 0.4) right = W - pr.left + 12; }
+  caps.style.bottom = bottom ? `${Math.round(bottom)}px` : '';
+  if (right || hintPadded) caps.style.paddingRight = right ? `${Math.round(right)}px` : ''; // (the lobby's own layout may use it when no row is up)
+  hintPadded = !!right;
+}
 function hint(text, ms = 2600) {
-  const el = $('#cap-hint'), caps = $('#captions'), port = PlayerPortal.current;
-  // on a phone the player waits at the bottom: the line sits just above it
-  caps.style.bottom = port && window.innerWidth < 640 ? `${Math.round(window.innerHeight - port.el.getBoundingClientRect().top + 8)}px` : '';
+  const el = $('#cap-hint'), caps = $('#captions');
   el.textContent = text; el.hidden = false; live(text);
+  placeHint();
+  clearInterval(hintPlacer); hintPlacer = setInterval(() => placeHint(true), 250); // (the player may open, dock or fold while the line is up)
   clearTimeout(hintTimer);
-  hintTimer = setTimeout(() => { el.hidden = true; caps.style.bottom = ''; }, ms);
+  hintTimer = setTimeout(() => { el.hidden = true; clearInterval(hintPlacer); caps.style.bottom = ''; if (hintPadded) caps.style.paddingRight = ''; hintPadded = false; }, ms);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -954,6 +971,8 @@ const Dev = (() => {
     trialSolve() { if (Room.here()) Room.solveNow(); else Trial.solveNow(); },
     roomSolve() { Room.solveNow(); },
     roomReset() { Room.reset(true); },
+    /** Evaluation only: builds floors as plain worlds, without their room (the roam, rotate-hint and tier checks need a world with nothing in it). Inert in a release build unless #dev is in the address. Not saved, not in the URL: a reload ends it. */
+    roomless(on) { Room.roomless = !!on && (SHOW_DEV_TOOLS || location.hash === '#dev'); },
     bookBuy(ebookUrl, physicalUrl) { BOOK.buy.ebookUrl = ebookUrl || ''; BOOK.buy.physicalUrl = physicalUrl || ''; if (App.overlay === 'book') Book.render(); },
     force2D() { switchTo2D(); },
     /** Opens every floor's official player on this device and waits for it to answer (no playback). */
@@ -1263,7 +1282,7 @@ async function boot() {
   let readyRes;
   window.__eldom = {
     ready: new Promise((res) => { readyRes = res; }),
-    config: () => ({ release: RELEASE_AT, demo: DEMO_ALBUM, gallery: { enabled: GALLERY.enabled, pieces: GALLERY.pieces.map(({ id, src, title, caption, thanks }) => ({ id, src, title, caption, thanks })), thanks: GALLERY.thanks.lines }, tracks: tracks.map((t) => ({ album: t.album, floor: t.floor, id: t.id, title: t.title, chapter: t.chapter || null, element: t.element || null, youtubeVideoId: t.youtubeVideoId, youtubeStartSeconds: t.youtubeStartSeconds, spotifyTrackUri: t.spotifyTrackUri, spotifyAlbumId: t.spotifyAlbumId, durationSeconds: t.durationSeconds })), level: { floor: Level.floor(), trackId: LEVEL.trackId, symbols: LEVEL.symbols, stones: LEVEL.stones }, catalog: App.catalog || [],
+    config: () => ({ release: RELEASE_AT, demo: DEMO_ALBUM, gallery: { enabled: GALLERY.enabled, pieces: GALLERY.pieces.map(({ id, src, title, caption, thanks }) => ({ id, src, title, caption, thanks })), thanks: GALLERY.thanks.lines }, tracks: tracks.map((t) => ({ album: t.album, floor: t.floor, id: t.id, title: t.title, chapter: t.chapter || null, element: t.element || null, youtubeVideoId: t.youtubeVideoId, youtubeStartSeconds: t.youtubeStartSeconds, spotifyTrackUri: t.spotifyTrackUri, spotifyAlbumId: t.spotifyAlbumId, durationSeconds: t.durationSeconds })), level: { floor: Level.floor(), trackId: LEVEL.trackId, symbols: LEVEL.symbols, stones: LEVEL.stones }, rooms: Object.keys(ROOMS), catalog: App.catalog || [],
       book: { opening: BOOK.opening.map((p) => p.id), pages: BOOK.pages.map((p) => ({ id: p.id, foundIn: p.foundIn })), closing: BOOK.closing.id, back: BOOK.back.id }, bookText: BOOK_TEXT }),
     state() {
       const port = PlayerPortal.current;
@@ -1299,7 +1318,7 @@ async function boot() {
       invite: (n) => Invite.open(n ? trackOf(n) : null), closeInvite: () => Invite.close(), gateChoose: (p) => Gate.choose(p), gateDismiss: () => Gate.dismiss(),
     },
     dev: { prelaunch: A.prelaunch, lastTen: A.lastTen, released: A.released, openDoors: A.openDoors, closeDoors: A.closeDoors, exterior: A.exterior, interior: A.interior, gallery: A.gallery, gallerySample: A.gallerySample,
-      arrive: A.arrive, platform: A.platform, press: A.press, embedMode: A.embedMode, clearLead: A.clearLead, clearBook: A.clearBook, levelFloor: A.levelFloor, levelReset: A.levelReset, levelSolve: A.levelSolve, playerTest: A.playerTest, adaptTest: (ms, s) => (R && R.adaptTest ? R.adaptTest(ms, s) : null), roamTo: A.roamTo, roamPush: A.roamPush, bookFind: A.bookFind, bookAll: A.bookAll, progressReset: A.progressReset, trialSolve: A.trialSolve, roomSolve: A.roomSolve, roomReset: A.roomReset, bookBuy: A.bookBuy, force2D: A.force2D, reducedMotion: A.reducedMotion, timeScale: A.timeScale },
+      arrive: A.arrive, platform: A.platform, press: A.press, embedMode: A.embedMode, clearLead: A.clearLead, clearBook: A.clearBook, levelFloor: A.levelFloor, levelReset: A.levelReset, levelSolve: A.levelSolve, playerTest: A.playerTest, adaptTest: (ms, s) => (R && R.adaptTest ? R.adaptTest(ms, s) : null), roamTo: A.roamTo, roamPush: A.roamPush, bookFind: A.bookFind, bookAll: A.bookAll, progressReset: A.progressReset, trialSolve: A.trialSolve, roomSolve: A.roomSolve, roomless: A.roomless, roomReset: A.roomReset, bookBuy: A.bookBuy, force2D: A.force2D, reducedMotion: A.reducedMotion, timeScale: A.timeScale },
   };
   boot().then(readyRes, (e) => { console.error(e); readyRes(); });
 }

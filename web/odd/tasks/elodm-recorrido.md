@@ -13,7 +13,7 @@ nine completes the book and opens basements −1..−9, where Pequeño Primate (
 |---|---|---|---|
 | 1 | En una | Una realidad simulada por computadora | 1 |
 | 2 | ¿Qué te está pasando? | El sistema | 2 |
-| 3 | El lado oscuro del mono | El bar Keller | 3 |
+| 3 | El lado oscuro del mono | El grito del mono | 3 |
 | 4 | ¿Qué carajo? | Una paloma | 4 |
 | 5 | Explotar | El dolor heredado | 6 |
 | 6 | Pato | Un pato | 5 |
