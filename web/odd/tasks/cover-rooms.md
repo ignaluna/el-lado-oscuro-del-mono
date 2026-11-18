@@ -1,7 +1,8 @@
 # Feature: cover rooms for floors 2 to 9
 
 Locator: `web/odd/tasks/cover-rooms.md` · Engram mirror: `odd/cover-rooms/tasks`
-Branch: `feat/cover-rooms`, stacked on `feat/en-una-room` (PR #10, open)
+Branch: `feat/cover-rooms`, based on `feat/en-una-room` (PR #10, merged into main 2026-11-09)
+Delivery: `single-pr` to main with a size exception, chosen by the user 2026-11-17 (about 11,100 changed lines, of which about 3,350 are generated drawing data; the gentle-ai reviews already ran per floor, see "Reviews")
 
 ## Objective
 
