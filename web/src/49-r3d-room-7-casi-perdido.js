@@ -259,7 +259,7 @@ ROOM_SETS['casi-perdido'] = function buildCasiPerdido(ctx, kit, track) {
   const D = { burn: 0, watch: 0, hand: 0, flare: 0, spun: [0, 0, 0], glyph: [0, 0, 0], extra: [0, 0, 0], pop: [0, 0, 0], ring: [0, 0, 0], enter: 0 };
   const st = { T: 0, init: false, tick: 0, cur: -2, said: [], fl: [], wrong: 0, spinA: [0, 0, 0] };
   const tmpV = V3(), tmpQ = V3(), tmpW = V3();
-  const spotNear = [0, 0, 0];
+  const spotNear = [Infinity, Infinity, Infinity]; // (a distance not measured yet reads as out of reach: the first frame fills them in)
   const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
   const placed = (said) => { const n = [0, 0, 0]; CP_THOUGHTS.forEach((t, i) => { if (said[i] && t.kind === 'lado') n[t.spot]++; }); return n; };
   /** The flames' sway: how far a point of the flames at cover (px, py) is moved (set metres) at time T; more the higher it is. */

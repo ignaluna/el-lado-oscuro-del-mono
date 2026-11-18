@@ -132,7 +132,7 @@ ROOMS['explotar'] = {
     this.heardR = [false, false, false, false, false, false]; this.heardN = [false, false, false];
     const tick = () => {
       if (!room.id || room.def() !== this) return; // (the floor was left: a new arrival starts its own)
-      const s = room.s, info = R && R.roomInfo ? R.roomInfo() : null;
+      const s = room.s, info = Room.info();
       if (s && info && room.here() && !room.busy && !App.overlay) {
         const ph = this.phase(s);
         if (ph === 'strand') { for (let k = 3; k < 6; k++) if (!s.rungs.includes(k) && !this.heardR[k] && info.rungDist[k] < this.near) { this.heardR[k] = true; hint(this.lines.near, 4600); live(this.lines.near); break; } }
@@ -210,12 +210,12 @@ ROOMS['explotar'] = {
     const line = this.says[r.id][keep ? 'keep' : 'drop'];
     room.say(line); live(line);
   },
-  /** The distance (m) from the walker to a far rung or a note, as the set measures it (0 for the rungs of the picture). */
-  dist(kind, k) { const info = R && R.roomInfo ? R.roomInfo() : null; return info ? (kind === 'rung' ? info.rungDist[k] : info.noteDist[k]) : 0; },
+  /** The distance (m) from the walker to a far rung or a note, as the set measures it (0 for the rungs of the picture). Infinity when it is not known: unknown is out of reach. */
+  dist(kind, k) { const info = Room.info(), a = info ? (kind === 'rung' ? info.rungDist : info.noteDist) : null, d = a ? a[k] : NaN; return Number.isFinite(d) ? d : Infinity; },
   /** A look at a rung: the ones of the picture are always there; the far ones must be near. */
   look(room, k) {
     if (!this.rungOn(room.s, k)) return;
-    if (this.dist('rung', k) > this.reach) { hint(this.lines.far, 3600); live(this.lines.far); return; }
+    if (EX_RUNGS[k].far && this.dist('rung', k) > this.reach) { hint(this.lines.far, 3600); live(this.lines.far); return; }
     room.go(`peldano-${k}`);
   },
   /** A note that is near is taken: its word is yours now. */

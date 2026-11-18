@@ -43,6 +43,9 @@ const Room = {
   def() { return this.id ? ROOMS[this.id] : null; },
   track() { return this.id ? trackById(this.id) : null; },
   roomless: false,   // evaluation only (Dev.actions.roomless): every floor is built as a plain world, as if it had no room
+  blind: false,      // evaluation only (Dev.actions.roomBlind): the set's measures read as unknown, to prove that an unknown distance is out of reach
+  /** What the set measures now, or null when that is not known (before it exists, or while `blind`). A reader of it treats null as out of reach. */
+  info() { return this.blind ? null : R && R.roomInfo ? R.roomInfo() : null; },
   hosts(track) { return !this.roomless && !!(track && ROOMS[track.id]); },
   /** The water this floor shows (see PLAIN_WATER): the world's own unless the room says otherwise. */
   waterStyle(track) { const d = track && this.hosts(track) ? ROOMS[track.id] : null; return d && d.water ? { ...WORLD_WATER, ...d.water } : WORLD_WATER; },
@@ -309,7 +312,7 @@ const Room = {
     const d = this.def(), s = this.s, panel = !$('#rm-panel').hidden;
     const visual = {}; // (arrays read as strings of digits: the checks compare them as such)
     for (const [k, v] of Object.entries(world.room)) visual[k] = Array.isArray(v) ? v.join('') : v && typeof v === 'object' ? { ...v } : v;
-    return { id: this.id, here: this.here(), view: this.view, busy: this.busy, stage: s ? s.stage : null, done: s ? s.done : null, ...(d && d.debug && s ? d.debug(s) : {}),
+    return { id: this.id, here: this.here(), view: this.view, busy: this.busy, blind: this.blind, stage: s ? s.stage : null, done: s ? s.done : null, ...(d && d.debug && s ? d.debug(s) : {}),
       tries: s ? s.tries : null, hints: s ? s.hints : null, clue: d ? d.clue : null, done_line: d ? d.done : null, panel, title: panel ? $('#rm-title').textContent : '', status: $('#rm-status').textContent,
       more: !$('#rm-more').hidden, saved: this.id ? store.local.json(this.key(), null) : null, visual,
       acts: [...document.querySelectorAll('#rm-acts [data-act]')].map((b) => ({ act: b.dataset.act, text: b.textContent, pressed: b.getAttribute('aria-pressed'), label: b.getAttribute('aria-label') })),

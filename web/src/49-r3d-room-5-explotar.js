@@ -211,7 +211,7 @@ ROOM_SETS['explotar'] = function buildExplotar(ctx, kit, track) {
   const st = { T: 0, init: false, tick: 0, drop: 0.2 + 0.55 * Math.sqrt(clamp((dTop - dHome) / (dTop - dFloor), 0.01, 1)), ripple: 0 };
   const tmpV = V3(), tmpQ = V3();
   const faceCam = (host, wx, wz) => { host.rotation.y = Math.atan2(-(ctx.camera.position.x - wx), -(ctx.camera.position.z - wz)); };
-  const noteNear = [0, 0, 0], rungNear = EX_RUNGS.map(() => 0);
+  const noteNear = [Infinity, Infinity, Infinity], rungNear = EX_RUNGS.map((r) => (r.far ? Infinity : 0)); // (a distance not measured yet reads as out of reach: the first frame fills them in; the rungs of the picture are never far)
   const camXZ = () => ctx.camera.position;
   function update(dt, t) {
     const v = world.room.v || {}, ok = Array.isArray(v.rung), m = world.reduced ? 0 : 1, rate = world.reduced ? 9 : 3, cam = ctx.camera;
