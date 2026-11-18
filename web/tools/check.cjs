@@ -2332,24 +2332,26 @@ const SCENARIOS = {
           await startIfStill('youtube');
           const tPlay = Date.now();
           let s1 = await until((s) => s.playing && s.diag.currentTime > t.youtubeStartSeconds, 12000);
-          let adSeconds = 0, adTimedOut = false, sawAd = false;
+          let adSeconds = 0, adTimedOut = false, sawAd = false, adStill = false;
           if (!(s1.playing && s1.diag.currentTime > t.youtubeStartSeconds)) { // an ad may play first: wait for it to end (bounded), skipping it whenever YouTube offers
             const yt = p.frameLocator('iframe[src*="youtube.com/embed"]');
             const skip = yt.locator('.ytp-ad-skip-button, .ytp-skip-ad-button, .ytp-ad-skip-button-modern, button[id^="skip-button"]');
             const adShowing = async () => (await yt.locator('.html5-video-player.ad-showing, .ytp-ad-player-overlay, .ytp-ad-text').count().catch(() => 0)) > 0;
             const tAd = Date.now();
+            let tQuiet = tAd; // last moment an ad was on screen (or the wait began, or the last play click)
             for (;;) {
               s1 = await until((s) => s.playing && s.diag.currentTime > t.youtubeStartSeconds, 3000);
               if (s1.playing && s1.diag.currentTime > t.youtubeStartSeconds) break;
-              if (await adShowing()) { sawAd = true; await skip.first().click({ timeout: 1000 }).catch(() => {}); }
-              else if (!sawAd && Date.now() - tAd > 15000 && !(await adShowing())) { await playYouTube().catch(() => {}); } // no ad and still not playing: a click starts it
-              if (Date.now() - tAd > 150000) { adTimedOut = true; break; }
+              if (await adShowing()) { sawAd = true; tQuiet = Date.now(); await skip.first().click({ timeout: 1000 }).catch(() => {}); }
+              else if (Date.now() - tQuiet > 15000) { tQuiet = Date.now(); await playYouTube().catch(() => {}); } // no ad for 15 s and still not playing (none came, or one ended): a click starts it
+              if (Date.now() - tAd > 150000) { adTimedOut = true; adStill = await adShowing(); break; }
             }
             adSeconds = Math.round((Date.now() - tAd) / 1000);
-            log(adTimedOut ? `piso ${t.floor} youtube: still not playing after ${adSeconds} s (${sawAd ? 'an ad is still showing' : 'no ad showing'})` : `piso ${t.floor} youtube: the song started ${((Date.now() - tPlay) / 1000).toFixed(0)} s after the load (${sawAd ? 'an ad played first, ' + adSeconds + ' s waited' : 'no ad'})`);
+            log(adTimedOut ? `piso ${t.floor} youtube: still not playing after ${adSeconds} s (${adStill ? 'an ad is still showing' : sawAd ? 'an ad played and ended' : 'no ad showing'})` : `piso ${t.floor} youtube: the song started ${((Date.now() - tPlay) / 1000).toFixed(0)} s after the load (${sawAd ? 'an ad played first, ' + adSeconds + ' s waited' : 'no ad'})`);
           }
           const ct = s1.diag.currentTime || 0;
-          if (adTimedOut && sawAd) log(`piso ${t.floor} youtube: ENVIRONMENTAL, an ad outlasted the 150 s wait; the song start is not verified here (not counted as a pass)`);
+          // only an ad still on screen at the timeout excuses the check; an ad that ended and a song that never started is a failure
+          if (adTimedOut && adStill) log(`piso ${t.floor} youtube: ENVIRONMENTAL, an ad outlasted the 150 s wait; the song start is not verified here (not counted as a pass)`);
           else check(!!s1.playing && ct >= t.youtubeStartSeconds - 1 && ct < t.youtubeStartSeconds + 20, `piso ${t.floor} youtube: playing at ${ct.toFixed ? ct.toFixed(1) : ct}s (song starts at ${t.youtubeStartSeconds}s)`);
         } else {
           const id = t.spotifyTrackUri ? t.spotifyTrackUri.split(':').pop() : null;
