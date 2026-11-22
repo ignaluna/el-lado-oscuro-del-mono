@@ -64,3 +64,5 @@ Strategy: ask-on-risk. Branch `feat/youtube-only` from `origin/main` 4b25c65, wo
   landscape) were adapted but not executed. Known cosmetic: the cabin panel keeps an empty band where the selector was.
 - 2026-11-21 parent spot check: rebuild ok; `check.cjs --scenario waiting,autoplay,phoneview,landscape --viewport both`
   exit 0 (all passed). Open: the empty band in the cabin panel is a design call for the user.
+- Commit 915f4a6 (Y1-Y3). Review assess vs 4b25c65: risk medium, review_due false (under_budget, 277 lines);
+  pending in the slice until a later commit reaches the budget or the PR is cut.
