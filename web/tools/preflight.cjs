@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Release-night preflight for the YouTube and Spotify players.
+// Release-night preflight for the YouTube and Spotify players. Follows the PLATFORMS switch of src/00-base.html: while
+// Spotify is hidden its ids, notices and CSP host are not required (the log says so).
 //
 //   node tools/preflight.cjs                 checks the config in src/00-base.html against the live services
 //   node tools/preflight.cjs --file X.html   checks another copy (for example the built artifact/index.html)
@@ -24,6 +25,7 @@ const OFFLINE = flag('--offline');
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36';
 
 let RELEASE_AT_STR = '';
+let SPOTIFY = true; // false while the PLATFORMS switch of the config hides Spotify
 const report = { file: FILE, errors: [], warnings: [], ok: [] };
 const err = (where, msg) => report.errors.push(`${where}: ${msg}`);
 const warn = (where, msg) => report.warnings.push(`${where}: ${msg}`);
@@ -37,7 +39,7 @@ function loadConfig(file) {
   if (a < 0 || b < 0) throw new Error('config block not found (const RELEASE_AT … const BOOK)');
   const code = src.slice(a, b);
   // eslint-disable-next-line no-new-func
-  return new Function(`${code}\nreturn { RELEASE_AT, EMBED_MODE, SHARE_BASE_URL, SHOW_DEV_TOOLS, LEAD_ENDPOINT, DEMO_ALBUM, tracks };`)();
+  return new Function(`${code}\nreturn { PLATFORMS, RELEASE_AT, EMBED_MODE, SHARE_BASE_URL, SHOW_DEV_TOOLS, LEAD_ENDPOINT, DEMO_ALBUM, tracks };`)();
 }
 
 const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -57,9 +59,11 @@ function checkFormat(cfg) {
   if (cfg.LEAD_ENDPOINT === null) warn('LEAD_ENDPOINT', "null: each sign-up stays in the visitor's browser and reaches nobody (see tools/leads/LEEME.md)");
   else if (!/^https:\/\//.test(cfg.LEAD_ENDPOINT || '')) err('LEAD_ENDPOINT', 'must be an https URL or null (where sign-ups go)');
 
+  SPOTIFY = (cfg.PLATFORMS || ['youtube', 'spotify']).includes('spotify');
+  if (!SPOTIFY) ok('PLATFORMS', 'Spotify is hidden: its ids, embeds and CSP host are not checked');
   const d = cfg.DEMO_ALBUM || {};
   if (!YT_ID.test(d.youtubeVideoId || '')) err('DEMO_ALBUM', `youtubeVideoId "${d.youtubeVideoId}" is not an 11-character id`);
-  if (!SP_ID.test(d.spotifyAlbumId || '')) err('DEMO_ALBUM', `spotifyAlbumId "${d.spotifyAlbumId}" is not a 22-character id`);
+  if (SPOTIFY && !SP_ID.test(d.spotifyAlbumId || '')) err('DEMO_ALBUM', `spotifyAlbumId "${d.spotifyAlbumId}" is not a 22-character id`);
 
   const T = cfg.tracks;
   if (!Array.isArray(T) || !T.length) { err('tracks', 'empty'); return; }
@@ -71,8 +75,8 @@ function checkFormat(cfg) {
   if (up.length + down.length !== T.length) err('tracks', 'a track sits on floor 0 (the entrance)');
   T.forEach((t) => {
     const w = `piso ${t.floor} «${t.title}»`;
-    if (!t.youtubeVideoId && !t.spotifyTrackUri && !t.spotifyAlbumId) { // not published yet: the floor shows the pending-audio plate
-      if (t.album === 'elodm') warn(w, 'audio pending (no YouTube or Spotify ids yet): the floor shows "El audio llega con el disco"');
+    if (!t.youtubeVideoId && !(SPOTIFY && (t.spotifyTrackUri || t.spotifyAlbumId))) { // not published yet: the floor shows the pending-audio plate
+      if (t.album === 'elodm') warn(w, `audio pending (no YouTube${SPOTIFY ? ' or Spotify' : ''} id yet): the floor shows "El audio llega con el disco"`);
       else err(w, 'no audio ids');
       if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(t.id || '')) err(w, `id "${t.id}" is not a lowercase slug (it is the invitation hash)`);
       if (ids.has(t.id)) err(w, `id "${t.id}" repeated`); ids.add(t.id);
@@ -83,11 +87,11 @@ function checkFormat(cfg) {
     if (!t.title) err(w, 'title empty');
     if (!YT_ID.test(t.youtubeVideoId || '')) err(w, `youtubeVideoId "${t.youtubeVideoId}" is not an 11-character id`);
     if (!Number.isInteger(t.youtubeStartSeconds) || t.youtubeStartSeconds < 0) err(w, `youtubeStartSeconds "${t.youtubeStartSeconds}" must be an integer ≥ 0`);
-    if (t.spotifyTrackUri != null) {
+    if (!SPOTIFY) { /* hidden: its ids are not required */ } else if (t.spotifyTrackUri != null) {
       if (!/^spotify:track:/.test(t.spotifyTrackUri) || !SP_ID.test(spId(t.spotifyTrackUri))) err(w, `spotifyTrackUri "${t.spotifyTrackUri}" is not spotify:track:<22 chars>`);
       if (uris.has(t.spotifyTrackUri)) err(w, `spotifyTrackUri repeated (${t.spotifyTrackUri})`); uris.add(t.spotifyTrackUri);
     } else warn(w, 'no spotifyTrackUri: this floor opens the whole album on Spotify');
-    if (!SP_ID.test(t.spotifyAlbumId || '')) err(w, `spotifyAlbumId "${t.spotifyAlbumId}" is not a 22-character id`);
+    if (SPOTIFY && !SP_ID.test(t.spotifyAlbumId || '')) err(w, `spotifyAlbumId "${t.spotifyAlbumId}" is not a 22-character id`);
     if (!(t.durationSeconds > 0)) warn(w, 'durationSeconds missing: the floor shows no duration and the preview check is off');
   });
   // several floors sharing one video (a full-album video with chapters): the starts must climb with the floors
@@ -198,6 +202,7 @@ async function checkSite(site) {
   const r = await fetch(base, { headers: { 'User-Agent': UA }, redirect: 'follow' }).catch((e) => ({ error: e.message }));
   if (!r || r.error) { err(w, `${base} unreachable (${r && r.error})`); return null; }
   const html = await r.text();
+  { const pm = /const PLATFORMS = \[([^\]]*)\]/.exec(html); if (pm) SPOTIFY = /spotify/.test(pm[1]); } // the deployed page's own switch
   if (r.status !== 200) err(w, `${base} answered ${r.status}`);
   if (!/text\/html/.test(r.headers.get('content-type') || '')) err(w, `content-type is "${r.headers.get('content-type')}", not text/html`);
   if (!r.url.startsWith('https://')) err(w, `ends at ${r.url}, not https`);
@@ -208,7 +213,7 @@ async function checkSite(site) {
   if (csp) {
     const dir = (name) => { const m = new RegExp('(?:^|;)\\s*' + name + '\\s+([^;]*)', 'i').exec(csp); return m ? m[1] : null; };
     const frames = dir('frame-src') ?? dir('child-src') ?? dir('default-src') ?? '';
-    for (const host of ['https://www.youtube.com', 'https://open.spotify.com']) if (!frames.includes(host) && !/\*|https:(\s|$)/.test(frames)) err('headers', `CSP frame-src does not allow ${host}: that player turns into a link`);
+    for (const host of SPOTIFY ? ['https://www.youtube.com', 'https://open.spotify.com'] : ['https://www.youtube.com']) if (!frames.includes(host) && !/\*|https:(\s|$)/.test(frames)) err('headers', `CSP frame-src does not allow ${host}: that player turns into a link`);
     const scripts = dir('script-src') ?? dir('default-src') ?? '';
     if (!/cdn\.jsdelivr\.net|unpkg\.com|https:(\s|$)|\*/.test(scripts)) err('headers', 'CSP script-src does not allow cdn.jsdelivr.net / unpkg.com: no 3D (three.js), only the 2D fallback');
     const inline = /<script type="module">([\s\S]*?)<\/script>/.exec(html);
@@ -259,10 +264,10 @@ async function checkSite(site) {
     for (const [vid, users] of videos) jobs.push(checkYouTube(vid, users, rel));
     if (cfg.DEMO_ALBUM && !videos.has(cfg.DEMO_ALBUM.youtubeVideoId)) jobs.push(checkYouTube(cfg.DEMO_ALBUM.youtubeVideoId, [], rel));
     const albums = new Map();
-    for (const t of cfg.tracks) { if (!t.spotifyAlbumId) continue; if (!albums.has(t.spotifyAlbumId)) albums.set(t.spotifyAlbumId, []); albums.get(t.spotifyAlbumId).push(t); }
-    for (const [aid, list] of albums) jobs.push(checkSpotifyAlbum(aid, list, rel));
-    if (cfg.DEMO_ALBUM && !albums.has(cfg.DEMO_ALBUM.spotifyAlbumId)) jobs.push(checkSpotifyAlbum(cfg.DEMO_ALBUM.spotifyAlbumId, [], NaN));
-    for (const t of cfg.tracks) if (t.spotifyTrackUri) jobs.push(checkSpotifyTrack(t, rel));
+    if (SPOTIFY) for (const t of cfg.tracks) { if (!t.spotifyAlbumId) continue; if (!albums.has(t.spotifyAlbumId)) albums.set(t.spotifyAlbumId, []); albums.get(t.spotifyAlbumId).push(t); }
+    if (SPOTIFY) for (const [aid, list] of albums) jobs.push(checkSpotifyAlbum(aid, list, rel));
+    if (SPOTIFY && cfg.DEMO_ALBUM && !albums.has(cfg.DEMO_ALBUM.spotifyAlbumId)) jobs.push(checkSpotifyAlbum(cfg.DEMO_ALBUM.spotifyAlbumId, [], NaN));
+    if (SPOTIFY) for (const t of cfg.tracks) if (t.spotifyTrackUri) jobs.push(checkSpotifyTrack(t, rel));
     if (cfg.LEAD_ENDPOINT) jobs.push(checkLeads(cfg.LEAD_ENDPOINT));
     await Promise.all(jobs);
   }

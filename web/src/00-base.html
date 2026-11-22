@@ -576,6 +576,17 @@ const SHOW_DEV_TOOLS = true;
 const SHARE_BASE_URL = "https://claude.ai/artifact/5xCceHjVXcc1Rtcv9xq8EB";
 const CONSENT_VERSION = "v1-2026-09";
 
+/**
+ * Where a visitor can listen. Spotify is hidden since 2026-11-21: signing in inside its embed was too complex, and
+ * without a session it plays a 30 s sample. With one platform on offer nobody is asked where to listen (the cabin
+ * selector, the gate question and the waiting-room question are skipped) and no Spotify text or control is shown.
+ * Add 'spotify' here to bring the choice and the Spotify player back; its code stays intact.
+ */
+const PLATFORMS = ['youtube'];
+const PLATFORM_CHOICE = PLATFORMS.length > 1;
+/** The platform a visit starts with: null while the visitor still has to choose. */
+const DEFAULT_PLATFORM = PLATFORM_CHOICE ? null : PLATFORMS[0];
+
 /** Demo album used while "El Lado Oscuro del Mono" is not out. */
 const DEMO_ALBUM = {
   title: "Pequeño Primate",

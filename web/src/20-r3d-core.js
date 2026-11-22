@@ -44,7 +44,7 @@ Object.assign(world, {
   inside: false,     // camera is inside the cabin
   env: 0,            // 0 = the void lobby, n = floor n
   playing: false,    // the official player reports "playing"
-  platform: null,    // 'youtube' | 'spotify'
+  platform: DEFAULT_PLATFORM, // 'youtube' | 'spotify'; null until chosen (only while PLATFORMS offers a choice)
   floor: 0,          // floor where the cabin is
   visited: [],
   hover: null,       // hovered panel control id

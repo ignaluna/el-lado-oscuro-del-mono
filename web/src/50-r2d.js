@@ -229,7 +229,7 @@ function createRenderer2D() {
       const [x0, y0] = P(0.015, y - L.rowStep() / 2 + 0.003);
       rects['floor-' + tr.floor] = { x: x0, y: y0, w: 0.509 * S, h: (L.rowStep() - 0.006) * S };
     }
-    for (const p of ['youtube', 'spotify']) {
+    if (PLATFORM_CHOICE) for (const p of PLATFORMS) {
       const b = L.sel[p];
       button('sel-' + p, b.x, b.y, L.sel.size / 2, true, [0.95, 0.9, 0.76]);
       { const [lx, ly] = P(b.x, b.y), pr = w.pressed['sel-' + p] || 0; drawLogo(g, p, lx, ly, L.sel.size * S * (p === 'youtube' ? 0.78 : 0.66) * (1 - 0.1 * pr)); }

@@ -93,7 +93,7 @@ const Invite = {
 
 /**
  * The way in for whoever opens a world link. Before the release the destination is only remembered; afterwards one
- * tap inside the cabin picks the platform (which also unlocks audio) and the elevator takes them straight there.
+ * tap inside the cabin (the platform, when there is a choice, which also unlocks audio) and the elevator takes them straight there.
  */
 const Gate = {
   KEY: 'eldom.invite',
@@ -113,11 +113,11 @@ const Gate = {
     $('#gate-pre').textContent = lock ? COPY.gateLockedPre : 'TE INVITARON A UN MUNDO';
     $('#gate-title').textContent = tr.title;
     $('#gate-locked').hidden = !lock; $('#gate-locked').textContent = lock ? COPY.gateLocked : '';
-    $('#gate-ask').hidden = lock; $('#gate-tokens').hidden = lock;
+    $('#gate-ask').hidden = lock || !PLATFORM_CHOICE; $('#gate-tokens').hidden = lock;
     $('#g-close').textContent = lock ? COPY.gateLockedBack : 'AHORA NO';
     $('#gate').hidden = false;
     $(lock ? '#g-close' : world.platform === 'spotify' ? '#g-spotify' : '#g-youtube').focus({ preventScroll: true });
-    live(lock ? `${tr.title}: ${COPY.gateLocked}` : `Te invitaron a ${tr.title}. Elegí por dónde viajar.`);
+    live(lock ? `${tr.title}: ${COPY.gateLocked}` : `Te invitaron a ${tr.title}.${PLATFORM_CHOICE ? ' Elegí por dónde viajar.' : ''}`);
     syncUI();
   },
   choose(platform) {

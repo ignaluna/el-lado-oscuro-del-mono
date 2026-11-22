@@ -73,8 +73,8 @@ Object.assign(Tex, {
       text(floorMark(n), d.x + c * (d.r - 0.034), d.y + s * (d.r - 0.034) - (end ? 0.013 : 0), n === 0 || n > 9 || n < 0 ? 0.0155 : 0.02, FONT_CAPS, 'g', 0.85, 0, 'center');
     }
     // question + selector labels
-    text('¿POR DÓNDE QUERÉS VIAJAR?', L.W / 2, L.ask.y, 0.0245, FONT_CAPS, st.platform ? 'r' : 'g', st.platform ? 0.95 : 0.9, 0.0032, 'center');
-    for (const p of ['youtube', 'spotify']) {
+    if (PLATFORM_CHOICE) text('¿POR DÓNDE QUERÉS VIAJAR?', L.W / 2, L.ask.y, 0.0245, FONT_CAPS, st.platform ? 'r' : 'g', st.platform ? 0.95 : 0.9, 0.0032, 'center');
+    if (PLATFORM_CHOICE) for (const p of PLATFORMS) {
       const b = L.sel[p], hs = L.sel.size / 2 + 0.012;
       stroke('r', 1, 0.004); ctx.strokeRect((b.x - hs) * S, (b.y - hs) * S, hs * 2 * S, hs * 2 * S);
       const on = st.platform === p, hov = st.hover === 'sel-' + p;
@@ -232,7 +232,7 @@ function buildCabin3D(ctx) {
   }
   placeRows();
   const selGeo = boxGeo(L.sel.size, L.sel.size, 0.024);
-  for (const p of ['youtube', 'spotify']) {
+  if (PLATFORM_CHOICE) for (const p of PLATFORMS) {
     const b = L.sel[p];
     const pos = onPlate(b.x, b.y, 0.008);
     const mat = ink({ interior: true, base: '#2a251b', engrave: 0.55, freq: 9, axis: 1, rim: 0.9 });

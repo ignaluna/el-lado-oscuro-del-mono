@@ -2,7 +2,8 @@
 
 Página estática de **El Lado Oscuro del Mono**: el vacío con agua, el ascensor como en la portada, la cuenta regresiva
 con el registro, los nueve pisos del disco con sus desafíos y su libro, Pequeño Primate en los subsuelos con los
-reproductores oficiales de YouTube y Spotify y su nivel de exploración. La galería (piso 10) está escondida con
+reproductores oficiales de YouTube y su nivel de exploración. Todo suena por YouTube y nadie elige dónde escuchar: Spotify
+está escondido con `PLATFORMS` (ver más abajo). La galería (piso 10) está escondida con
 `GALLERY.enabled = false` hasta que esté lista para abrirse. El recorrido, piso por piso, está
 en [RECORRIDO.md](RECORRIDO.md). No necesita servidor: es un solo `index.html` con todo adentro (Three.js se carga de un
 CDN).
@@ -29,7 +30,8 @@ las pruebas.
   declara 4 GB o menos de memoria o 4 núcleos o menos. El botón DEV muestra el nivel y `window.__eldom.state().tier` lo
   expone. En un celular en vertical el reproductor de los mundos se abre minimizado (si la persona lo amplía, se respeta
   en el resto de la visita).
-- `tools/preflight.cjs` — verifica los ids de YouTube y Spotify y, con `--site`, el sitio publicado.
+- `tools/preflight.cjs` — verifica los ids de YouTube (y los de Spotify solo si `PLATFORMS` lo incluye) y, con `--site`, el sitio publicado.
+- **YouTube solamente (`PLATFORMS`).** En `src/00-base.html`, `const PLATFORMS = ['youtube']` decide dónde se puede escuchar. Con una sola plataforma no se pregunta nada («¿POR DÓNDE QUERÉS VIAJAR?» en el ascensor, «¿DÓNDE QUERÉS ESCUCHAR?» en «Mientras esperás», la pregunta de la invitación): se va directo a YouTube y no aparece ningún texto ni control de Spotify (aviso «SPOTIFY SIN SESIÓN», inicio de sesión, «abrir en Spotify», enlaces al álbum, filas de Spotify en «Probar reproductores»). Un `'spotify'` guardado de visitas anteriores se ignora. Se escondió el 2026-11-21 porque iniciar sesión dentro del embed era demasiado complicado. El código de Spotify sigue intacto: agregar `'spotify'` a `PLATFORMS` y recompilar devuelve la elección. `tools/check.cjs` y `tools/preflight.cjs` leen ese valor y, mientras Spotify está escondido, saltean sus escenarios y filas con un aviso en el log (`SKIPPED …`). Una canción sin id de YouTube muestra «El audio llega con el disco» (nunca un reproductor de Spotify).
 - `tools/leads/` — la planilla de Google donde caen los registros: el programa (`Code.gs`), sus pruebas y cómo
   armarla ([LEEME.md](tools/leads/LEEME.md)).
 - `odd/tasks/` — el registro de cada etapa: qué se hizo, por qué y cómo se verificó.
