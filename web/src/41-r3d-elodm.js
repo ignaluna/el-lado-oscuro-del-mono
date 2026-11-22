@@ -60,14 +60,14 @@ const ELODM_KINDS = {
     return () => {};
   },
 
-  // 5 — Explotar: the cover, walkable, a monkey walking on tiles with a DNA strand behind him. Its art is a room
+  // 6 — Explotar: the cover, walkable, a monkey walking on tiles with a DNA strand behind him. Its art is a room
   // (49-r3d-room-5-explotar.js) built beside the floor; the floor itself only keeps a faint light.
   letter(F) {
     F.light(F.V3(F.A.x, 2.4, F.A.z - 1), 0.25, 8);
     return () => {};
   },
 
-  // 6 — Pato: the cover, walkable, a smug duck smoking with five speech bubbles around him and a house to build. Its art is a room
+  // 5 — Pato: the cover, walkable, a smug duck smoking with five speech bubbles around him and a house to build. Its art is a room
   // (49-r3d-room-6-pato.js) built beside the floor; the floor itself only keeps a faint light.
   duck(F) {
     F.light(F.V3(F.A.x, 2.4, F.A.z - 1), 0.25, 8);

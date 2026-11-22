@@ -1,4 +1,4 @@
-// Floor 6 · «Un poco más cediendo» (Pato) · chapter 5 · the cover is a smug duck smoking, with five white speech bubbles around him and a house
+// Floor 5 · «Un poco más cediendo» (Pato) · chapter 5 · the cover is a smug duck smoking, with five white speech bubbles around him and a house
 //   that is not built yet; walkable, and an escape-room in it.
 //   1. The voices. Five bubbles hang around the duck, some behind him or at his sides: walk. Up close each says one of the Pato's lines aloud.
 //      Answer with the chapter's reply (love as a choice, a decision, building, peace) or with the Pato's own logic (winning, being right,

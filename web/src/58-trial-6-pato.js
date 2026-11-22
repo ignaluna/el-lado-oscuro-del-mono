@@ -1,4 +1,4 @@
-// Floor 6 · «Pato» · chapter 5 · a duck.
+// Floor 5 · «Pato» · chapter 5 · a duck.
 // A house built in two, brick by brick. Before each brick the Pato shows how he is: turned away (closed) or looking
 // at you (open). Ceding when he closes and asking when he opens lays the brick; the other way it does not settle —
 // nothing is lost, it is tried again. There is a little more ceding than asking, as the chapter says.
