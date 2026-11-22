@@ -78,7 +78,7 @@ function syncUI() {
   $('#gal-actions').hidden = !inGallery;
   $('#gal-cap').hidden = !atPiece || !!ov;
   $('#gal-back').textContent = atPiece && !Gallery.guided() ? COPY.backRoom : Gallery.from === 'elevator' ? COPY.backElevator : COPY.backLobby;
-  { const cv = $('#cab-view'), on = p === 'cabin' && !ov && window.innerHeight < 520 && window.innerWidth > window.innerHeight;
+  { const cv = $('#cab-view'), on = PLATFORM_CHOICE && p === 'cabin' && !ov && window.innerHeight < 520 && window.innerWidth > window.innerHeight;
     cv.hidden = !on; if (on) cv.textContent = (world.cabView || (world.platform ? 'rows' : 'top')) === 'rows' ? COPY.cabTop : COPY.cabRows; }
   $('#cap-invite-all').hidden = !((ext || (p === 'cabin' && aspectNow() >= 0.8)) && !ov); // on a phone the plate fills the cabin view
   const pend = Gate.pending();
@@ -113,7 +113,7 @@ function syncUI() {
   for (const tr of tracks) Hot.label('floor-' + tr.floor, `${floorName(tr.floor)}: ${tr.title}${Progress.solved(tr.id) ? ', capítulo encontrado' : ''}${world.visited.includes(tr.floor) ? ', visitado' : ''}${world.floor === tr.floor ? ', estás acá' : ''}`);
   Hot.label('panel-section', panelDown() ? COPY.panelUp : COPY.panelDown);
   Hot.label('tr-element', Room.id ? '' : Trial.label()); // (a room has its own hotspots)
-  for (const pf of ['youtube', 'spotify']) Hot.label('sel-' + pf, `Viajar por ${pf === 'youtube' ? 'YouTube' : 'Spotify'}${world.platform === pf ? ' (elegido)' : ''}`);
+  if (PLATFORM_CHOICE) for (const pf of PLATFORMS) Hot.label('sel-' + pf, `Viajar por ${pf === 'youtube' ? 'YouTube' : 'Spotify'}${world.platform === pf ? ' (elegido)' : ''}`);
   $('#dev').classList.toggle('shy', !!ov && !Dev.isOpen());
   Dev.refresh();
 }
@@ -158,6 +158,7 @@ function closePortal() {
 }
 function openPortal(opts, accent) {
   closePortal();
+  if (!PLATFORMS.includes(opts.provider)) opts = { ...opts, provider: PLATFORMS[0] }; // a hidden platform never gets a player
   // onYoutube: a Spotify sample offers the same song on YouTube, from the second the visitor reached (see PlayerPortal)
   const portal = new PlayerPortal({ ...opts, onChange: (info) => { world.playing = info.playing; Dev.refresh(); }, onYoutube: (sec) => continueOnYoutube(opts, accent, sec) });
   world.glow.accent = accent;
@@ -309,6 +310,7 @@ const Listen = {
     const playing = this.portal();
     if (playing && playing.mini && !App.overlay) { playing.setMini(false); return; } // already sounding: bring it back
     if (world.phase !== 'prelaunch' || App.overlay) return;
+    if (!PLATFORM_CHOICE) { this.restore = document.activeElement; this.choose(PLATFORMS[0]); return; } // one platform on offer: no question
     App.overlay = 'question';
     this.restore = document.activeElement;
     $('#question').hidden = false;
@@ -398,7 +400,7 @@ function resetWorld() {
   Object.assign(w.hand, { reach: 0, press: 0, point: 0, lift: 0, target: null, show: false });
   Object.assign(w.book, { lift: 0, light: 0, take: 0 });
   w.lit = {};
-  w.pressed = { 'sel-youtube': w.platform === 'youtube' ? 1 : 0, 'sel-spotify': w.platform === 'spotify' ? 1 : 0 };
+  w.pressed = Object.fromEntries(PLATFORMS.map((p) => ['sel-' + p, w.platform === p ? 1 : 0]));
   w.called = Lead.registered();
   App.seqBob = 0;
   look.walkX = look.walkZ = look.moveX = look.moveZ = 0; look.dragYaw = look.dragPitch = 0;
@@ -434,16 +436,17 @@ function applyFloor(n) {
   const tr = trackOf(n);
   if (!tr) return;
   resetWorld();
-  if (!world.platform) setPlatform('youtube');
+  if (!world.platform) setPlatform(PLATFORMS[0]);
   Object.assign(world, { doors: 1, needle: n, floor: n, env: n, line: 1, lineFade: 0.45, lamp: 1, spill: 1 });
   R.setFloor(tr);
   setPose(poseFromShot(Shots.floor(aspectNow())));
   arriveOnFloor(n);
 }
 function setPlatform(p) {
+  if (!PLATFORMS.includes(p)) p = PLATFORMS[0]; // a hidden platform is never selected, whoever asks
   world.platform = p;
   store.session.set('eldom.platform', p);
-  world.pressed['sel-youtube'] = p === 'youtube' ? 1 : 0; world.pressed['sel-spotify'] = p === 'spotify' ? 1 : 0;
+  for (const q of PLATFORMS) world.pressed['sel-' + q] = p === q ? 1 : 0;
 }
 /** Visited worlds are kept by id (eldom.visited.v2); world.visited holds their current floors for the panels. */
 const VISITED_KEY = 'eldom.visited.v2';
@@ -584,22 +587,23 @@ async function handPress(c, id, onContact, latch) {
 }
 
 function choosePlatform(p) {
+  if (!PLATFORMS.includes(p)) return; // hidden platform: no key, hotspot or dev action can pick it
   const from = document.activeElement;
   if (world.phase !== 'cabin') { setPlatform(p); syncUI(); return; }
   setPhase('pressing');
   Seq.run('main', async (c) => {
-    const id = 'sel-' + p, other = 'sel-' + (p === 'youtube' ? 'spotify' : 'youtube');
+    const id = 'sel-' + p, other = 'sel-' + (p === 'youtube' ? 'spotify' : 'youtube'); // (the other one only exists while it is on offer)
     await handPress(c, id, () => {
       Sound.latch();
       const was = world.pressed[other] || 0;
       setPlatform(p);
-      world.pressed[other] = was;
-      c.spawn((cc) => cc.to(world.pressed, { [other]: 0 }, 0.18, Ease.outBack));
+      if (PLATFORM_CHOICE) world.pressed[other] = was;
+      if (PLATFORM_CHOICE) c.spawn((cc) => cc.to(world.pressed, { [other]: 0 }, 0.18, Ease.outBack));
       live(`Viajás por ${p === 'youtube' ? 'YouTube' : 'Spotify'}.`);
     }, () => true);
     if (window.innerHeight < 520 && window.innerWidth > window.innerHeight) { world.cabView = 'rows'; await toPose(c, poseFromShot(Shots.panel(aspectNow())), rm(0.9), Ease.inOutCubic); }
     setPhase('cabin');
-    if (p === 'spotify') SpNotice.maybeShow(from);
+    if (p === 'spotify' && PLATFORMS.includes('spotify')) SpNotice.maybeShow(from);
   });
 }
 
@@ -871,8 +875,8 @@ const Input = (() => {
         if (/^[1-9]$/.test(k)) { const n = panelDown() ? -Number(k) : Number(k); if (trackOf(n)) { pressFloor(n); return; } }
         if (k === '-' && Progress.basementsOpen()) { togglePanelSection(); return; }
         if (k === '0') { pressLobby(); return; }
-        if (k === 'y') { choosePlatform('youtube'); return; }
-        if (k === 's') { choosePlatform('spotify'); return; }
+        if (PLATFORM_CHOICE && k === 'y') { choosePlatform('youtube'); return; }
+        if (PLATFORM_CHOICE && k === 's') { choosePlatform('spotify'); return; }
       }
       if (['w', 'a', 's', 'd', 'q', 'e', 'shift', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { keys.add(k); if (k.startsWith('arrow') && document.activeElement === document.body) e.preventDefault(); }
     });
@@ -983,7 +987,7 @@ const Dev = (() => {
       const out = Dev.testOut, saved = { platform: world.platform, visited: [...world.visited] }, rows = [];
       const say = (txt) => { if (out) { out.hidden = false; out.textContent = txt; } };
       App.testing = (async () => {
-        for (const prov of ['youtube', 'spotify']) {
+        for (const prov of PLATFORMS) { // a hidden platform is not tested (its rows would show its name)
           setPlatform(prov);
           for (const tr of tracks.filter((t) => t.youtubeVideoId || t.spotifyTrackUri)) { // the record's floors wait for their audio
             say(`probando ${prov === 'youtube' ? 'YouTube' : 'Spotify'} · piso ${tr.floor}…\n${rows.map((r) => r.line).join('\n')}`);
@@ -1035,7 +1039,7 @@ const Dev = (() => {
       grp('Llegar al piso', ...tracks.filter((t) => t.floor > 0).map((t) => btn(floorMark(t.floor), () => actions.arrive(t.floor)))),
       grp('Subsuelos (sin candado)', ...tracks.filter((t) => t.floor < 0).map((t) => btn(floorMark(t.floor), () => actions.arrive(t.floor)))),
       grp('Desafíos', btn('Resolver este', actions.trialSolve), btn('Resolver 8', () => actions.bookAll(8)), btn('Resolver 9', () => actions.bookAll()), btn('Reiniciar progreso', actions.progressReset)),
-      grp('Plataforma', btn('YouTube', () => actions.platform('youtube'), 'p-youtube'), btn('Spotify', () => actions.platform('spotify'), 'p-spotify')),
+      ...(PLATFORM_CHOICE ? [grp('Plataforma', btn('YouTube', () => actions.platform('youtube'), 'p-youtube'), btn('Spotify', () => actions.platform('spotify'), 'p-spotify'))] : []),
       grp('Embeds', btn('Auto', () => actions.embedMode('auto'), 'e-auto'), btn('Embed', () => actions.embedMode('embed'), 'e-embed'), btn('Links', () => actions.embedMode('link'), 'e-link')),
       grp('Reproductores', btn('Probar reproductores', () => actions.playerTest()), (api.testOut = h('pre', { class: 'testout', hidden: true }))),
       grp('Nivel', btn('Ir al piso del nivel', actions.levelFloor), btn('Reiniciar nivel', actions.levelReset), btn('Ruedas resueltas', actions.levelSolve)),
@@ -1119,7 +1123,7 @@ function initUI() {
   document.documentElement.style.setProperty('--metal-noise', noiseTile('metal'));
   Hot.add('call', COPY.cta, () => Register.open());
   Hot.add('elevator', COPY.enter, () => enterCabin());
-  for (const p of ['youtube', 'spotify']) Hot.add('sel-' + p, p, () => choosePlatform(p));
+  if (PLATFORM_CHOICE) for (const p of PLATFORMS) Hot.add('sel-' + p, p, () => choosePlatform(p));
   for (const tr of [...tracks].sort((a, b) => b.floor - a.floor)) Hot.add('floor-' + tr.floor, tr.title, () => pressFloor(tr.floor));
   Hot.add('floor-0', 'PB', () => pressLobby());
   Hot.add('panel-section', COPY.panelDown, () => togglePanelSection());
@@ -1179,6 +1183,8 @@ function initUI() {
   $('#invite-copy').addEventListener('click', () => Invite.copy());
   $('#g-youtube').addEventListener('click', () => { Sound.unlock(); Gate.choose('youtube'); });
   $('#g-spotify').addEventListener('click', () => { Sound.unlock(); Gate.choose('spotify'); });
+  for (const p of ['spotify']) if (!PLATFORMS.includes(p)) { $('#g-' + p).hidden = true; $('#q-' + p).hidden = true; } // hidden platform: its tokens are never shown
+  if (!PLATFORM_CHOICE) { $('#g-youtube').textContent = COPY.enter; $('#gate-ask').hidden = true; $('#question-title').hidden = true; }
   $('#g-close').addEventListener('click', () => Gate.dismiss());
   $('#cap-invited-go').addEventListener('click', () => { const tr = Gate.pending(); if (tr) Gate.open(tr); });
   window.addEventListener('hashchange', () => {
@@ -1254,7 +1260,7 @@ async function boot() {
   if (!R) R = createRenderer2D();
   progress(0.9);
   const p = store.session.get('eldom.platform');
-  if (p === 'youtube' || p === 'spotify') world.platform = p;
+  if (PLATFORMS.includes(p)) world.platform = p; // a remembered 'spotify' does not come back while it is hidden
   world.visited = loadVisited();
   initUI(); Input.init(); Dev.init();
   Book.load();
@@ -1284,7 +1290,7 @@ async function boot() {
   let readyRes;
   window.__eldom = {
     ready: new Promise((res) => { readyRes = res; }),
-    config: () => ({ release: RELEASE_AT, demo: DEMO_ALBUM, gallery: { enabled: GALLERY.enabled, pieces: GALLERY.pieces.map(({ id, src, title, caption, thanks }) => ({ id, src, title, caption, thanks })), thanks: GALLERY.thanks.lines }, tracks: tracks.map((t) => ({ album: t.album, floor: t.floor, id: t.id, title: t.title, chapter: t.chapter || null, element: t.element || null, youtubeVideoId: t.youtubeVideoId, youtubeStartSeconds: t.youtubeStartSeconds, spotifyTrackUri: t.spotifyTrackUri, spotifyAlbumId: t.spotifyAlbumId, durationSeconds: t.durationSeconds })), level: { floor: Level.floor(), trackId: LEVEL.trackId, symbols: LEVEL.symbols, stones: LEVEL.stones }, rooms: Object.keys(ROOMS), catalog: App.catalog || [],
+    config: () => ({ platforms: [...PLATFORMS], release: RELEASE_AT, demo: DEMO_ALBUM, gallery: { enabled: GALLERY.enabled, pieces: GALLERY.pieces.map(({ id, src, title, caption, thanks }) => ({ id, src, title, caption, thanks })), thanks: GALLERY.thanks.lines }, tracks: tracks.map((t) => ({ album: t.album, floor: t.floor, id: t.id, title: t.title, chapter: t.chapter || null, element: t.element || null, youtubeVideoId: t.youtubeVideoId, youtubeStartSeconds: t.youtubeStartSeconds, spotifyTrackUri: t.spotifyTrackUri, spotifyAlbumId: t.spotifyAlbumId, durationSeconds: t.durationSeconds })), level: { floor: Level.floor(), trackId: LEVEL.trackId, symbols: LEVEL.symbols, stones: LEVEL.stones }, rooms: Object.keys(ROOMS), catalog: App.catalog || [],
       book: { opening: BOOK.opening.map((p) => p.id), pages: BOOK.pages.map((p) => ({ id: p.id, foundIn: p.foundIn })), closing: BOOK.closing.id, back: BOOK.back.id }, bookText: BOOK_TEXT }),
     state() {
       const port = PlayerPortal.current;

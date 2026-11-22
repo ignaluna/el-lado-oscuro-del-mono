@@ -2,6 +2,8 @@
 
 Cómo funciona el recorrido de nueve pisos, qué pide cada desafío y dónde se agregan las tapas de Luján y el audio del disco.
 
+**Cómo se escucha.** Todo suena por el reproductor oficial de YouTube: al elegir un piso el ascensor va directo y «Mientras esperás: Pequeño Primate» abre YouTube sin preguntar dónde escuchar. Spotify está escondido (ver `PLATFORMS` en el README).
+
 ## En una línea
 
 Los pisos 1 a 9 son el disco. Cada piso tiene su elemento de tapa en escena y un desafío. Al resolverlo, el elemento se vuelve una página y el capítulo del libro se abre completo, con el texto exacto del manuscrito. Con los nueve capítulos se completa el libro y se abren los subsuelos −1 a −9, donde vive Pequeño Primate.
@@ -190,7 +192,7 @@ Este piso también es una **sala que se recorre**: la tapa del disco dibujada en
 
 ## Lo que falta (recursos reales)
 
-- **Audio de El Lado Oscuro del Mono.** No hay ids de YouTube ni de Spotify publicados, y no se inventó ninguno. Cada piso muestra en el lugar del reproductor: «El audio llega con el disco. Mientras tanto, este piso ya se puede recorrer.» Los WAV masters no se subieron al repositorio ni al sitio porque el disco no salió.
+- **Audio de El Lado Oscuro del Mono.** No hay ids de YouTube publicados (Spotify está escondido, ver `PLATFORMS` en el README), y no se inventó ninguno. Cada piso muestra en el lugar del reproductor: «El audio llega con el disco. Mientras tanto, este piso ya se puede recorrer.» Los WAV masters no se subieron al repositorio ni al sitio porque el disco no salió.
 - **Tapas de Luján.** Mientras tanto cada elemento se dibuja con líneas, en el mundo y en la placa.
 - **Enlaces de compra del libro** (`BOOK.buy`), si se quieren.
 
@@ -204,7 +206,7 @@ El build la publica junto a la página, y frena si falta el archivo. La placa de
 
 **Audio.** En `web/src/00-base.html`, en `tracks`, en la canción del disco, completar:
 - `youtubeVideoId` y `youtubeStartSeconds`, si es un solo video del disco con capítulos, como el de Pequeño Primate;
-- `spotifyTrackUri` y `spotifyAlbumId`;
+- `spotifyTrackUri` y `spotifyAlbumId` (guardados, pero hoy no se usan: Spotify está escondido);
 - `durationSeconds`.
 
 También se puede completar `ALBUMS.elodm`. Con eso el cartel de «audio pendiente» se vuelve el reproductor oficial y el piso reproduce su canción al llegar, como los demás.

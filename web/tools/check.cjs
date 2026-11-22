@@ -27,6 +27,12 @@ const DIST = path.join(ROOT, 'dist');
 const SHOTS = path.join(ROOT, 'shots');
 const PLAYWRIGHT = 'playwright'; // the repo's devDependency (npm install at the repo root)
 
+// PLATFORMS in src/00-base.html: while Spotify is hidden the scenarios that need it say so and skip it (YouTube coverage stays).
+const SPOTIFY_ON = /const PLATFORMS = \[[^\]]*'spotify'/.test(fs.readFileSync(path.join(ROOT, 'src', '00-base.html'), 'utf8'));
+const PROVIDERS = SPOTIFY_ON ? ['youtube', 'spotify'] : ['youtube'];
+const PROVIDERS_ARG = () => opt('providers', PROVIDERS.join(',')).split(',').filter((x) => PROVIDERS.includes(x));
+const skipSpotify = (log, what) => { log(`SKIPPED ${what}: Spotify is hidden (PLATFORMS in src/00-base.html); add 'spotify' there to run it`); };
+
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
 const opt = (name, fallback) => {
@@ -244,6 +250,24 @@ const clickHot = async (p, label) => {
   const why = await ev(p, (l) => [...document.querySelectorAll('.hot')].filter((b) => !b.hidden && (b.getAttribute('aria-label') || '').startsWith(l)).map((b) => { const r = b.getBoundingClientRect(), top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return { rect: [r.x, r.y, r.width, r.height].map(Math.round), view: [innerWidth, innerHeight], covered: top && top !== b && !b.contains(top) ? top.id || top.className || top.tagName : null }; }), label);
   throw new Error(`no click can land on "${label}" (turned and waited): ${JSON.stringify(why)}`);
 };
+// The YouTube-only visit (Spotify hidden): no platform question, no Spotify text or control a visitor could see or reach.
+// Rendered text only (innerText skips what is hidden), names of visible controls, and the question's own elements.
+const youtubeOnlyIssues = (p) => ev(p, () => {
+  const out = [];
+  const vis = (e) => !!e && !e.hidden && e.checkVisibility({ opacityProperty: true, visibilityProperty: true });
+  const text = document.body.innerText || '';
+  if (/spotify/i.test(text)) out.push('visible text mentions Spotify: ' + (text.match(/.{0,30}spotify.{0,30}/i) || [''])[0].replace(/\s+/g, ' '));
+  for (const e of document.querySelectorAll('[aria-label],[title],a[href],iframe')) {
+    if (!vis(e)) continue;
+    const v = [e.getAttribute('aria-label'), e.getAttribute('title'), e.getAttribute('href'), e.getAttribute('src')].filter(Boolean).join(' ');
+    if (/spotify/i.test(v)) out.push('visible control names Spotify: ' + v.slice(0, 80));
+  }
+  for (const id of ['question', 'spn', 'g-spotify', 'q-spotify']) if (vis(document.getElementById(id))) out.push('#' + id + ' is visible');
+  if (vis(document.getElementById('gate-ask'))) out.push('the gate asks where to travel');
+  if ([...document.querySelectorAll('h2,p')].some((e) => vis(e) && /D[ÓO]NDE QUER[ÉE]S (ESCUCHAR|VIAJAR)/i.test(e.textContent))) out.push('a platform question is visible');
+  if (window.__eldom.state().platform !== 'youtube') out.push('platform is ' + window.__eldom.state().platform);
+  return out;
+});
 // GALLERY.enabled in 00-base.html: the gallery scenarios (and the gallery steps of the others) only run while the floor is open
 const galleryOn = (p) => ev(p, () => window.__eldom.config().gallery.enabled);
 // Official players only: a host may add frames of its own (Netlify's badge on free sites is an empty iframe).
@@ -1674,12 +1698,17 @@ const ROOM_WALKS = {
 };
 
 const SCENARIOS = {
-  async smoke(p, shot) {
+  async smoke(p, shot, log) {
     await shot('prelaunch');
     const vp = p.viewportSize();
     await p.mouse.move(vp.width * 0.8, vp.height * 0.35);
     await wait(1500);
     await shot('prelaunch-look');
+    if (!SPOTIFY_ON) {
+      const bad = await youtubeOnlyIssues(p);
+      log((bad.length ? 'FAIL  ' : 'ok    ') + 'YouTube only, no Spotify text and no platform question in a normal visit' + (bad.length ? ': ' + bad.join(' | ') : ''));
+      if (bad.length) throw new Error('youtube-only: ' + bad.join(' | '));
+    }
   },
   async form(p, shot, log) {
     await ev(p, () => window.__eldom.dev.clearLead());
@@ -1720,13 +1749,22 @@ const SCENARIOS = {
   async listen(p, shot, log) {
     await ev(p, () => window.__eldom.ui.openListen());
     await wait(1200);
-    await shot('listen-question');
-    await ev(p, () => window.__eldom.ui.chooseListen('youtube'));
+    if (SPOTIFY_ON) {
+      await shot('listen-question');
+      await ev(p, () => window.__eldom.ui.chooseListen('youtube'));
+    } else { // "Mientras esperás" opens the YouTube player straight away: no question
+      const bad = await youtubeOnlyIssues(p);
+      const pr = (await state(p)).portal;
+      const okk = !bad.length && !!pr && pr.provider === 'youtube';
+      log((okk ? 'ok    ' : 'FAIL  ') + 'listen opens YouTube directly, no question (' + (bad.join(' | ') || 'clean') + '; provider ' + (pr && pr.provider) + ')');
+      if (!okk) throw new Error('listen is not YouTube-only: ' + bad.join(' | ') + ' provider=' + (pr && pr.provider));
+    }
     await wait(5000);
     await shot('listen-youtube');
     log('state: ' + JSON.stringify((await state(p)).portal) + ' iframes=' + (await iframeCount(p)));
     await ev(p, () => window.__eldom.ui.closeListen());
     await wait(900);
+    if (SPOTIFY_ON) {
     await ev(p, () => window.__eldom.ui.openListen());
     await wait(900);
     await ev(p, () => window.__eldom.ui.chooseListen('spotify'));
@@ -1734,6 +1772,7 @@ const SCENARIOS = {
     await shot('listen-spotify');
     log('state: ' + JSON.stringify((await state(p)).portal) + ' iframes=' + (await iframeCount(p)));
     await ev(p, () => window.__eldom.ui.closeListen());
+    } else skipSpotify(log, 'the Spotify listen player');
     await wait(1000);
     await shot('listen-closed');
     log('iframes after close=' + (await iframeCount(p)));
@@ -1775,6 +1814,24 @@ const SCENARIOS = {
     await waitPhase(p, 'cabin');
     await wait(1500);
     await shot('cabin-idle');
+    if (!SPOTIFY_ON) { // one platform on offer: nothing to choose, nothing to refuse, floors work from the first press
+      const fails = [];
+      const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+      const bad = await youtubeOnlyIssues(p);
+      check(!bad.length, 'cabin: YouTube only, no Spotify text and no platform question' + (bad.length ? ': ' + bad.join(' | ') : ''));
+      check((await p.locator('.hot[aria-label^="Viajar por"]').count()) === 0, 'cabin: no platform buttons to press');
+      check(!(await p.locator('#cab-view').isVisible()), 'cabin: no selector/floors switch on a phone lying down');
+      check(((await state(p)).panel || {}).logos === 0, 'cabin: no platform marks on the panel');
+      await ev(p, () => window.__eldom.dev.press(3));
+      await wait(900);
+      await shot('cabin-press');
+      const s = await state(p);
+      check(s.platform === 'youtube' && s.phase !== 'cabin', 'cabin: pressing a floor goes straight on (platform ' + s.platform + ', phase ' + s.phase + ', no refusal)');
+      skipSpotify(log, 'cabin-spotify');
+      log('state: ' + JSON.stringify(s));
+      if (fails.length) throw new Error(fails.length + ' cabin check(s) failed: ' + fails.join(' | '));
+      return;
+    }
     await ev(p, () => window.__eldom.dev.press(3));
     await wait(900);
     await shot('cabin-refuse');
@@ -2281,8 +2338,7 @@ const SCENARIOS = {
     await shot('01-prelaunch');
     await tap('#cap-primary'); await wait(2300); await shot('02-form');
     await tap('#lead-close'); await wait(1700);
-    await tap('#cap-secondary'); await wait(900); await shot('03-question');
-    await tap('#q-youtube'); await wait(4500); await shot('04-listen');
+    await tap('#cap-secondary'); await wait(900); if (SPOTIFY_ON) { await shot('03-question'); await tap('#q-youtube'); } await wait(4500); await shot('04-listen'); // (YouTube only: the same click opens the player)
     await tap('.portal-close'); await wait(1600);
     await tap('#cap-invite-all'); await wait(700); await shot('05-invite-all');
     await tap('#invite-close'); await wait(400);
@@ -2336,9 +2392,10 @@ const SCENARIOS = {
     const floors = cfg.tracks.filter((t) => t.youtubeVideoId && (!only.length || only.includes(t.floor))); // the record's floors wait for their audio
 
     // 1. before the release: "Mientras esperás" (demo album) on both platforms
-    for (const prov of ['youtube', 'spotify']) {
+    if (!SPOTIFY_ON) skipSpotify(log, 'the Spotify rows of integrations');
+    for (const prov of PROVIDERS) {
       await ev(p, () => window.__eldom.ui.openListen()); await wait(700);
-      await ev(p, (pv) => window.__eldom.ui.chooseListen(pv), prov);
+      if (SPOTIFY_ON) await ev(p, (pv) => window.__eldom.ui.chooseListen(pv), prov); // (YouTube only: openListen already opened it)
       await p.waitForSelector(PLAYER_FRAMES, { timeout: 15000 });
       const src = await frameSrc();
       check(prov === 'youtube' ? src.includes('/embed/' + cfg.demo.youtubeVideoId) : src.includes('/embed/album/' + cfg.demo.spotifyAlbumId), `listen ${prov}: embed ${src.split('?')[0]}`);
@@ -2355,7 +2412,7 @@ const SCENARIOS = {
 
     // 2. after the release: every floor on both platforms
     await ev(p, () => window.__eldom.dev.released());
-    for (const prov of opt('providers', 'youtube,spotify').split(',')) {
+    for (const prov of PROVIDERS_ARG()) {
       await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin');
       await ev(p, (pv) => window.__eldom.dev.platform(pv), prov); await wait(1600);
       for (const t of floors) {
@@ -2468,6 +2525,8 @@ const SCENARIOS = {
     await shot('yt-unreachable-link');
     await leave();
 
+    if (!SPOTIFY_ON) skipSpotify(log, 'failure modes 6 and 7 (Spotify missing track, Spotify unreachable)');
+    else {
     // 6. Spotify: a track that does not exist (or is not out yet in this market)
     await p.route('https://open.spotify.com/embed/**', (r) => r.continue({ url: r.request().url().replace(/\/embed\/track\/[A-Za-z0-9]{22}/, '/embed/track/0000000000000000000000') }));
     await floorWith('spotify');
@@ -2488,6 +2547,7 @@ const SCENARIOS = {
     check(s.mode === 'link', `spotify unreachable at 20 s: official link box (mode=${s.mode})`);
     await shot('sp-unreachable-link');
     await leave();
+    }
 
     // 8. a silent player the visitor is already using stays (only the note appears)
     await p.route('https://www.youtube.com/embed/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><body style="background:#000"><button style="width:100%;height:100vh">x</button></body>' }));
@@ -2718,6 +2778,13 @@ const SCENARIOS = {
     const rows = await p.evaluate(() => window.__eldom.dev.playerTest());
     await shot('selftest');
     for (const r of rows) log(`${r.ok ? 'ok   ' : 'FAIL '} ${r.provider} piso ${r.floor} · ${r.seconds} s ${r.why}`);
+    if (!SPOTIFY_ON) {
+      skipSpotify(log, 'the Spotify rows of the self-test');
+      if (rows.some((r) => r.provider !== 'youtube')) throw new Error('the self-test ran a hidden platform: ' + JSON.stringify([...new Set(rows.map((r) => r.provider))]));
+      const shown = await ev(p, () => { const o = document.querySelector('.testout'); return o ? o.textContent : ''; });
+      if (/spotify|SP piso/i.test(shown)) throw new Error('the self-test panel shows Spotify rows: ' + shown.slice(0, 120));
+      log('ok    the self-test has only YouTube rows (' + rows.length + ') and its panel shows no Spotify');
+    }
     const bad = rows.filter((r) => !r.ok);
     if (bad.length) throw new Error(`${bad.length} player(s) did not answer`);
     const st = await state(p);
@@ -2748,10 +2815,11 @@ const SCENARIOS = {
     const env = await p.locator('.hot[aria-label^="Invitar a alguien al mundo"]').count();
     check(env === 0, `no invitation envelopes on the floor rows (${env} hotspots)`);
     const logos = await ev(p, () => window.__eldom.state().panel);
-    check(logos && logos.logos === 2, `the selector carries both platform marks (${JSON.stringify(logos)})`);
+    check(logos && logos.logos === (SPOTIFY_ON ? 2 : 0), SPOTIFY_ON ? `the selector carries both platform marks (${JSON.stringify(logos)})` : `YouTube only: the panel has no selector marks (${JSON.stringify(logos)})`);
+    if (!SPOTIFY_ON) { const bad = await youtubeOnlyIssues(p); check(!bad.length, 'the cabin shows no Spotify text and no platform question' + (bad.length ? ': ' + bad.join(' | ') : '')); }
     await shot('01-cabin');
 
-    for (const prov of (opt('providers', 'youtube,spotify')).split(',')) {
+    for (const prov of PROVIDERS_ARG()) {
       await ev(p, (pv) => window.__eldom.dev.platform(pv), prov); await wait(900);
       await ev(p, () => sessionStorage.removeItem('eldom.mini'));
       await ev(p, () => window.__eldom.dev.arrive(-2)); await waitFloor(p, -2); await wait(2600);
@@ -2829,7 +2897,7 @@ const SCENARIOS = {
       document.dispatchEvent(new Event('visibilitychange'));
     }, hidden);
 
-    for (const prov of (opt('providers', 'youtube,spotify')).split(',')) {
+    for (const prov of PROVIDERS_ARG()) {
       await ev(p, () => window.__eldom.ui.openListen()); await wait(700);
       await ev(p, (pv) => window.__eldom.ui.chooseListen(pv), prov);
       await p.waitForSelector('.portal iframe, .portal .portal-linkbox', { timeout: 15000 }); await wait(1800);
@@ -3031,7 +3099,7 @@ const SCENARIOS = {
     };
     await ev(p, () => window.__eldom.dev.released());
     await ev(p, () => window.__eldom.dev.bookAll()); // Pequeño Primate's songs (with official players) are in the basements
-    for (const prov of (opt('providers', 'youtube,spotify')).split(',')) {
+    for (const prov of PROVIDERS_ARG()) {
       await tapFloor(-2, prov);
       const s = await until((x) => x.playing, 25000);
       check(!!(s && s.playing && s.provider === prov), `${prov}: the song plays on arrival without touching the player (${s && s.mode}, ${JSON.stringify(s && s.diag).slice(0, 120)})`);
@@ -3386,7 +3454,7 @@ const SCENARIOS = {
     await shot('02-cabin'); await scan('cabin');
     await ev(p, () => window.__eldom.dev.bookAll());
     await ev(p, () => sessionStorage.removeItem('eldom.mini'));
-    for (const [prov, n] of [['youtube', -2], ['spotify', -3]]) {
+    for (const [prov, n] of [['youtube', -2], ['spotify', -3]].filter(([pv]) => PROVIDERS.includes(pv))) {
       await ev(p, (pv) => window.__eldom.dev.platform(pv), prov); await wait(900);
       await ev(p, (f) => window.__eldom.dev.arrive(f), n); await waitFloor(p, n);
       if (prov === 'youtube' && coarse && portrait) { // the one-time hints, sampled while the world settles: never two at once, the ring goes by itself
@@ -3476,6 +3544,14 @@ const SCENARIOS = {
       await ev(p, () => { sessionStorage.removeItem('eldom.platform'); });
       await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin'); await wait(1200);
       const cv = p.locator('#cab-view');
+      if (!SPOTIFY_ON) { // no selector: the cabin lying down shows the floor buttons from the start
+        check(!(await cv.isVisible()) && (await p.locator(hot('Viajar por')).count()) === 0, 'cabin lying down: no selector and no switch (YouTube only)');
+        const rb = await p.locator(hot('Piso 2')).boundingBox();
+        check(rb && rb.height >= 26, 'cabin lying down: the floor buttons are in view from the start (rows ' + (rb && Math.round(rb.height)) + ' px tall)');
+        log(fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed');
+        if (fails.length) throw new Error(fails.length + ' landscape check(s) failed: ' + fails.join(' | '));
+        return;
+      }
       check(await cv.isVisible() && /PISOS/.test(await cv.innerText()), `cabin lying down: the selector in view, "${await cv.innerText()}" to see the floors`);
       await shot('01-cabin-selector');
       const selBox = await p.locator(hot('Viajar por YouTube')).boundingBox();
@@ -3549,6 +3625,7 @@ const SCENARIOS = {
     log('iframes after return=' + (await iframeCount(p)));
   },
   async spotify(p, shot, log) {
+    if (!SPOTIFY_ON) { skipSpotify(log, 'spotify'); return; }
     await ev(p, () => window.__eldom.dev.interior());
     await waitPhase(p, 'cabin');
     await ev(p, () => window.__eldom.dev.platform('spotify'));
@@ -3580,6 +3657,7 @@ const SCENARIOS = {
   // when the visitor comes back, none without the click, minimized and "Mientras esperás" included, no line in link mode or
   // where the audio is still pending.
   async signin(p, shot, log) {
+    if (!SPOTIFY_ON) { skipSpotify(log, 'signin'); return; }
     const fails = [];
     const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
     const vw = p.viewportSize();
@@ -3732,6 +3810,7 @@ const SCENARIOS = {
   // "YA TENGO SESIÓN", Escape, keyboard focus, shown once; then a sample (stand-in embed) offers "SEGUIR EN YOUTUBE", which
   // reopens the same song on YouTube at the second the visitor had reached.
   async spnotice(p, shot, log) {
+    if (!SPOTIFY_ON) { skipSpotify(log, 'spnotice'); return; }
     const fails = [];
     const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
     const cfg = await ev(p, () => window.__eldom.config());
