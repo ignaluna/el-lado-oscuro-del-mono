@@ -41,6 +41,8 @@ El álbum y el libro se unen por identificadores estables (`tracks[].chapter`), 
 
 **Accesibilidad.** Todo se hace con botones, también con teclado y lector de pantalla. Ningún desafío necesita sonido, pasar el mouse por encima, arrastrar con precisión ni moverse rápido.
 
+**Salir de una mirada de cerca o de una pista.** **← ALEJARSE** (o Escape) vuelve un paso atrás y **CERRAR** cierra la pista; los dos botones quedan enteros en pantalla, de al menos 44 px, también con el celular acostado (las placas se corren a la derecha de los botones del piso en vez de taparlos). Además, un toque en un lugar vacío de la vista 3D hace lo mismo, de a un paso: primero cierra la pista abierta y, si no hay ninguna, sale de la mirada de cerca como ALEJARSE. Un toque sobre un objeto, un botón o una placa sigue haciendo lo de siempre, y arrastrar para mirar alrededor no cuenta como toque. Los rótulos que se dibujan sobre el mundo (ALEJARSE, PISTA, SONIDO, los del reproductor) llevan un fondo oscuro para leerse también sobre los dibujos blancos.
+
 **"Quedarse" (pisos 1, 3 y 7).** (En el piso 1 es el último paso de la sala; en el piso 2 son las tres respiraciones del final, sin cuenta; en el piso 3 es TRAGAR LA PALABRA.) Con un toque empieza una cuenta lenta, de 4 a 5 segundos, que se ve en el mismo botón. No hace falta mantener el dedo apretado. Otro toque, o cualquier otro botón, la interrumpe.
 
 **Límite conocido (celulares).** La línea de llegada (el texto que describe la sala al entrar) queda 6 segundos sobre la parte baja del dibujo en los pisos 4, 6 y 7, y en pantallas de 360 × 740 también en los pisos 5 y 9. Pasados los 6 segundos desaparece y el dibujo se ve entero; se aceptó así.
