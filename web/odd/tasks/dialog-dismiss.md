@@ -58,3 +58,6 @@ Strategy: ask-on-risk. Branch `fix/dialog-dismiss` from `origin/main` df208a0, w
   D3: `dialogDismiss` helper in check.cjs (scenario `dismiss`, also run by phoneview and landscape); RECORRIDO.md note.
   Checks observed: build ok; smoke, phoneview, landscape on desktop + mobile + landscape (780x360): all checks passed; room and
   trials on desktop + mobile: no FAIL (room 1631 s / 1636 s, trials 647 s). Not committed.
+- 2026-11-22 parent spot check: rebuild ok; `check.cjs --scenario dismiss --viewport landscape` all checks passed;
+  landscape room-hint shot shows the plate beside the buttons and dark backings. Commit 9151da7. Review assess vs
+  df208a0: risk medium, review_due false (under_budget); pending in the slice.
