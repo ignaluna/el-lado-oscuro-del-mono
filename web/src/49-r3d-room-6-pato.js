@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════
-// FLOOR 6 · «UN POCO MÁS CEDIENDO»  (the cover, as a smug duck with a cigarette: chalk tones on black, glitter only on the ring and the suspenders)
+// FLOOR 5 · «UN POCO MÁS CEDIENDO»  (the cover, as a smug duck with a cigarette: chalk tones on black, glitter only on the ring and the suspenders)
 //   The drawing: a duck with heavy half-closed eyelids, a long white-outlined bill, hatched head feathers and a dark cheek, smoking a
 //   cigarette in the fingers of his left wing; the smoke curls up into a heart and loops. His right wing rests on his hip with a ring of
 //   silver glitter; he has a dark round belly with a white highlight, silver glitter suspenders, feathered wing edges, crossed legs with

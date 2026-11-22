@@ -42,7 +42,7 @@ La transición del contador al ascensor abierto debe sentirse como la continuaci
 
 ## Estado 1: antes del lanzamiento
 Definí una constante configurable:
-    const RELEASE_AT = "2026-12-01T21:00:00-03:00";
+    const RELEASE_AT = "2026-12-11T11:11:00-03:00";
 La fecha es temporal y debe ser fácil de reemplazar.
 Antes de esa fecha:
 1. El ascensor permanece cerrado al fondo.

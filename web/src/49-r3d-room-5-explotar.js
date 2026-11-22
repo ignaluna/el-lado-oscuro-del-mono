@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════
-// FLOOR 5 · «EXPLOTAR»  (the cover, as a walking monkey with a DNA strand behind him: chalk tones on black, glitter only on the ear cup)
+// FLOOR 6 · «EXPLOTAR»  (the cover, as a walking monkey with a DNA strand behind him: chalk tones on black, glitter only on the ear cup)
 //   The drawing: a monkey in profile walks to the right on a tiled floor in perspective, with headphones (a glitter disc on the ear cup),
 //   sunglasses, hatched fur, plaid shorts and laced sneakers, blowing music notes. Behind him a DNA double helix: frayed into a brush on
 //   the left, whole in the middle, dashed and fading on the right; a drop hangs from it and falls. Squiggles and notes float on both
