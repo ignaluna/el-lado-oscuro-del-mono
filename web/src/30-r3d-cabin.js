@@ -29,15 +29,19 @@ const PanelLayout = {
   dial: { x: 0.29, y: 0.205, r: 0.12 },
   ask: { y: 0.292 },
   sel: { youtube: { x: 0.17, y: 0.428 }, spotify: { x: 0.41, y: 0.428 }, size: 0.105, labelY: 0.34 }, // the name, then the button with its logo
-  rowsTop: 0.64, rowsBottom: 1.228,
+  /** The rule under the top block: below the selector when there is a choice, right under the dial when there is none
+   *  (the section label and the rows move up with it, and the rows spread over the freed plate). */
+  ruleY: PLATFORM_CHOICE ? 0.531 : 0.275,
+  rowsTop: PLATFORM_CHOICE ? 0.64 : 0.384, rowsBottom: 1.228,
+  maxStep: PLATFORM_CHOICE ? 0.075 : 0.094,
   /** "PISOS" engraved over the rows; once the basements open, the switch between the two sections. */
-  section: { y: 0.586, h: 0.078, up: 0.17, down: 0.41 },
+  section: { y: PLATFORM_CHOICE ? 0.586 : 0.33, h: 0.078, up: 0.17, down: 0.41 },
   btnX: 0.07, numX: 0.13, titleX: 0.164, markX: 0.497,
   /** Place of floor n counted from the bottom row. Pisos: PB at the bottom, the gallery on top, as in a real cab.
    *  Subsuelos: −9 at the bottom, PB on top. */
   slot(n, down) { return n < 0 ? n + basementCount() : n === 0 && down ? basementCount() : n; },
   rowY(n, down = panelDown()) { return this.rowsBottom - this.slot(n, down) * this.rowStep(); },
-  rowStep() { return Math.min(0.075, (this.rowsBottom - this.rowsTop) / Math.max(1, panelTop())); },
+  rowStep() { return Math.min(this.maxStep, (this.rowsBottom - this.rowsTop) / Math.max(1, panelTop())); },
 };
 
 Object.assign(Tex, {
@@ -80,7 +84,7 @@ Object.assign(Tex, {
       const on = st.platform === p, hov = st.hover === 'sel-' + p;
       text(p === 'youtube' ? COPY.youtube : COPY.spotify, b.x, L.sel.labelY, 0.0195, FONT_CAPS, 'g', on || hov ? 1 : 0.6, 0.004, 'center');
     }
-    stroke('r', 0.8, 0.003); ctx.beginPath(); ctx.moveTo(0.05 * S, 0.531 * S); ctx.lineTo((L.W - 0.05) * S, 0.531 * S); ctx.stroke();
+    stroke('r', 0.8, 0.003); ctx.beginPath(); ctx.moveTo(0.05 * S, L.ruleY * S); ctx.lineTo((L.W - 0.05) * S, L.ruleY * S); ctx.stroke();
     if (!st.open) text('PISOS', L.W / 2, L.section.y - 0.012, 0.0145, FONT_CAPS, 'g', 0.5, 0.007, 'center');
     else { // the switch: the section shown is lit, the other one waits
       const hov = st.hover === 'panel-section';

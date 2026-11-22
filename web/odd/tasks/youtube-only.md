@@ -66,3 +66,7 @@ Strategy: ask-on-risk. Branch `feat/youtube-only` from `origin/main` 4b25c65, wo
   exit 0 (all passed). Open: the empty band in the cabin panel is a design call for the user.
 - Commit 915f4a6 (Y1-Y3). Review assess vs 4b25c65: risk medium, review_due false (under_budget, 277 lines);
   pending in the slice until a later commit reaches the budget or the PR is cut.
+- [x] Y4 Close the empty band in the cabin panel (user: "Sí, cerralo"; route: direct inline, one file). PanelLayout
+  in src/30-r3d-cabin.js derives ruleY/section.y/rowsTop/maxStep from PLATFORM_CHOICE: without a choice the rule sits
+  right under the dial (0.275) and the rows spread over the freed plate (step cap 0.094). Observed: build ok;
+  `check.cjs --scenario smoke,cabin,mini,basements --viewport both` exit 0; desktop and mobile cabin shots show no gap.
