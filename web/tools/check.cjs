@@ -1677,6 +1677,9 @@ async function quickWins(p, shot, log, check) {
   const hintText = () => ev(p, () => { const e = document.querySelector('#cap-hint'); return e.hidden ? '' : e.textContent; });
   const until = async (fn, ms = 12000) => { const t0 = Date.now(); for (;;) { const v = await fn(); if (v) return v; if (Date.now() - t0 > ms) return v; await wait(150); } };
   const COUNT = (n) => `Capítulo ${n}/9 · `;
+  /** A track of the record by id: floors move when the band reorders the record, ids do not. */
+  const track = (id) => ev(p, (i) => window.__eldom.config().tracks.find((t) => t.id === i), id);
+  const nextLine = (n, t) => `${COUNT(n)}Seguí por el piso ${t.floor}, «${t.title}».`;
   await ev(p, () => window.__eldom.dev.released());
 
   // ---- Q1: PISTA glows (a room) ----
@@ -1722,8 +1725,9 @@ async function quickWins(p, shot, log, check) {
   check(!(await lvs()).nudge, 'Q1 level: opening PISTA stops the glow' + tag);
 
   // ---- Q2: Explotar keeps the three notes on a wrong word ----
+  const EXPLOTAR = (await track('explotar')).floor;
   await ev(p, () => { window.__eldom.dev.progressReset(); localStorage.setItem('eldom.room.explotar.v1', JSON.stringify({ v: 1, rungs: [0, 1, 2, 3, 4, 5], notes: [0, 1, 2], sung: [], done: false, tries: 0, hints: 0 })); });
-  await ev(p, (f) => window.__eldom.dev.arrive(f), 5); await waitFloor(p, 5); await wait(2600);
+  await ev(p, (f) => window.__eldom.dev.arrive(f), EXPLOTAR); await waitFloor(p, EXPLOTAR); await wait(2600);
   s = await rms(); check(s.phase === 'song' && s.notes === '0,1,2', `Q2: Explotar starts at the song with its three notes (phase ${s.phase}, notes "${s.notes}")` + tag);
   await ev(p, () => window.__eldom.ui.roomTap('rm-auriculares')); await wait(2000);
   await p.locator('#rm-acts [data-act="cantar-te"]').click(); await wait(400);
@@ -1770,17 +1774,28 @@ async function quickWins(p, shot, log, check) {
   await ev(p, () => window.__eldom.dev.roomless(false));
 
   // ---- Q4: after a freed chapter, the book closes on the next step ----
+  // the first four floors are free and Explotar is solved: Pato, the lowest floor still closed, is next (below the one just solved)
   await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.bookAll(4); });
-  await ev(p, (f) => window.__eldom.dev.arrive(f), 5); await waitFloor(p, 5); await wait(2600);
+  await ev(p, (f) => window.__eldom.dev.arrive(f), EXPLOTAR); await waitFloor(p, EXPLOTAR); await wait(2600);
   await ev(p, () => window.__eldom.dev.trialSolve());
   const opened = await until(async () => (await state(p)).overlay === 'book', 20000);
   check(!!opened, 'Q4: the freed chapter opens the book' + tag);
   await ev(p, () => window.__eldom.ui.closeBook()); await wait(500);
   const line = await hintText();
-  check(line === COUNT(5) + 'Seguí por el piso 6, «Pato».', `Q4: the book closes on the next step by floor, not by chapter number ("${line}")` + tag);
+  check(line === nextLine(5, await track('pato')), `Q4: the book closes on the next floor still closed ("${line}")` + tag);
   await shot('quick-5-next-step');
+  // the first six floors are free and Casi Perdido (chapter 8) is solved: seven chapters are free, and the next floor is No me perdones (chapter 7): floors are not chapters
+  const CASI = (await track('casi-perdido')).floor;
+  await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.bookAll(6); });
+  await ev(p, (f) => window.__eldom.dev.arrive(f), CASI); await waitFloor(p, CASI); await wait(2600);
+  await ev(p, () => window.__eldom.dev.trialSolve());
+  await until(async () => (await state(p)).overlay === 'book', 20000);
+  await ev(p, () => window.__eldom.ui.closeBook()); await wait(500);
+  const line2 = await hintText();
+  check(line2 === nextLine(7, await track('no-me-perdones')), `Q4: the next floor comes from the floors, not from the chapter numbers ("${line2}")` + tag);
   await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.bookAll(8); });
-  await ev(p, (f) => window.__eldom.dev.arrive(f), 9); await waitFloor(p, 9); await wait(2600);
+  const PORTALES = (await track('portales')).floor;
+  await ev(p, (f) => window.__eldom.dev.arrive(f), PORTALES); await waitFloor(p, PORTALES); await wait(2600);
   await ev(p, () => window.__eldom.dev.trialSolve());
   await until(async () => (await state(p)).overlay === 'book', 20000);
   await ev(p, () => window.__eldom.ui.closeBook()); await wait(600);
