@@ -2411,7 +2411,10 @@ const SCENARIOS = {
       await p.locator(`.hot[aria-label^="Piso ${t.floor}:"]`).first().click({ timeout: 10000 });
       await waitFloor(p, t.floor, 45000); await wait(2600);
       const s0 = await state(p);
-      check(s0.portal && s0.portal.pending && !(await iframeCount(p)), `${t.floor} «${t.title}»: no player of another record — the audio waits for the release`);
+      if (t.youtubeVideoId) { // the record's own video, at the song's chapter — never another record's player
+        const srcs = await ev(p, (sel) => [...document.querySelectorAll(sel)].map((f) => f.src || ''), PLAYER_FRAMES);
+        check(srcs.length > 0 && srcs.every((src) => src.includes('/embed/' + t.youtubeVideoId) && src.includes('start=' + t.youtubeStartSeconds + '&')), `${t.floor} «${t.title}»: its own record plays (${t.youtubeVideoId} at ${t.youtubeStartSeconds}s)`);
+      } else check(s0.portal && s0.portal.pending && !(await iframeCount(p)), `${t.floor} «${t.title}»: no player of another record — the audio waits for the release`);
       let d = await tr();
       check(d.here && d.element === t.element, `${t.floor}: its element (${d.element}) stands in the world`);
       if (cfg.rooms.includes(t.id)) { // a room: the cover, walkable; solved with its hotspots and the plate's buttons, then the book
