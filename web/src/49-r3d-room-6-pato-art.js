@@ -1,4 +1,4 @@
-// Floor 6 · «Pato» · the cover's tones, traced from the photo (web/shots/covers/6-pato.jpg). Generated once, not by hand: the photo is a black paper in a plastic
+// Floor 5 · «Pato» · the cover's tones, traced from the photo (web/shots/covers/6-pato.jpg). Generated once, not by hand: the photo is a black paper in a plastic
 // sleeve, so it was first unwarped to a square (the paper's four corners, a homography). The paper's own tone was estimated outside the figure only (the duck, the bubbles and
 // everything bright) and taken out, so the duck's dark greys stay and no shadow of the sleeve is drawn; the luminance was lightly blurred and cut at five levels (marching squares),
 // and every contour simplified (about a pixel). Each level is a list of closed loops, nested ones are holes (even-odd), in rectified cover pixels (the paper is 1100 square), as
