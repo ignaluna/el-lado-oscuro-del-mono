@@ -68,3 +68,8 @@ Strategy: ask-on-risk. Branch `feat/ux-quick-wins` stacked on `fix/dialog-dismis
   (test race: reset and arrival in separate `ev()` calls let a frame show the line on the previous floor) was fixed in
   the test only. Observed: `dismiss --viewport both` 3/3 by the writer plus 1/1 by the parent; smoke, phoneview,
   landscape both pass; next-step shot shows the book icon clear.
+- 2026-11-23 review: assess vs df208a0 medium, review_due (slice_budget_reached, 680 lines); user granted; lens
+  reliability; approved and acknowledged (lineage review-487cbdbdd9f484ae, authority burned). Advisory, non-blocking
+  follow-ups: R3-001/002 plate maxHeight ignores the new upright top (a long plate's CERRAR could fall under the player
+  or off screen); R3-003 Explotar `heardN` no longer reset after a wrong word; R3-004 stale tap entry could disable
+  dismissTap; R3-005 `Book.fresh` could fire the next-step line on a later unrelated close.
