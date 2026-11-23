@@ -23,6 +23,7 @@ const Book = {
   reset() {
     if (App.overlay === 'book') this.close();
     this.state = { found: false, print: null, at: 0 };
+    this.fresh = false;
     store.session.remove(this.KEY);
     this.mirror();
     syncUI();
@@ -85,6 +86,7 @@ const Book = {
     live(COPY.bookGotChapter);
     this.fresh = true; // (the line about what comes next is said when this opening closes)
     this.open(this.leafOf(chapterId));
+    if (App.overlay !== 'book') this.fresh = false; // (another dialog held the screen: the book did not open, so no later close is its close)
   },
   fresh: false,
   /** "Capítulo n/9 · Seguí por el piso X, «Title»": X is the lowest floor of the record whose chapter is still closed (chapter numbers do not follow floors). Once all are free, a closing line. */

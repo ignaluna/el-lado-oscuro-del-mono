@@ -109,7 +109,7 @@ ROOMS['explotar'] = {
   onSolved(s) { this.almost(s); world.room.v = this.vOf(s); },
   debug(s) {
     const info = R && R.roomInfo ? R.roomInfo() : null;
-    return { phase: this.phase(s), rungs: s.rungs.join(','), notes: s.notes.join(','), sung: s.sung.join(','), noteDist: info ? info.noteDist : null, rungDist: info ? info.rungDist : null, hum: info ? info.hummers : 0 };
+    return { heard: (this.heardN || []).join(), phase: this.phase(s), rungs: s.rungs.join(','), notes: s.notes.join(','), sung: s.sung.join(','), noteDist: info ? info.noteDist : null, rungDist: info ? info.rungDist : null, hum: info ? info.hummers : 0 };
   },
   /** What the set shows for a state (its targets). */
   vOf(s) {
@@ -234,6 +234,7 @@ ROOMS['explotar'] = {
     if (!this.songOn(s)) return;
     if (w !== EX_SONG[s.sung.length]) {
       s.tries++; s.sung = []; s.stage = this.stageOf(s); room.save(); Sound.buzz(); // (the three notes stay: only the sung order starts again)
+      this.heardN = [false, false, false]; // (and what the walker announced about notes starts again with it)
       this.refresh(s);
       room.renderPanel(); room.say(this.lines.wrong); live(this.lines.wrong);
       room.later(() => { if (room.view === 'cantar') room.go('wide'); }, 2300);

@@ -18,6 +18,8 @@ function plateClear() {
   }
   return H <= 480 ? { left: Math.round(r.right + 12) } : {};
 }
+/** The tallest a plate may be when it starts at `top`: it ends 12 px above `floor` (the docked player's top on a phone held upright, the screen's bottom elsewhere) and never under 16 px from the screen's edge; never under 120 px. Its content scrolls inside, its buttons bar stays. */
+function plateMaxH(top, floor) { return Math.max(120, Math.min(window.innerHeight - 16, floor - 12) - top); }
 /** The width of a plate that starts at `left` on a short wide screen: it stops short of the corner player on the right (never under 230 px). */
 function plateFit(max, left) {
   const W = window.innerWidth, port = PlayerPortal.current, pl = port ? port.el.getBoundingClientRect().left : W;
@@ -274,9 +276,9 @@ const Level = {
     let left = 16, top = 16, maxH = H - 32;
     if (W < 640) {
       left = (W - w) / 2; top = clear.top || 12;
-      if (port) maxH = Math.max(160, port.el.getBoundingClientRect().top - 24);
     } else if (el.id === 'lv-card') top = Math.max(16, H * 0.3);
     else if (clear.left) { left = clear.left; w = plateFit(w, left); }
+    maxH = plateMaxH(top, W < 640 && port ? port.el.getBoundingClientRect().top : H);
     el.style.width = Math.round(w) + 'px'; el.style.left = Math.round(left) + 'px'; el.style.top = Math.round(top) + 'px';
     el.style.maxHeight = Math.round(maxH) + 'px';
   },
