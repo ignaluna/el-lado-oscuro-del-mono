@@ -74,6 +74,7 @@ function syncUI() {
     if (!lv) { $('#lv-tip').hidden = true; }
   }
   Room.sync();
+  Room.place(); if (!$('#lv-tip').hidden) Level.place($('#lv-tip')); // (the floor's buttons changed: the plates keep clear of them)
   const inGallery = p === 'gallery', atPiece = inGallery && world.gallery.at >= 0;
   $('#gal-actions').hidden = !inGallery;
   $('#gal-cap').hidden = !atPiece || !!ov;
@@ -841,16 +842,21 @@ function directorTick(dt, t) {
 const Input = (() => {
   const keys = new Set();
   const drags = new Map(); // pointerId → last position and kind (look drags)
+  const taps = new Map(); // pointerId → where and when a touch on the bare stage began (a tap is short, still and alone)
+  const TAP_MS = 600, TAP_PX = 10;
   const typing = (e) => /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '');
   function init() {
     const stage = $('#stage');
     stage.addEventListener('pointerdown', (e) => {
       Sound.unlock();
+      taps.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now(), type: e.pointerType, far: false, solo: taps.size === 0 }); // (a short still touch is a tap even where the walking ring would start)
       if (!Joy.claim(e)) drags.set(e.pointerId, { x: e.clientX, y: e.clientY, kind: e.pointerType });
       try { stage.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     });
     window.addEventListener('pointermove', (e) => {
       if (e.pointerType === 'mouse') { look.tx = (e.clientX / window.innerWidth) * 2 - 1; look.ty = (e.clientY / window.innerHeight) * 2 - 1; }
+      const tp = taps.get(e.pointerId);
+      if (tp && e.pointerType === tp.type && Math.hypot(e.clientX - tp.x, e.clientY - tp.y) > TAP_PX) tp.far = true; // a drag looks around: never a tap
       if (Joy.owns(e.pointerId)) { Joy.move(e); return; }
       const d = drags.get(e.pointerId);
       if (!d) return;
@@ -860,8 +866,14 @@ const Input = (() => {
       look.dragYaw = clamp(look.dragYaw + dx * 0.0032, -0.42, 0.42);
       look.dragPitch = clamp(look.dragPitch + dy * 0.0026, -0.2, 0.21);
     }, { passive: true });
-    const end = (e) => { if (Joy.owns(e.pointerId)) Joy.release(); drags.delete(e.pointerId); };
-    window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end);
+    const end = (e) => {
+      if (Joy.owns(e.pointerId)) Joy.release();
+      drags.delete(e.pointerId);
+      const tp = taps.get(e.pointerId); taps.delete(e.pointerId);
+      if (e.type === 'pointerup' && tp && e.pointerType === tp.type && tp.solo && taps.size === 0 && !tp.far && performance.now() - tp.t < TAP_MS && Math.hypot(e.clientX - tp.x, e.clientY - tp.y) <= TAP_PX) dismissTap();
+    };
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', (e) => { taps.delete(e.pointerId); end(e); });
     window.addEventListener('pointerdown', () => Sound.unlock(), { passive: true });
     window.addEventListener('keydown', (e) => {
       Sound.unlock();
@@ -882,6 +894,17 @@ const Input = (() => {
     });
     window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
     window.addEventListener('blur', () => keys.clear());
+  }
+  /**
+   * A tap on the bare 3D view (only the stage receives it: controls, plates and the hotspots over objects take their own taps)
+   * closes the topmost thing, one step at a time: an open hint first, then the close look, like ALEJARSE.
+   */
+  function dismissTap() {
+    if (App.overlay || world.phase !== 'floor') return;
+    if (!$('#lv-tip').hidden) { Level.closeTip(); return; }
+    if (Room.tipOn && Room.view === 'wide') { Room.closeTip(); return; }
+    if (Level.inspecting() && !Level.busy) { Level.go('wide'); return; }
+    if (Room.inspecting() && !Room.busy) Room.backStep();
   }
   function escape() {
     if (SpNotice.isOpen) { SpNotice.close(); return; }

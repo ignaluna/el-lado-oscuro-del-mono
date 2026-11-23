@@ -1549,6 +1549,120 @@ async function playCasiPerdido(p, { check, shot, thorough = false }) {
  *   reload), solvedHot (the label of the hotspot that says it is solved), replayHot + replayView (what opens the plate with LEER EL
  *   CAPÍTULO / JUGARLO DE NUEVO), freshRoom(state) (after a reset), midWalk(p) + midOK(state) + midMsg (a step that must survive a reload).
  */
+/**
+ * The way out of a close look (room inspect, level close view) and of a hint: ← ALEJARSE and CERRAR are whole on screen, at least 44 px
+ * tall and not covered by a plate, on whatever screen this is (a phone lying down included); a tap outside the hint closes it, the next
+ * tap on empty space steps back, and a tap on an object of the close look keeps doing what it did. Also: what the floor's buttons and
+ * plates draw over the artwork is backed by something dark enough to read over a white drawing. Run by phoneview, landscape and dismiss.
+ */
+const reachOf = (p, sel) => ev(p, (q) => {
+  const e = document.querySelector(q);
+  if (!e || e.hidden || !e.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return null;
+  const r = e.getBoundingClientRect();
+  const inView = r.left >= -0.5 && r.top >= -0.5 && r.right <= innerWidth + 0.5 && r.bottom <= innerHeight + 0.5;
+  const pts = [[0.5, 0.5], [0.1, 0.15], [0.9, 0.15], [0.1, 0.85], [0.9, 0.85]].map(([u, v]) => [Math.min(innerWidth - 1, Math.max(0, r.left + r.width * u)), Math.min(innerHeight - 1, Math.max(0, r.top + r.height * v))]);
+  const free = pts.every(([x, y]) => { const t = document.elementFromPoint(x, y); return t === e || e.contains(t); });
+  return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height * 10) / 10, inView, free };
+}, sel);
+/** A label's own colour and the background drawn behind it, as [r, g, b, alpha] lists. */
+const backingOf = (p, sel, fgSel) => ev(p, ([q, g]) => {
+  const e = document.querySelector(q);
+  if (!e || e.hidden || !e.checkVisibility()) return null;
+  const col = (c) => { const v = (c.match(/[\d.]+/g) || []).map(Number); if (v.length === 3) v.push(1); return v; };
+  const cs = getComputedStyle(e), fg = g ? getComputedStyle(document.querySelector(g)) : cs;
+  return { bg: col(cs.backgroundColor), fg: col(fg.color) };
+}, [sel, fgSel || null]);
+/** Contrast of a label over a pure WHITE drawing behind its backing: the worst case. */
+const contrastOverWhite = (b) => {
+  if (!b || b.bg.length < 4) return 0;
+  const [r, g, bl, a] = b.bg, [fr, fg, fb, fa = 1] = b.fg;
+  const back = [r, g, bl].map((c) => c * a + 255 * (1 - a));
+  const front = [fr, fg, fb].map((c, i) => c * fa + back[i] * (1 - fa));
+  const lum = (c) => { const v = c.map((x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+  const l1 = lum(front), l2 = lum(back);
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+};
+/** A point of the bare 3D view (what a tap on empty space would hit): nothing but the stage under it, clear of every control. */
+const bareSpot = (p) => ev(p, () => {
+  const W = innerWidth, H = innerHeight;
+  const boxes = [...document.querySelectorAll('.portal, #rm-panel, #lv-tip, #floor-actions button, #sound, #dev, .hot, #book-open')].filter((e) => !e.hidden && e.checkVisibility()).map((e) => e.getBoundingClientRect());
+  const clear = (x, y) => boxes.every((r) => x < r.left - 14 || x > r.right + 14 || y < r.top - 14 || y > r.bottom + 14);
+  for (let v = 0.5; v < 1; v += 0.07) for (let u = 0.97; u > 0.03; u -= 0.06) for (const dv of v === 0.5 ? [0] : [0, -2 * (v - 0.5)]) {
+    const x = Math.round(W * u), y = Math.round(H * (v + dv)), t = document.elementFromPoint(x, y);
+    if (t && t.closest('#stage') && clear(x, y)) return [x, y];
+  }
+  return null;
+});
+const untilNotBusy = async (p) => {
+  for (let i = 0; i < 40; i++) { const b = await ev(p, () => { const s = window.__eldom.state(); return (s.level && s.level.busy) || (s.room && s.room.busy); }); if (!b) break; await wait(250); }
+  await wait(300);
+};
+/** Every label on screen from the list reads over a white drawing: a dark backing (opacity at least .7) and a contrast of 4.5:1 or better. */
+async function legible(p, what, pairs, tag) {
+  const rows = [];
+  for (const [q, g] of pairs) { const b = await backingOf(p, q, g); if (b) rows.push(q + ' ' + contrastOverWhite(b).toFixed(1) + ':1 on alpha ' + b.bg[3]); else continue; if (!(b.bg[3] >= 0.7 && contrastOverWhite(b) >= 4.5)) rows.push('LOW ' + q); }
+  return { ok: rows.length > 0 && !rows.some((r) => r.startsWith('LOW')), msg: what + ': labels read over a white drawing (' + rows.join(', ') + ')' + tag };
+}
+async function dialogDismiss(p, shot, log, check) {
+  const vp = p.viewportSize(), coarse = await ev(p, () => matchMedia('(pointer: coarse)').matches);
+  const tag = ` [${vp.width}×${vp.height}]`;
+  const tapAt = async ([x, y]) => { if (coarse) await p.touchscreen.tap(x, y); else await p.mouse.click(x, y); await wait(500); };
+  const way = (r, what) => check(!!r && r.inView && r.free && r.h >= 43.5, what + ': whole on screen, uncovered and at least 44 px tall (' + JSON.stringify(r) + ')' + tag);
+  const lvs = () => ev(p, () => window.__eldom.state().level);
+  const rms = () => ev(p, () => window.__eldom.state().room);
+  await ev(p, () => window.__eldom.dev.released());
+  // ---- the level (basement 1): close view, a hint on top ----
+  await ev(p, () => window.__eldom.dev.levelReset()); await ev(p, () => window.__eldom.dev.levelFloor()); await waitFloor(p, -1); await wait(2600);
+  await ev(p, () => window.__eldom.ui.levelGo('wall')); await wait(1700);
+  await shot('dismiss-1-level-close');
+  way(await reachOf(p, '#lv-back'), 'level close view: ← ALEJARSE');
+  { const l = await legible(p, 'level close view', [['#lv-back'], ['#lv-hint'], ['#sound']], tag); check(l.ok, l.msg); }
+  await ev(p, () => window.__eldom.ui.levelHint()); await wait(500);
+  await shot('dismiss-2-level-hint');
+  way(await reachOf(p, '#lv-tip-close'), 'level hint: CERRAR');
+  way(await reachOf(p, '#lv-tip-more'), 'level hint: OTRA PISTA');
+  { const l = await legible(p, 'level hint plate', [['#lv-tip', '#lv-tip p']], tag); check(l.ok, l.msg); }
+  way(await reachOf(p, '#lv-back'), 'level close view with the hint open: ← ALEJARSE still reachable');
+  let spot = await bareSpot(p);
+  check(!!spot, 'level: there is bare 3D view to tap' + tag);
+  if (spot) {
+    await tapAt(spot);
+    let s = await lvs();
+    check(s.tip === '' && s.view === 'wall', 'level: a tap outside the hint closes it and stays in the close view (view ' + s.view + ', tip "' + s.tip + '")' + tag);
+    const hp = await hotPoint(p, 'Mover el cuadro');
+    if (hp) { await tapAt(hp); await untilNotBusy(p); s = await lvs(); check(s.stage === 1 && s.view === 'wall', 'level: tapping the object keeps working and does not leave the close view (stage ' + s.stage + ', view ' + s.view + ')' + tag); }
+    else check(false, 'level: the painting hotspot is tappable' + tag);
+    // a drag is a look-around, not a tap
+    const [dx, dy] = (await bareSpot(p)) || [vp.width * 0.6, vp.height * 0.5];
+    await p.mouse.move(dx, dy); await p.mouse.down(); await p.mouse.move(dx + 60, dy + 20, { steps: 6 }); await p.mouse.up(); await wait(500);
+    check((await lvs()).view === 'wall', 'level: dragging to look around does not step back' + tag);
+    await tapAt(await bareSpot(p)); await wait(1200);
+    s = await lvs();
+    check(s.view === 'wide', 'level: a tap on empty space steps back like ← ALEJARSE (view ' + s.view + ')' + tag);
+  }
+  // ---- the room of floor 1: a hint over the wide view, then the close look ----
+  await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.roomReset(); });
+  await ev(p, (f) => window.__eldom.dev.arrive(f), 1); await waitFloor(p, 1); await wait(2600);
+  await ev(p, () => window.__eldom.ui.roomHint()); await wait(500);
+  await shot('dismiss-3-room-hint');
+  way(await reachOf(p, '#rm-close'), 'room hint over the wide view: CERRAR');
+  way(await reachOf(p, '#rm-back') || await reachOf(p, '#cap-back'), 'room hint over the wide view: the way back (VOLVER AL ASCENSOR) stays uncovered');
+  { const l = await legible(p, 'room hint', [['#cap-back'], ['#cap-invite'], ['#tr-open'], ['#rm-hint'], ['#rm-panel', '#rm-status']], tag); check(l.ok, l.msg); }
+  const spotW = await bareSpot(p);
+  if (spotW) { await tapAt(spotW); check(!(await reachOf(p, '#rm-panel')) && (await rms()).view === 'wide', 'room: a tap outside the hint closes it' + tag); }
+  await ev(p, () => window.__eldom.ui.roomGo('screen')); await wait(1900);
+  await shot('dismiss-4-room-close');
+  way(await reachOf(p, '#rm-back'), 'room close look: ← ALEJARSE');
+  { const l = await legible(p, 'room close look', [['#rm-back'], ['#rm-hint']], tag); check(l.ok, l.msg); }
+  const panel = await reachOf(p, '#rm-panel');
+  check(!!panel && panel.inView, 'room close look: the plate is whole on screen (' + JSON.stringify(panel) + ')' + tag);
+  const act = await ev(p, () => { const b = document.querySelector('#rm-acts button:not(:disabled)'); if (!b) return null; const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
+  if (act) { await tapAt(act); await wait(900); check((await rms()).view === 'screen', 'room: tapping a control of the close look does not leave it' + tag); }
+  const spotR = await bareSpot(p);
+  check(!!spotR, 'room: there is bare 3D view to tap' + tag);
+  if (spotR) { await tapAt(spotR); await wait(1300); const v = (await rms()).view; check(v === 'wide', 'room: a tap on empty space steps back like ← ALEJARSE (view ' + v + ')' + tag); }
+}
+
 const ROOM_WALKS = {
   'en-una': {
     floor: 1, chapter: 'cap-1', minSegments: 6000, play: playEnUna,
@@ -3498,6 +3612,9 @@ const SCENARIOS = {
       await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 30000); await wait(600);
       await ev(p, () => sessionStorage.removeItem('eldom.mini'));
     }
+    // the way out of a close look and of a hint, on this screen (landscape runs the same on a phone lying down)
+    await dialogDismiss(p, shot, log, check);
+    await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 30000); await wait(600);
     await ev(p, () => window.__eldom.dev.exterior()); await waitPhase(p, 'open', 20000); await wait(1500);
     await ev(p, () => window.__eldom.ui.openBook(0)); await wait(1800);
     await shot('04-book'); await scan('book');
@@ -3519,6 +3636,14 @@ const SCENARIOS = {
   },
   // A phone lying down (run with --viewport landscape): cabin selector → floors, the slim corner player, walking with
   // the joystick; and upright (--viewport mobile): no dialog in the way, one brief line about lying it down.
+  // The way out of a close look and of a hint (see dialogDismiss): run with --viewport desktop|mobile|landscape.
+  async dismiss(p, shot, log) {
+    const fails = [];
+    const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
+    await dialogDismiss(p, shot, log, check);
+    log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
+    if (fails.length) throw new Error(fails.length + ' dismiss check(s) failed: ' + fails.join(' | '));
+  },
   async landscape(p, shot, log) {
     const fails = [];
     const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
@@ -3543,6 +3668,8 @@ const SCENARIOS = {
     } else {
       await ev(p, () => { sessionStorage.removeItem('eldom.platform'); });
       await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin'); await wait(1200);
+      await dialogDismiss(p, shot, log, check); // (a phone lying down: the way back and CERRAR stay on screen under plates; taps outside close)
+      await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 30000); await wait(900);
       const cv = p.locator('#cab-view');
       if (!SPOTIFY_ON) { // no selector: the cabin lying down shows the floor buttons from the start
         check(!(await cv.isVisible()) && (await p.locator(hot('Viajar por')).count()) === 0, 'cabin lying down: no selector and no switch (YouTube only)');

@@ -5,6 +5,21 @@
 //   It gives no chapter: the book is earned on the nine floors of the record (an old finished level unlocks nothing).
 //   Stages: 0 painting hung · 1 painting moved · 2 hatch open (box locked) · 3 box open · 4 done (page taken).
 // ═══════════════════════════════════════════════════════════════════════════════════════════
+/**
+ * Where a plate may start so it never covers the floor's buttons (← ALEJARSE, PISTA): to the right of their column on a short wide screen
+ * (a phone lying down, where they stack at the top left), below their row on a phone held upright. A tall wide screen keeps them at the bottom.
+ */
+function plateClear() {
+  const fa = $('#floor-actions'), r = fa.hidden ? null : fa.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
+  if (!r || !r.width) return {};
+  if (W < 640) return { top: Math.round(r.bottom + 8) };
+  return H <= 480 ? { left: Math.round(r.right + 12) } : {};
+}
+/** The width of a plate that starts at `left` on a short wide screen: it stops short of the corner player on the right (never under 230 px). */
+function plateFit(max, left) {
+  const W = window.innerWidth, port = PlayerPortal.current, pl = port ? port.el.getBoundingClientRect().left : W;
+  return Math.round(pl > W * 0.4 && pl < W ? Math.max(230, Math.min(max, pl - 12 - left)) : Math.min(max, W - left - 12));
+}
 const Level = {
   KEY: 'eldom.level.v1',
   s: null,
@@ -250,15 +265,16 @@ const Level = {
     live(text);
   },
   closeTip() { clearTimeout(this.tipTimer); $('#lv-tip').hidden = true; },
-  /** Like the book, these plates never cover the official player. */
+  /** Like the book, these plates never cover the official player, nor (the hint) the floor's buttons. */
   place(el) {
-    const W = window.innerWidth, H = window.innerHeight, port = PlayerPortal.current;
-    const w = Math.min(el.id === 'lv-card' ? 360 : 330, W - 24);
+    const W = window.innerWidth, H = window.innerHeight, port = PlayerPortal.current, clear = el.id === 'lv-tip' ? plateClear() : {};
+    let w = Math.min(el.id === 'lv-card' ? 360 : 330, W - 24);
     let left = 16, top = 16, maxH = H - 32;
     if (W < 640) {
-      left = (W - w) / 2; top = 12;
+      left = (W - w) / 2; top = clear.top || 12;
       if (port) maxH = Math.max(160, port.el.getBoundingClientRect().top - 24);
     } else if (el.id === 'lv-card') top = Math.max(16, H * 0.3);
+    else if (clear.left) { left = clear.left; w = plateFit(w, left); }
     el.style.width = Math.round(w) + 'px'; el.style.left = Math.round(left) + 'px'; el.style.top = Math.round(top) + 'px';
     el.style.maxHeight = Math.round(maxH) + 'px';
   },
