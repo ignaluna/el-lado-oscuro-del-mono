@@ -72,7 +72,7 @@ const Room = {
   },
   leave() {
     Seq.cancel('rm'); Seq.cancel('rmv'); Seq.cancel('rmf');
-    this.clearTimers();
+    this.clearTimers(); Nudge.reset();
     this.id = null; this.s = null; this.view = 'wide'; this.busy = false; this.tipOn = false; this.back = null; this.hintStage = -1; this.hintTier = 0; this.resetArmed = 0;
     Object.assign(world.room, { through: 0, page: 0, flash: 0 });
     for (const id of ['#rm-panel']) $(id).hidden = true;
@@ -89,7 +89,7 @@ const Room = {
   /** The set shows the saved state (it is built whenever the floor is). */
   applyVisual() { if (this.def() && this.s) this.def().visual(this.s); },
   /** The progress was reset (dev panel, checks): the room follows. */
-  onProgressReset() { if (!this.id) return; this.s = this.load(); this.applyVisual(); this.view = 'wide'; this.back = null; this.renderPanel(); syncUI(); },
+  onProgressReset() { if (!this.id) return; Nudge.reset(); this.s = this.load(); this.applyVisual(); this.view = 'wide'; this.back = null; this.renderPanel(); syncUI(); },
 
   /** The floor's first view turns toward the set (a wide screen: above the corner player; a phone: above the docked one). */
   floorAim(a) {
@@ -198,8 +198,9 @@ const Room = {
     if (el.hidden) return;
     const W = window.innerWidth, H = window.innerHeight, port = PlayerPortal.current, clear = plateClear();
     let w = Math.min(340, W - 24), left = 16, top = 16, maxH = H - 32;
-    if (W < 640) { left = (W - w) / 2; top = clear.top || 54; /* under the floor's row of buttons */ if (port) maxH = Math.max(160, port.el.getBoundingClientRect().top - 20); }
+    if (W < 640) { left = (W - w) / 2; top = clear.top || 54; /* under the floor's row of buttons */ }
     else if (clear.left) { left = clear.left; w = plateFit(w, left); /* beside their column (a phone lying down) */ }
+    maxH = plateMaxH(top, W < 640 && port ? port.el.getBoundingClientRect().top : H); // (what is left between its top and the player, or the screen's bottom)
     el.style.width = Math.round(w) + 'px'; el.style.left = Math.round(left) + 'px'; el.style.top = Math.round(top) + 'px'; el.style.maxHeight = Math.round(maxH) + 'px';
   },
   /** A hint over the wide view, or in the status line of the close look. */
@@ -257,7 +258,7 @@ const Room = {
     if (!d || !s || s.done || !this.here() || App.overlay) return;
     const st = Math.min(s.stage, d.hints.length - 1), tiers = d.hints[st];
     if (this.hintStage !== st) { this.hintStage = st; this.hintTier = 0; } else this.hintTier = Math.min(tiers.length - 1, this.hintTier + 1);
-    s.hints++; this.save(); Progress.hint(this.id);
+    s.hints++; this.save(); Progress.hint(this.id); Nudge.take();
     this.tip(tiers[this.hintTier], this.hintTier < tiers.length - 1);
   },
 
@@ -300,7 +301,7 @@ const Room = {
     this.resetArmed = 0;
     $('#rm-reset').textContent = COPY.rmReset; $('#rm-reset').classList.remove('armed');
     Seq.cancel('rm'); Seq.cancel('rmv'); Seq.cancel('rmf');
-    this.cancelHold(); this.busy = false; this.tipOn = false; this.hintStage = -1;
+    this.cancelHold(); this.busy = false; this.tipOn = false; this.hintStage = -1; Nudge.reset();
     this.s = this.def().fresh(); this.save();
     Object.assign(world.room, { through: 0, page: 0, flash: 0 });
     this.applyVisual();
@@ -315,7 +316,7 @@ const Room = {
     for (const [k, v] of Object.entries(world.room)) visual[k] = Array.isArray(v) ? v.join('') : v && typeof v === 'object' ? { ...v } : v;
     return { id: this.id, here: this.here(), view: this.view, busy: this.busy, blind: this.blind, stage: s ? s.stage : null, done: s ? s.done : null, ...(d && d.debug && s ? d.debug(s) : {}),
       tries: s ? s.tries : null, hints: s ? s.hints : null, clue: d ? d.clue : null, done_line: d ? d.done : null, panel, title: panel ? $('#rm-title').textContent : '', status: $('#rm-status').textContent,
-      more: !$('#rm-more').hidden, saved: this.id ? store.local.json(this.key(), null) : null, visual,
+      more: !$('#rm-more').hidden, nudge: $('#rm-hint').classList.contains('nudge'), saved: this.id ? store.local.json(this.key(), null) : null, visual,
       acts: [...document.querySelectorAll('#rm-acts [data-act]')].map((b) => ({ act: b.dataset.act, text: b.textContent, pressed: b.getAttribute('aria-pressed'), label: b.getAttribute('aria-label') })),
       set: R && R.roomInfo ? R.roomInfo() : null, align: this.view === 'through' && R && R.roomAlignError ? R.roomAlignError() : null };
   },

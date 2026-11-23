@@ -12,9 +12,14 @@
 function plateClear() {
   const fa = $('#floor-actions'), r = fa.hidden ? null : fa.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
   if (!r || !r.width) return {};
-  if (W < 640) return { top: Math.round(r.bottom + 8) };
+  if (W < 640) { // upright: below the buttons' row and the corner controls on the right (sound, the book)
+    const low = ['#sound', '#book-open'].map((s) => $(s)).filter((e) => e && !e.hidden).reduce((b, e) => Math.max(b, e.getBoundingClientRect().bottom), r.bottom);
+    return { top: Math.round(low + 8) };
+  }
   return H <= 480 ? { left: Math.round(r.right + 12) } : {};
 }
+/** The tallest a plate may be when it starts at `top`: it ends 12 px above `floor` (the docked player's top on a phone held upright, the screen's bottom elsewhere) and never under 16 px from the screen's edge; never under 120 px. Its content scrolls inside, its buttons bar stays. */
+function plateMaxH(top, floor) { return Math.max(120, Math.min(window.innerHeight - 16, floor - 12) - top); }
 /** The width of a plate that starts at `left` on a short wide screen: it stops short of the corner player on the right (never under 230 px). */
 function plateFit(max, left) {
   const W = window.innerWidth, port = PlayerPortal.current, pl = port ? port.el.getBoundingClientRect().left : W;
@@ -81,6 +86,7 @@ const Level = {
     Seq.cancel('lv');
     this.view = 'wide'; this.busy = false; this.awaitCard = false;
     this.closeTip();
+    Nudge.reset();
     $('#lv-card').hidden = true;
     if (App.overlay === 'level') App.overlay = null;
     this.applyVisual();
@@ -173,8 +179,7 @@ const Level = {
       Sound.buzz();
       Seq.run('lvs', async (c) => { world.level.shake = 1; await c.to(world.level, { shake: 0 }, 0.5); });
       this.flash(COPY.lvNoGive);
-      if (this.s.tries >= 2) $('#lv-hint').classList.add('nudge');
-      return;
+      return; // (the glow on PISTA after two wrong tries is Nudge's)
     }
     this.anim(async (c) => {
       Sound.latch();
@@ -184,7 +189,6 @@ const Level = {
       Sound.ding();
       await c.to(world.level, { obj: 1 }, rm(0.9), Ease.outCubic);
       this.setStage(3);
-      $('#lv-hint').classList.remove('nudge');
       live(COPY.lvOpen);
     });
   },
@@ -232,7 +236,7 @@ const Level = {
     Seq.cancel('lv');
     this.busy = false; this.awaitCard = false; this.hintStage = -1;
     this.hideCard(); this.closeTip();
-    $('#lv-hint').classList.remove('nudge');
+    Nudge.reset();
     this.applyVisual();
     live(COPY.lvResetDone);
     if (this.here()) this.go('wide'); else syncUI();
@@ -244,7 +248,7 @@ const Level = {
     if (!tiers || this.s.done) return;
     if (this.hintStage !== st) { this.hintStage = st; this.hintTier = 0; } else this.hintTier = Math.min(tiers.length - 1, this.hintTier + 1);
     this.s.hints++; this.save();
-    $('#lv-hint').classList.remove('nudge');
+    Nudge.take();
     this.tip(tiers[this.hintTier], this.hintTier < tiers.length - 1);
   },
   tip(text, more) {
@@ -272,9 +276,9 @@ const Level = {
     let left = 16, top = 16, maxH = H - 32;
     if (W < 640) {
       left = (W - w) / 2; top = clear.top || 12;
-      if (port) maxH = Math.max(160, port.el.getBoundingClientRect().top - 24);
     } else if (el.id === 'lv-card') top = Math.max(16, H * 0.3);
     else if (clear.left) { left = clear.left; w = plateFit(w, left); }
+    maxH = plateMaxH(top, W < 640 && port ? port.el.getBoundingClientRect().top : H);
     el.style.width = Math.round(w) + 'px'; el.style.left = Math.round(left) + 'px'; el.style.top = Math.round(top) + 'px';
     el.style.maxHeight = Math.round(maxH) + 'px';
   },
@@ -282,7 +286,7 @@ const Level = {
   /** For the checks. */
   debug() {
     return { stage: this.s.stage, done: this.s.done, dials: this.s.dials.map((i) => LEVEL.symbols[i]), tries: this.s.tries, hints: this.s.hints, view: this.view, busy: this.busy,
-      here: this.here(), card: !$('#lv-card').hidden, tip: $('#lv-tip').hidden ? '' : $('#lv-tip-text').textContent, set: R && R.levelInfo ? R.levelInfo() : null,
+      here: this.here(), card: !$('#lv-card').hidden, tip: $('#lv-tip').hidden ? '' : $('#lv-tip-text').textContent, nudge: $('#lv-hint').classList.contains('nudge'), set: R && R.levelInfo ? R.levelInfo() : null,
       floor: this.floor(), saved: store.local.json(this.KEY, null) };
   },
 };

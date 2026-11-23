@@ -5,7 +5,7 @@
 //      staying alive, a piece of her): CONSERVAR keeps them; NO HEREDAR on one of those frays the strand again and the rung returns (a try).
 //      Three rungs are on the helix of the picture and three beyond it, where the strand goes on past the edge: they show when you are near.
 //   2. The notes. Notes float around the room; three carry the unsaid words (te, amo, abuela), the rest only hum. They show only near: walk to them.
-//   3. The song. At the headphones the collected words are sung in the letter's order: te, amo, abuela. A wrong order scatters the notes back.
+//   3. The song. At the headphones the collected words are sung in the letter's order: te, amo, abuela. A wrong order starts the song again (the notes stay).
 //   4. The ending. A slow hold, SEGUIR CAMINANDO: his step lands, the strand ahead dissolves into dashes and the drop falls into the floor.
 //      "De no heredar la misma tristeza." The page and chapter 6 come out, once.
 // The words keep the book's own: clue and done are verbatim chapter text; the hints are new prose.
@@ -32,7 +32,7 @@ ROOMS['explotar'] = {
     [ // 2 · the song
       'Con las tres palabras en la mano, el lugar para cantarlas son los auriculares del mono, el disco brillante en la oreja.',
       'La carta lo dice: «no haberte dicho te amo». Y se lo dice a la abuela.',
-      'Tocá los auriculares y cantá TE, después AMO, después ABUELA. Si te equivocás de orden, las notas se dispersan.',
+      'Tocá los auriculares y cantá TE, después AMO, después ABUELA. Si te equivocás de orden, empezás de nuevo la canción con las mismas notas.',
     ],
     [ // 3 · the ending
       'La canción ya suena. El mono sigue caminando, con la hebra detrás.',
@@ -77,7 +77,7 @@ ROOMS['explotar'] = {
     nearNote: 'Cerca tuyo flota una nota con una palabra. Tocala.',
     taken: (w, n) => `Tomás la nota: «${w}». ${n < 3 ? `${n} de 3.` : 'Las tres: llevalas a los auriculares del mono.'}`,
     song: (w, n) => `Cantás «${w}». ${n < 3 ? `${n} de 3.` : 'Las tres palabras suenan en el orden de la carta.'}`,
-    scatter: 'Ese no es el orden de la carta. Las notas se dispersan otra vez por el cuarto.',
+    wrong: 'Ese no es el orden de la carta. Tenés las tres notas: probá de nuevo desde la primera palabra.',
     step: 'El mono apoya el paso. La hebra de adelante se disuelve en rayas y la gota cae al piso.',
   },
 
@@ -109,7 +109,7 @@ ROOMS['explotar'] = {
   onSolved(s) { this.almost(s); world.room.v = this.vOf(s); },
   debug(s) {
     const info = R && R.roomInfo ? R.roomInfo() : null;
-    return { phase: this.phase(s), rungs: s.rungs.join(','), notes: s.notes.join(','), sung: s.sung.join(','), noteDist: info ? info.noteDist : null, rungDist: info ? info.rungDist : null, hum: info ? info.hummers : 0 };
+    return { heard: (this.heardN || []).join(), phase: this.phase(s), rungs: s.rungs.join(','), notes: s.notes.join(','), sung: s.sung.join(','), noteDist: info ? info.noteDist : null, rungDist: info ? info.rungDist : null, hum: info ? info.hummers : 0 };
   },
   /** What the set shows for a state (its targets). */
   vOf(s) {
@@ -228,15 +228,15 @@ ROOMS['explotar'] = {
     const line = this.lines.taken(EX_NOTES[k].word, s.notes.length);
     hint(line, 5200); live(line);
   },
-  /** One word is sung: only the letter's order goes on; any other word scatters the notes back. */
+  /** One word is sung: only the letter's order goes on; any other word sends the song back to its first word (the notes stay). */
   sing(room, w) {
     const s = room.s;
     if (!this.songOn(s)) return;
     if (w !== EX_SONG[s.sung.length]) {
-      s.tries++; s.sung = []; s.notes = []; s.stage = this.stageOf(s); room.save(); Sound.buzz();
-      this.refresh(s); this.pulse(room, 'scatter', () => { world.room.v.scatter = 1; }, () => { if (world.room.v) world.room.v.scatter = 0; }, 1600);
-      this.heardN = [false, false, false];
-      room.renderPanel(); room.say(this.lines.scatter); live(this.lines.scatter);
+      s.tries++; s.sung = []; s.stage = this.stageOf(s); room.save(); Sound.buzz(); // (the three notes stay: only the sung order starts again)
+      this.heardN = [false, false, false]; // (and what the walker announced about notes starts again with it)
+      this.refresh(s);
+      room.renderPanel(); room.say(this.lines.wrong); live(this.lines.wrong);
       room.later(() => { if (room.view === 'cantar') room.go('wide'); }, 2300);
       return;
     }
