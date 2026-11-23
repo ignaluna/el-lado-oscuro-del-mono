@@ -1072,14 +1072,14 @@ async function reachGate(p, check, { id, what, read, dist, reach = 4.8, whileBli
 }
 
 /**
- * Plays floor 5's room (the walking monkey and the strand) with real clicks: the six rungs (three on the helix of the picture, three beyond its
+ * Plays floor 6's room (the walking monkey and the strand) with real clicks: the six rungs (three on the helix of the picture, three beyond its
  * edge that show only near: NO HEREDAR on the pain, CONSERVAR on what is kept), the three notes that carry the unsaid words (walked to), the song
  * sung at the headphones in the letter's order, and the slow SEGUIR CAMINANDO. `thorough` adds saved states that must be rejected, wrong choices
  * on the rungs, things touched out of turn, the hint ladder of every stage, a wrong song (the notes stay) and the visitor's walk to the far
  * rungs and the notes. Returns the room's state at the end.
  */
 async function playExplotar(p, { check, shot, thorough = false }) {
-  const FLOOR = 5, KEY = 'eldom.room.explotar.v1';
+  const FLOOR = 6, KEY = 'eldom.room.explotar.v1';
   const WORDS = ['el puño cerrado', 'la fuerza', 'tus ojos duros', 'tu manera de seguir viva', 'ese silencio', 'un pedazo tuyo en mí'], KEEP = [false, true, false, true, false, true];
   const NOTES = ['te', 'amo', 'abuela'];
   const rmState = async () => (await state(p)).room;
@@ -1233,14 +1233,14 @@ async function playExplotar(p, { check, shot, thorough = false }) {
 }
 
 /**
- * Plays floor 6's room (the smug duck, five bubbles and a house) with real clicks: the five bubbles (reached by walking: they show only near, some behind him
+ * Plays floor 5's room (the smug duck, five bubbles and a house) with real clicks: the five bubbles (reached by walking: they show only near, some behind him
  * or at his sides; the chapter's reply empties one and drops its brick, the Pato's logic counts a try), the five bricks laid with CEDER and PEDIR as his
  * eyelids ask (half closed, open; the plate says it too), the ring (the Pato says "pollerudo"; only the chapter's words lay the roof) and the heart that
  * drifts into the house to light its fire. `thorough` adds saved states that must be rejected, things touched out of turn, the hint ladder of every stage,
  * the wrong replies, a wrong CEDER / PEDIR and the visitor's walk to every bubble. Returns the room's state at the end.
  */
 async function playPato(p, { check, shot, thorough = false }) {
-  const FLOOR = 6, KEY = 'eldom.room.pato.v1';
+  const FLOOR = 5, KEY = 'eldom.room.pato.v1';
   const MOODS = ['ceder', 'pedir', 'ceder', 'ceder', 'pedir'];
   const VOICES = [
     { name: 'el globo de arriba, a la izquierda de su cabeza', line: 'Estás ciego. No ves lo que hay detrás.', yes: 'Amar no es negocio.', no: 'Tenés razón: todo es un negocio.' },
@@ -1678,6 +1678,9 @@ async function quickWins(p, shot, log, check) {
   const hintText = () => ev(p, () => { const e = document.querySelector('#cap-hint'); return e.hidden ? '' : e.textContent; });
   const until = async (fn, ms = 12000) => { const t0 = Date.now(); for (;;) { const v = await fn(); if (v) return v; if (Date.now() - t0 > ms) return v; await wait(150); } };
   const COUNT = (n) => `Capítulo ${n}/9 · `;
+  /** A track of the record by id: floors move when the band reorders the record, ids do not. */
+  const track = (id) => ev(p, (i) => window.__eldom.config().tracks.find((t) => t.id === i), id);
+  const nextLine = (n, t) => `${COUNT(n)}Seguí por el piso ${t.floor}, «${t.title}».`;
   await ev(p, () => window.__eldom.dev.released());
 
   // ---- Q1: PISTA glows (a room) ----
@@ -1723,8 +1726,9 @@ async function quickWins(p, shot, log, check) {
   check(!(await lvs()).nudge, 'Q1 level: opening PISTA stops the glow' + tag);
 
   // ---- Q2: Explotar keeps the three notes on a wrong word ----
+  const EXPLOTAR = (await track('explotar')).floor;
   await ev(p, () => { window.__eldom.dev.progressReset(); localStorage.setItem('eldom.room.explotar.v1', JSON.stringify({ v: 1, rungs: [0, 1, 2, 3, 4, 5], notes: [0, 1, 2], sung: [], done: false, tries: 0, hints: 0 })); });
-  await ev(p, (f) => window.__eldom.dev.arrive(f), 5); await waitFloor(p, 5); await wait(2600);
+  await ev(p, (f) => window.__eldom.dev.arrive(f), EXPLOTAR); await waitFloor(p, EXPLOTAR); await wait(2600);
   s = await rms(); check(s.phase === 'song' && s.notes === '0,1,2', `Q2: Explotar starts at the song with its three notes (phase ${s.phase}, notes "${s.notes}")` + tag);
   await ev(p, () => window.__eldom.ui.roomTap('rm-auriculares')); await wait(2000);
   await p.locator('#rm-acts [data-act="cantar-te"]').click(); await wait(400);
@@ -1771,17 +1775,28 @@ async function quickWins(p, shot, log, check) {
   await ev(p, () => window.__eldom.dev.roomless(false));
 
   // ---- Q4: after a freed chapter, the book closes on the next step ----
+  // the first four floors are free and Explotar is solved: Pato, the lowest floor still closed, is next (below the one just solved)
   await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.bookAll(4); });
-  await ev(p, (f) => window.__eldom.dev.arrive(f), 5); await waitFloor(p, 5); await wait(2600);
+  await ev(p, (f) => window.__eldom.dev.arrive(f), EXPLOTAR); await waitFloor(p, EXPLOTAR); await wait(2600);
   await ev(p, () => window.__eldom.dev.trialSolve());
   const opened = await until(async () => (await state(p)).overlay === 'book', 20000);
   check(!!opened, 'Q4: the freed chapter opens the book' + tag);
   await ev(p, () => window.__eldom.ui.closeBook()); await wait(500);
   const line = await hintText();
-  check(line === COUNT(5) + 'Seguí por el piso 6, «Pato».', `Q4: the book closes on the next step by floor, not by chapter number ("${line}")` + tag);
+  check(line === nextLine(5, await track('pato')), `Q4: the book closes on the next floor still closed ("${line}")` + tag);
   await shot('quick-5-next-step');
+  // the first six floors are free and Casi Perdido (chapter 8) is solved: seven chapters are free, and the next floor is No me perdones (chapter 7): floors are not chapters
+  const CASI = (await track('casi-perdido')).floor;
+  await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.bookAll(6); });
+  await ev(p, (f) => window.__eldom.dev.arrive(f), CASI); await waitFloor(p, CASI); await wait(2600);
+  await ev(p, () => window.__eldom.dev.trialSolve());
+  await until(async () => (await state(p)).overlay === 'book', 20000);
+  await ev(p, () => window.__eldom.ui.closeBook()); await wait(500);
+  const line2 = await hintText();
+  check(line2 === nextLine(7, await track('no-me-perdones')), `Q4: the next floor comes from the floors, not from the chapter numbers ("${line2}")` + tag);
   await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.bookAll(8); });
-  await ev(p, (f) => window.__eldom.dev.arrive(f), 9); await waitFloor(p, 9); await wait(2600);
+  const PORTALES = (await track('portales')).floor;
+  await ev(p, (f) => window.__eldom.dev.arrive(f), PORTALES); await waitFloor(p, PORTALES); await wait(2600);
   await ev(p, () => window.__eldom.dev.trialSolve());
   await until(async () => (await state(p)).overlay === 'book', 20000);
   await ev(p, () => window.__eldom.ui.closeBook()); await wait(600);
@@ -2011,7 +2026,7 @@ const ROOM_WALKS = {
     midOK: (s) => s.roots === 'perro,,,' && s.visual.v.at.join(',') === '0,-1,-1,-1' && s.stage === 0, midMsg: 'a reload keeps the thing left in the first root (and nothing else)',
   },
   'explotar': {
-    floor: 5, chapter: 'cap-6', minSegments: 8000, play: playExplotar,
+    floor: 6, chapter: 'cap-6', minSegments: 8000, play: playExplotar,
     built: (set) => set.contours > 14000 && set.rungs === 6 && set.notes === 3 && set.hummers >= 4,
     tierBuilt: (set) => set.rungs === 6 && set.notes === 3,
     hots: [/^Un peldaño de la hebra/],
@@ -2027,7 +2042,7 @@ const ROOM_WALKS = {
     midOK: (s) => s.rungs === '0' && s.visual.v.rung[0] === 1 && s.stage === 0, midMsg: 'a reload keeps the rung that was let go (and nothing else)',
   },
   'pato': {
-    floor: 6, chapter: 'cap-5', minSegments: 10000, play: playPato,
+    floor: 5, chapter: 'cap-5', minSegments: 10000, play: playPato,
     built: (set) => set.contours > 10000 && set.bubbles === 5 && set.bricks === 5 && set.places === 5,
     tierBuilt: (set) => set.bubbles === 5 && set.bricks === 5,
     hots: [], // (the bubbles show only near, and the house, the ring and the heart wait for their turn: nothing can be touched from the arrival spot)
@@ -2343,7 +2358,7 @@ const SCENARIOS = {
     // a closed chapter says where it waits, and nothing else
     await ev(p, (i) => window.__eldom.ui.bookTurn(i - window.__eldom.state().book.at), order.indexOf('cap-5')); await wait(200);
     b = await bk();
-    check(/Te espera en el piso 6, «Pato»/.test(b.text) && !/pendiente/i.test(b.text) && !b.text.includes(paras('cap-5')[0].slice(0, 30)), `closed chapter 5: "${b.text.replace(/\s+/g, ' ')}"`);
+    check(/Te espera en el piso 5, «Pato»/.test(b.text) && !/pendiente/i.test(b.text) && !b.text.includes(paras('cap-5')[0].slice(0, 30)), `closed chapter 5: "${b.text.replace(/\s+/g, ' ')}"`);
     await shot('book-closed-chapter');
     await ev(p, () => window.__eldom.ui.closeBook()); await wait(1600);
     // survives a reload (the copy is this visit's)
@@ -2359,7 +2374,7 @@ const SCENARIOS = {
       if (id === 'cap-3') await shot('book-chapter-3');
     }
     const songLine = await ev(p, (i) => { window.__eldom.ui.bookTurn(i - window.__eldom.state().book.at); return (document.querySelector('#bk-page .bk-song') || {}).textContent || ''; }, order.indexOf('cap-6'));
-    check(/Explotar.*Piso 5/.test(songLine), `chapter 6 points at its song, floor 5: "${songLine}"`);
+    check(/Explotar.*Piso 6/.test(songLine), `chapter 6 points at its song, floor 6: "${songLine}"`);
     check((await bk()).count === '9 / 9', `counter ${(await bk()).count}`);
     // purchase: ebook always, paper only when complete
     await ev(p, () => window.__eldom.dev.bookBuy('https://example.com/ebook', 'https://example.com/papel'));
@@ -2386,7 +2401,7 @@ const SCENARIOS = {
     await ev(p, () => window.__eldom.dev.released());
     await ev(p, () => window.__eldom.dev.interior()); await waitPhase(p, 'cabin'); await ev(p, () => window.__eldom.dev.platform('youtube')); await wait(1200);
     const record = cfg.tracks.filter((t) => t.album === 'elodm');
-    check(record.map((t) => `${t.floor}:${t.id}:${t.chapter}:${t.element}`).join(' ') === '1:en-una:cap-1:realidad-simulada 2:que-te-esta-pasando:cap-2:sistema 3:el-lado-oscuro-del-mono:cap-3:grito 4:que-carajo:cap-4:manos 5:explotar:cap-6:dolor-heredado 6:pato:cap-5:pato 7:casi-perdido:cap-8:fuego 8:no-me-perdones:cap-7:vacio 9:portales:cap-9:arbol', 'floors, songs, chapters and elements: the band\'s table');
+    check(record.map((t) => `${t.floor}:${t.id}:${t.chapter}:${t.element}`).join(' ') === '1:en-una:cap-1:realidad-simulada 2:que-te-esta-pasando:cap-2:sistema 3:el-lado-oscuro-del-mono:cap-3:grito 4:que-carajo:cap-4:manos 5:pato:cap-5:pato 6:explotar:cap-6:dolor-heredado 7:casi-perdido:cap-8:fuego 8:no-me-perdones:cap-7:vacio 9:portales:cap-9:arbol', 'floors, songs, chapters and elements: the band\'s table');
     check(cfg.catalog.length === 0, `catalog links by id: ${cfg.catalog.join(' · ') || 'all resolved'}`);
     let solved = 0;
     for (const t of record) {
@@ -2467,9 +2482,9 @@ const SCENARIOS = {
     await ev(p, () => window.__eldom.ui.returnToElevator()); await waitPhase(p, 'cabin', 30000); await wait(500);
     await p.locator('.hot[aria-label="Mostrar los pisos"]').click(); await p.waitForFunction(() => !window.__eldom.state().panelDown && window.__eldom.state().phase === 'cabin', null, { timeout: 10000 }); await wait(400);
     // back up: a solved floor gives its chapter to reread; playing it again gives nothing twice
-    await ev(p, () => window.__eldom.dev.roomless(true)); // (this step reads the 2D plate, the fallback of a floor that has a room: build floor 6 as a plain world, dev only)
-    await p.locator('.hot[aria-label^="Piso 6:"]').first().click({ timeout: 10000 }); await waitFloor(p, 6, 45000); await wait(2200);
-    check(/^✓/.test(await p.locator('#tr-open').innerText()), `floor 6 remembers it was solved ("${await p.locator('#tr-open').innerText()}")`);
+    await ev(p, () => window.__eldom.dev.roomless(true)); // (this step reads the 2D plate, the fallback of a floor that has a room: build floor 5 as a plain world, dev only)
+    await p.locator('.hot[aria-label^="Piso 5:"]').first().click({ timeout: 10000 }); await waitFloor(p, 5, 45000); await wait(2200);
+    check(/^✓/.test(await p.locator('#tr-open').innerText()), `floor 5 remembers it was solved ("${await p.locator('#tr-open').innerText()}")`);
     await p.locator('#tr-open').click(); await wait(400);
     await p.locator('#tr-again').click(); await wait(300);
     for (const step of (await tr()).walkthrough) { await p.locator(`#tr-stage [data-act="${step}"]`).first().click(); await wait(120); }
@@ -3518,7 +3533,7 @@ const SCENARIOS = {
 
     await ev(p, () => window.__eldom.dev.released());
     await ev(p, () => window.__eldom.dev.roomless(true)); // (dev only: a floor built without its room, so the first view faces straight ahead and nothing blocks the walk; floors with a room are checked below)
-    await ev(p, () => window.__eldom.dev.arrive(6)); await waitFloor(p, 6); await wait(2500);
+    await ev(p, () => window.__eldom.dev.arrive(5)); await waitFloor(p, 5); await wait(2500);
     let s = await st();
     check(s.roam.scene === 'floor', `free walking on a world (scene ${s.roam.scene})`);
     if (touch) check(s.roam.ghost, 'touch screen: the joystick hint ring is shown');
@@ -3698,8 +3713,8 @@ const SCENARIOS = {
     ];
     const measure = async (q) => { // renders per second and the distance a 1.5 s push walks, at a world
       await q.evaluate(() => window.__eldom.dev.released());
-      await q.evaluate(() => { window.__eldom.dev.roomless(true); window.__eldom.dev.arrive(6); });
-      await q.waitForFunction(() => window.__eldom.state().phase === 'floor' && window.__eldom.state().floor === 6, null, { timeout: 40000 });
+      await q.evaluate(() => { window.__eldom.dev.roomless(true); window.__eldom.dev.arrive(5); });
+      await q.waitForFunction(() => window.__eldom.state().phase === 'floor' && window.__eldom.state().floor === 5, null, { timeout: 40000 });
       await wait(2500);
       await q.evaluate(() => window.__eldom.dev.roamTo(0, 6, 0)); await wait(500);
       const r0 = (await q.evaluate(() => window.__eldom.state())).tier.renders, z0 = (await q.evaluate(() => window.__eldom.state())).cam.z, t0 = Date.now();
@@ -3908,7 +3923,7 @@ const SCENARIOS = {
     await ev(p, () => window.__eldom.dev.released());
     const lineUp = () => ev(p, () => { const e = document.querySelector('#cap-hint'); return !e.hidden && /Acostá el teléfono/.test(e.textContent); });
     if (vw.width < vw.height) { // upright: no dialog, one brief line once the walking ring has gone
-      await ev(p, () => { window.__eldom.dev.roomless(true); window.__eldom.dev.arrive(6); }); await waitFloor(p, 6); await wait(2400);
+      await ev(p, () => { window.__eldom.dev.roomless(true); window.__eldom.dev.arrive(5); }); await waitFloor(p, 5); await wait(2400);
       check((await p.locator('#rot-invite').count()) === 0 && (await ev(p, () => ![...document.querySelectorAll('[role=dialog]')].some((e) => e.checkVisibility()))), 'upright phone in a world: no dialog in the way');
       check(!(await lineUp()) && (await state(p)).roam.ghost, 'the walking ring comes first, with no line yet');
       await shot('01-world-upright');

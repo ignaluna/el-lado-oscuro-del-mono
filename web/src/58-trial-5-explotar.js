@@ -1,4 +1,4 @@
-// Floor 5 · «Explotar» · chapter 6 · inherited pain.
+// Floor 6 · «Explotar» · chapter 6 · inherited pain.
 // A letter to the grandmother, under pressure: the needle climbs with every silence that was inherited. Two blanks
 // hold the same words that were never said in time. Writing them — any capitals, accents or spaces — lets the
 // pressure out, and the threads that wrapped the letter turn into steam.

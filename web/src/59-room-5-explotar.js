@@ -1,4 +1,4 @@
-// Floor 5 · «Explotar» · chapter 6 · the strand: the cover is a monkey walking on tiles, with headphones and sunglasses, blowing notes, and a DNA strand
+// Floor 6 · «Explotar» · chapter 6 · the strand: the cover is a monkey walking on tiles, with headphones and sunglasses, blowing notes, and a DNA strand
 //   behind him (frayed on the left, whole in the middle, dashed on the right); walkable, and an escape-room in it.
 //   1. The strand. Six rungs of the helix carry words from the letter. Three are what was inherited without choosing (the closed fist, the hard eyes
 //      and the mandate, the silence): NO HEREDAR turns them into the cover's dashes. Three are what is worth keeping (the strength, the way of

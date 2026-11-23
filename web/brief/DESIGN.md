@@ -528,7 +528,7 @@ at n with the portal for the current platform (default youtube if none chosen).
 ## 22. Config block (top of the script, exactly this shape)
 ```js
 /** Release moment, ISO 8601 with offset (Montevideo, UTC-3). Temporary: replace freely. */
-const RELEASE_AT = "2026-12-01T21:00:00-03:00";
+const RELEASE_AT = "2026-12-11T11:11:00-03:00";
 /** "#privacidad" opens the in-scene note; set an https URL to link to the real policy. */
 const PRIVACY_URL = "#privacidad";
 /** Set to your API URL to send registrations to a server (see submitLead). null = this device only. */
