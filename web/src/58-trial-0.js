@@ -293,5 +293,5 @@ const Reveal = {
   hide() { $('#reveal').hidden = true; if (App.overlay === 'reveal') App.overlay = null; Progress.markRevealed(); },
   /** Down: back into the elevator, the panel already showing the basements. */
   go() { this.hide(); world.panelDown = true; syncUI(); returnToElevator(); },
-  stay() { this.hide(); syncUI(); },
+  stay() { this.hide(); syncUI(); if (world.phase === 'floor') hint(Book.nextLine(), 7000); },
 };

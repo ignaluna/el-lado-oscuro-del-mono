@@ -32,12 +32,18 @@ El álbum y el libro se unen por identificadores estables (`tracks[].chapter`), 
    - un fragmento textual del capítulo, que tiene la clave;
    - la escena del desafío;
    - una línea de estado que responde a cada acción.
-4. **PISTA** es opcional y dice un poco más cada vez. La última pista da la solución.
+4. **PISTA** es opcional y dice un poco más cada vez. La última pista da la solución. Nunca aparece sola: si el visitante parece trabado (dos intentos errados en el paso, o unos 90 segundos en el piso sin avanzar, contando solo el tiempo con el piso a la vista y nada abierto encima), el botón PISTA **brilla** hasta que se abre, hasta que se avanza de paso o hasta que el piso se resuelve (con movimiento reducido, un resaltado fijo en vez de un pulso). PISTA es el botón principal de la fila del piso: más claro y enmarcado que INVITAR.
 5. Al resolverlo:
    - la escena se ilumina y el elemento se vuelve una página con el título del capítulo;
    - el capítulo entra al libro, que se abre en él;
    - el piso queda marcado en el tablero con un librito y con ✓ en el botón.
 6. Un piso resuelto ofrece **LEER EL CAPÍTULO** y **VOLVER A HACERLO**. Jugarlo de nuevo no da nada dos veces.
+
+**Primera llegada.** La primera vez que el visitante está libre en un piso, una sola línea le dice cómo moverse y mirar: en el celular, «Caminá con el pulgar a la izquierda. Arrastrá el dedo por la pantalla para mirar.»; en la compu, «Caminá con W, A, S, D o las flechas. Arrastrá el mouse para mirar.». Espera a que se vayan la línea de llegada, el anillo CAMINÁ y (celular parado) la línea de acostar el teléfono, así que nunca comparte pantalla con ellos. Se queda hasta que el visitante camina (y unos segundos después), la toca o apoya el pulgar en el anillo. Se muestra una sola vez por visitante (se guarda como visto en este dispositivo).
+
+**Después de un capítulo.** Al cerrar el libro que se abrió sobre un capítulo recién liberado, una línea dice «Capítulo n/9 · Seguí por el piso X, «Título».», donde X es el piso más bajo cuyo capítulo sigue cerrado (se deduce de los pisos, no de la numeración de los capítulos: en los pisos 5 a 8 no coinciden). Con los nueve, el libro abre la revelación de los subsuelos; al quedarse en el piso, la línea es «Capítulo 9/9 · Ya están todos los capítulos en tu libro.».
+
+**Controles chicos en pantallas táctiles.** CERRAR y sus parientes (OTRA PISTA, el de las placas y el del libro), SONIDO y los AMPLIAR/MINIMIZAR y CERRAR del reproductor miden al menos 44 px de alto con el dedo (`pointer: coarse`); en la compu el diseño no se mueve.
 
 **Accesibilidad.** Todo se hace con botones, también con teclado y lector de pantalla. Ningún desafío necesita sonido, pasar el mouse por encima, arrastrar con precisión ni moverse rápido.
 
@@ -113,7 +119,7 @@ Este piso también es una **sala que se recorre**: la tapa del disco dibujada en
   2. **Las notas.** Por el cuarto flotan notas. Tres llevan lo que nunca se dijo («te», «amo», «abuela») y solo se ven de cerca (una a la izquierda, una a la derecha y una detrás del mono, a la izquierda); las demás solo tararean. Tocar una la toma, y se anuncia.
   3. **La canción.** Con las tres, los auriculares del mono ofrecen **TE**, **AMO** y **ABUELA** (en otro orden que el de la carta). Hay que cantarlas como las dice la carta: «te», «amo», «abuela».
   4. **Seguir caminando.** Con la canción sonando, **SEGUIR CAMINANDO** (una cuenta lenta de 5 s: un toque la empieza, otro toque o cualquier otro botón la corta). El mono apoya el paso, la hebra de adelante se disuelve en rayas y la gota cae al piso: «De no heredar la misma tristeza.»
-- **Si se equivoca:** NO HEREDAR en lo que vale guardar deshilacha la hebra otra vez y el peldaño vuelve (cuenta un intento); CONSERVAR en lo heredado lo deja igual (se avisa). Cantar una palabra fuera del orden de la carta dispersa las notas otra vez por el cuarto: hay que volver a juntarlas. No hay otro castigo.
+- **Si se equivoca:** NO HEREDAR en lo que vale guardar deshilacha la hebra otra vez y el peldaño vuelve (cuenta un intento); CONSERVAR en lo heredado lo deja igual (se avisa). Cantar una palabra fuera del orden de la carta cuenta un intento y la canción vuelve a empezar, pero las tres notas se quedan con el visitante («Ese no es el orden de la carta. Tenés las tres notas: probá de nuevo desde la primera palabra.»). No hay otro castigo.
 - **Pista en pantalla:** «Me arrepiento de no haberte abrazado más, de no haberte dicho te amo cuando todavía podía hacerlo. / Pero te juro que estoy tratando de ser mejor. De no callar lo que siento.» (la sala dice al llegar: «Un mono camina por un piso de baldosas, con auriculares y lentes, soplando notas. Detrás, una hebra de ADN: deshilachada a la izquierda, entera en el medio, rayada y desvaneciéndose a la derecha.»). **PISTA** tiene tres niveles por paso (la hebra, las notas, la canción, seguir caminando); el último da la solución de ese paso.
 - **Solución:** NO HEREDAR en «el puño cerrado», «tus ojos duros» y «ese silencio»; CONSERVAR en «la fuerza», «tu manera de seguir viva» y «un pedazo tuyo en mí» (los tres últimos, a la derecha del cuadro); caminar hasta las tres notas y tomarlas; en los auriculares, TE, AMO, ABUELA; tocar al mono y dejar correr SEGUIR CAMINANDO.
 - **Recompensa:** Capítulo 6 — Explotar (la página vuela al libro, que se abre en el capítulo). Una vez: volver a jugar la sala (**JUGARLO DE NUEVO**, dos toques) no da nada dos veces.

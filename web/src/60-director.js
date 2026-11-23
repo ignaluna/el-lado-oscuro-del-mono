@@ -74,7 +74,6 @@ function syncUI() {
     if (!lv) { $('#lv-tip').hidden = true; }
   }
   Room.sync();
-  Room.place(); if (!$('#lv-tip').hidden) Level.place($('#lv-tip')); // (the floor's buttons changed: the plates keep clear of them)
   const inGallery = p === 'gallery', atPiece = inGallery && world.gallery.at >= 0;
   $('#gal-actions').hidden = !inGallery;
   $('#gal-cap').hidden = !atPiece || !!ov;
@@ -94,6 +93,7 @@ function syncUI() {
     if (mini) lp.layout();
   }
   $('#book-open').hidden = !(Book.state.found && !ov && (ext || p === 'cabin' || p === 'floor' || p === 'gallery'));
+  Room.place(); if (!$('#lv-tip').hidden) Level.place($('#lv-tip')); // (the floor's buttons and corner controls changed: the plates keep clear of them)
   Hot.enable((id) => {
     if (id === 'call') return p === 'prelaunch' && !ov;
     if (id === 'elevator') return p === 'open' && !ov;
@@ -140,12 +140,18 @@ function placeHint(again) {
   hintPadded = !!right;
 }
 function hint(text, ms = 2600) {
-  const el = $('#cap-hint'), caps = $('#captions');
-  el.textContent = text; el.hidden = false; live(text);
+  const el = $('#cap-hint');
+  el.textContent = text; el.hidden = false; el.classList.remove('tap'); live(text);
   placeHint();
   clearInterval(hintPlacer); hintPlacer = setInterval(() => placeHint(true), 250); // (the player may open, dock or fold while the line is up)
   clearTimeout(hintTimer);
-  hintTimer = setTimeout(() => { el.hidden = true; clearInterval(hintPlacer); caps.style.bottom = ''; if (hintPadded) caps.style.paddingRight = ''; hintPadded = false; }, ms);
+  hintTimer = setTimeout(unhint, ms);
+}
+/** Takes the line away now (its own timer, or a visitor who moved or tapped it). */
+function unhint() {
+  const el = $('#cap-hint'), caps = $('#captions');
+  clearTimeout(hintTimer); clearInterval(hintPlacer);
+  el.hidden = true; el.classList.remove('tap'); caps.style.bottom = ''; if (hintPadded) caps.style.paddingRight = ''; hintPadded = false;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -998,6 +1004,10 @@ const Dev = (() => {
     trialSolve() { if (Room.here()) Room.solveNow(); else Trial.solveNow(); },
     roomSolve() { Room.solveNow(); },
     roomReset() { Room.reset(true); },
+    /** Evaluation only: how long (ms) a floor may sit without progress before PISTA glows (90000 by default). */
+    nudgeIdle(ms) { Nudge.idleMs = Number(ms) > 0 ? Number(ms) : 90000; },
+    /** Evaluation only: the one-time line on how to move and look comes back for the next arrival. */
+    moveTipReset() { Roam.tipReset(); },
     /** Evaluation only: builds floors as plain worlds, without their room (the roam, rotate-hint and tier checks need a world with nothing in it). Inert in a release build unless #dev is in the address. Not saved, not in the URL: a reload ends it. */
     roomless(on) { Room.roomless = !!on && (SHOW_DEV_TOOLS || location.hash === '#dev'); },
     /** Evaluation only: the room's measures read as unknown (so the checks can prove an unknown distance is out of reach). Inert in a release build unless #dev is in the address. Not saved: a reload ends it. */
@@ -1132,6 +1142,7 @@ function frame(now) {
   App.time += dt;
   Seq.tick(dt);
   directorTick(dt, App.time);
+  Nudge.tick(dt);
   Input.tick(dt);
   try { R.render(dt, App.time); } catch (e) { console.error(e); if (R.kind === '3d') switchTo2D(); }
   Hot.update();
@@ -1173,6 +1184,7 @@ function initUI() {
   Trial.init();
   $('#rm-back').addEventListener('click', () => Room.backStep());
   $('#rm-hint').addEventListener('click', () => Room.hint());
+  $('#cap-hint').addEventListener('click', () => { if ($('#cap-hint').classList.contains('tap')) Roam.endTip(); }); // (only the one-time line on how to move can be tapped away)
   $('#rm-more').addEventListener('click', () => Room.hint());
   $('#rm-close').addEventListener('click', () => Room.closeTip());
   $('#rm-reset').addEventListener('click', () => Room.reset());
@@ -1349,7 +1361,7 @@ async function boot() {
       invite: (n) => Invite.open(n ? trackOf(n) : null), closeInvite: () => Invite.close(), gateChoose: (p) => Gate.choose(p), gateDismiss: () => Gate.dismiss(),
     },
     dev: { prelaunch: A.prelaunch, lastTen: A.lastTen, released: A.released, openDoors: A.openDoors, closeDoors: A.closeDoors, exterior: A.exterior, interior: A.interior, gallery: A.gallery, gallerySample: A.gallerySample,
-      arrive: A.arrive, platform: A.platform, press: A.press, embedMode: A.embedMode, clearLead: A.clearLead, clearBook: A.clearBook, levelFloor: A.levelFloor, levelReset: A.levelReset, levelSolve: A.levelSolve, playerTest: A.playerTest, adaptTest: (ms, s) => (R && R.adaptTest ? R.adaptTest(ms, s) : null), roamTo: A.roamTo, roamPush: A.roamPush, bookFind: A.bookFind, bookAll: A.bookAll, progressReset: A.progressReset, trialSolve: A.trialSolve, roomSolve: A.roomSolve, roomless: A.roomless, roomBlind: A.roomBlind, roomReset: A.roomReset, bookBuy: A.bookBuy, force2D: A.force2D, reducedMotion: A.reducedMotion, timeScale: A.timeScale },
+      arrive: A.arrive, platform: A.platform, press: A.press, embedMode: A.embedMode, clearLead: A.clearLead, clearBook: A.clearBook, levelFloor: A.levelFloor, levelReset: A.levelReset, levelSolve: A.levelSolve, playerTest: A.playerTest, adaptTest: (ms, s) => (R && R.adaptTest ? R.adaptTest(ms, s) : null), roamTo: A.roamTo, roamPush: A.roamPush, bookFind: A.bookFind, bookAll: A.bookAll, progressReset: A.progressReset, trialSolve: A.trialSolve, roomSolve: A.roomSolve, roomless: A.roomless, roomBlind: A.roomBlind, roomReset: A.roomReset, nudgeIdle: A.nudgeIdle, moveTipReset: A.moveTipReset, bookBuy: A.bookBuy, force2D: A.force2D, reducedMotion: A.reducedMotion, timeScale: A.timeScale },
   };
   boot().then(readyRes, (e) => { console.error(e); readyRes(); });
 }

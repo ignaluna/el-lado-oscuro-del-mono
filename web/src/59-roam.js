@@ -10,6 +10,8 @@ const Roam = {
   moved: 0,                     // metres walked since arriving: the player docks compact once the visitor moves
   docked: false,
   RADIUS: 0.3,
+  MOVE_KEY: 'eldom.moved.v1', // the visitor has been told how to move and look (once, kept with the rest of the progress)
+  tip: { on: false, text: '', leaveAt: 0, seen: null }, // the one-time line (see moveTip)
 
   /** Which free scene the visitor is in right now, or null (scripted moments, dialogs, close looks, the cabin). */
   scene() {
@@ -25,6 +27,7 @@ const Roam = {
     this.vx = this.vz = 0; this.stepT = 0; this.moved = 0; this.docked = false;
     this.joy.x = this.joy.y = 0;
     Joy.ghostSince = 0; Joy.ghostDone = false; // the ring shows again in the new scene
+    this.endTip();
   },
 
   /** Drag to look (mouse or a finger). Returns false when looking is not free here (the cabin keeps its own). */
@@ -43,6 +46,7 @@ const Roam = {
   tick(dt, keys) {
     const sc = this.scene(), c = world.cam;
     this.rotateHint();
+    this.moveTip();
     if (!sc) { this.vx = this.vz = 0; return false; }
     this.dockIfNeeded();
     let mx = this.joy.x, mz = this.joy.y, turn = 0;
@@ -98,6 +102,39 @@ const Roam = {
     store.session.set('eldom.rot', '1');
     hint(COPY.rotate, 4200);
   },
+  /**
+   * The first time a visitor stands free on a floor: one line on how to move and look (touch: the left thumb and dragging; desktop: WASD or
+   * the arrows and dragging the mouse). Once per visitor. It never shares the screen with anything else that speaks: it waits for the arrival
+   * line, for the walking ring and (a phone held upright) for the line about lying it down. It stays until the visitor moves (then a few
+   * seconds), taps it, or puts a thumb on the walking ring; another line that takes its place ends it too.
+   */
+  moveTip() {
+    const t = this.tip, el = $('#cap-hint'), now = performance.now();
+    if (t.on) {
+      if (el.hidden || el.textContent !== t.text) { t.on = false; return; } // (its time ran out, or another line took its place)
+      if (!this.scene() || (Joy.coarse && Joy.id !== null)) { this.endTip(); return; } // something opened (a close look, a plate), or a thumb is already walking: the live ring takes the spot
+      if (this.moved > 0.6 && !t.leaveAt) t.leaveAt = now + 3000;
+      if (t.leaveAt && now > t.leaveAt) this.endTip();
+      return;
+    }
+    if (t.seen === null) t.seen = store.local.get(this.MOVE_KEY) === '1';
+    if (t.seen || world.phase !== 'floor' || this.scene() !== 'floor' || !el.hidden) return;
+    if (Joy.coarse && (!Joy.ghostDone || !$('#joy-ghost').hidden || Joy.id !== null)) return;                       // the walking ring comes first
+    if (Joy.coarse && window.innerWidth < window.innerHeight && !store.session.get('eldom.rot')) return;             // then the line about lying the phone down
+    t.seen = true; store.local.set(this.MOVE_KEY, '1');
+    if (this.moved > 2) return; // (already walking around: nothing to teach)
+    t.text = Joy.coarse ? COPY.moveTouch : COPY.moveDesk; t.leaveAt = 0; t.on = true;
+    hint(t.text, 60000);
+    el.classList.add('tap');
+  },
+  /** Takes the line away (it was tapped, the visitor walks, or the scene changed). */
+  endTip() {
+    const t = this.tip;
+    if (t.on && $('#cap-hint').textContent === t.text) unhint();
+    t.on = false;
+  },
+  /** Evaluation only: the line comes back at the next arrival. */
+  tipReset() { store.local.remove(this.MOVE_KEY); this.tip.seen = false; this.endTip(); },
   /** Keeps the visitor inside the scene and outside the solid things in it. */
   collide(sc, x, z) {
     const r = this.RADIUS;

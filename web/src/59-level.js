@@ -12,7 +12,10 @@
 function plateClear() {
   const fa = $('#floor-actions'), r = fa.hidden ? null : fa.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
   if (!r || !r.width) return {};
-  if (W < 640) return { top: Math.round(r.bottom + 8) };
+  if (W < 640) { // upright: below the buttons' row and the corner controls on the right (sound, the book)
+    const low = ['#sound', '#book-open'].map((s) => $(s)).filter((e) => e && !e.hidden).reduce((b, e) => Math.max(b, e.getBoundingClientRect().bottom), r.bottom);
+    return { top: Math.round(low + 8) };
+  }
   return H <= 480 ? { left: Math.round(r.right + 12) } : {};
 }
 /** The width of a plate that starts at `left` on a short wide screen: it stops short of the corner player on the right (never under 230 px). */
@@ -81,6 +84,7 @@ const Level = {
     Seq.cancel('lv');
     this.view = 'wide'; this.busy = false; this.awaitCard = false;
     this.closeTip();
+    Nudge.reset();
     $('#lv-card').hidden = true;
     if (App.overlay === 'level') App.overlay = null;
     this.applyVisual();
@@ -173,8 +177,7 @@ const Level = {
       Sound.buzz();
       Seq.run('lvs', async (c) => { world.level.shake = 1; await c.to(world.level, { shake: 0 }, 0.5); });
       this.flash(COPY.lvNoGive);
-      if (this.s.tries >= 2) $('#lv-hint').classList.add('nudge');
-      return;
+      return; // (the glow on PISTA after two wrong tries is Nudge's)
     }
     this.anim(async (c) => {
       Sound.latch();
@@ -184,7 +187,6 @@ const Level = {
       Sound.ding();
       await c.to(world.level, { obj: 1 }, rm(0.9), Ease.outCubic);
       this.setStage(3);
-      $('#lv-hint').classList.remove('nudge');
       live(COPY.lvOpen);
     });
   },
@@ -232,7 +234,7 @@ const Level = {
     Seq.cancel('lv');
     this.busy = false; this.awaitCard = false; this.hintStage = -1;
     this.hideCard(); this.closeTip();
-    $('#lv-hint').classList.remove('nudge');
+    Nudge.reset();
     this.applyVisual();
     live(COPY.lvResetDone);
     if (this.here()) this.go('wide'); else syncUI();
@@ -244,7 +246,7 @@ const Level = {
     if (!tiers || this.s.done) return;
     if (this.hintStage !== st) { this.hintStage = st; this.hintTier = 0; } else this.hintTier = Math.min(tiers.length - 1, this.hintTier + 1);
     this.s.hints++; this.save();
-    $('#lv-hint').classList.remove('nudge');
+    Nudge.take();
     this.tip(tiers[this.hintTier], this.hintTier < tiers.length - 1);
   },
   tip(text, more) {
@@ -282,7 +284,7 @@ const Level = {
   /** For the checks. */
   debug() {
     return { stage: this.s.stage, done: this.s.done, dials: this.s.dials.map((i) => LEVEL.symbols[i]), tries: this.s.tries, hints: this.s.hints, view: this.view, busy: this.busy,
-      here: this.here(), card: !$('#lv-card').hidden, tip: $('#lv-tip').hidden ? '' : $('#lv-tip-text').textContent, set: R && R.levelInfo ? R.levelInfo() : null,
+      here: this.here(), card: !$('#lv-card').hidden, tip: $('#lv-tip').hidden ? '' : $('#lv-tip-text').textContent, nudge: $('#lv-hint').classList.contains('nudge'), set: R && R.levelInfo ? R.levelInfo() : null,
       floor: this.floor(), saved: store.local.json(this.KEY, null) };
   },
 };
