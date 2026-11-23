@@ -1075,7 +1075,7 @@ async function reachGate(p, check, { id, what, read, dist, reach = 4.8, whileBli
  * Plays floor 5's room (the walking monkey and the strand) with real clicks: the six rungs (three on the helix of the picture, three beyond its
  * edge that show only near: NO HEREDAR on the pain, CONSERVAR on what is kept), the three notes that carry the unsaid words (walked to), the song
  * sung at the headphones in the letter's order, and the slow SEGUIR CAMINANDO. `thorough` adds saved states that must be rejected, wrong choices
- * on the rungs, things touched out of turn, the hint ladder of every stage, a wrong song (the notes scatter back) and the visitor's walk to the far
+ * on the rungs, things touched out of turn, the hint ladder of every stage, a wrong song (the notes stay) and the visitor's walk to the far
  * rungs and the notes. Returns the room's state at the end.
  */
 async function playExplotar(p, { check, shot, thorough = false }) {
@@ -1202,13 +1202,12 @@ async function playExplotar(p, { check, shot, thorough = false }) {
   if (thorough) await hintLadder(2, /TE, después AMO, después ABUELA/, 'stage 2');
   await tapHot('Los auriculares'); s = await until((x) => x.view === 'cantar' && x.panel, 8000); await wait(900);
   check(NOTES.every((w) => s.acts.some((a) => a.act === `cantar-${w}`)) && /tres palabras/.test(s.status), `the headphones: the three words to sing ("${s.status}")`);
-  if (thorough) { // out of order: the notes scatter back
+  if (thorough) { // out of order: the song starts again, the notes stay
     const t0 = s.tries; await act('cantar-te').click(); await until((x) => x.sung === 'te', 3000); await act('cantar-abuela').click(); s = await until((x) => x.tries === t0 + 1, 3000);
-    check(s.tries === t0 + 1 && s.sung === '' && s.notes === '' && s.phase === 'notes' && s.stage === 1 && /orden de la carta/.test(s.status), `«abuela» before «amo»: the notes scatter back ("${s.status}")`);
-    await shot('room5-07-scatter');
+    check(s.tries === t0 + 1 && s.sung === '' && s.notes === '0,1,2' && s.phase === 'song' && s.stage === 2 && /orden de la carta/.test(s.status) && !/dispers/i.test(s.status), `«abuela» before «amo»: the song starts again and the three notes stay ("${s.status}")`);
+    await shot('room5-07-wrong-word');
     s = await until((x) => x.view === 'wide', 6000); await wait(500);
-    for (const k of [1, 2, 0]) await collect(k); // (they are taken again, in another order)
-    await settle(); await home();
+    await settle(); await home(); // (nothing to collect again: the notes stayed)
     await tapHot('Los auriculares'); s = await until((x) => x.view === 'cantar' && x.panel, 8000); await wait(900);
   }
   for (const [i, w] of NOTES.entries()) { await act(`cantar-${w}`).click(); s = await until((x) => ids(x.sung).length === i + 1, 3000); }
@@ -1661,6 +1660,151 @@ async function dialogDismiss(p, shot, log, check) {
   const spotR = await bareSpot(p);
   check(!!spotR, 'room: there is bare 3D view to tap' + tag);
   if (spotR) { await tapAt(spotR); await wait(1300); const v = (await rms()).view; check(v === 'wide', 'room: a tap on empty space steps back like ← ALEJARSE (view ' + v + ')' + tag); }
+}
+
+/**
+ * The quick wins of the first-time visitor (feature ux-quick-wins). Run by dismiss, on whatever screen this is.
+ *  Q1 PISTA glows after two wrong tries or a stretch of idle time without progress, and opening it stops the glow (a room and the basement level).
+ *  Q2 a wrong word at the headphones of Explotar keeps the three notes.   Q3 the line on how to move and look: first arrival only, never with the ring or another line.
+ *  Q4 after a freed chapter the book closes on "Capítulo n/9 · Seguí por el piso X, «Title»".   Q5 the small controls are at least 44 px on a touch screen.
+ * (Every other scenario starts with the Q3 line already seen: see run().)
+ */
+async function quickWins(p, shot, log, check) {
+  const vp = p.viewportSize(), coarse = await ev(p, () => matchMedia('(pointer: coarse)').matches);
+  const tag = ` [${vp.width}×${vp.height}]`;
+  const rms = () => ev(p, () => window.__eldom.state().room);
+  const lvs = () => ev(p, () => window.__eldom.state().level);
+  const hintText = () => ev(p, () => { const e = document.querySelector('#cap-hint'); return e.hidden ? '' : e.textContent; });
+  const until = async (fn, ms = 12000) => { const t0 = Date.now(); for (;;) { const v = await fn(); if (v) return v; if (Date.now() - t0 > ms) return v; await wait(150); } };
+  const COUNT = (n) => `Capítulo ${n}/9 · `;
+  await ev(p, () => window.__eldom.dev.released());
+
+  // ---- Q1: PISTA glows (a room) ----
+  await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.roomReset(); window.__eldom.dev.nudgeIdle(0); });
+  await ev(p, (f) => window.__eldom.dev.arrive(f), 1); await waitFloor(p, 1); await wait(2600);
+  let s = await rms();
+  check(s.here && !s.nudge && s.tries === 0, 'Q1 room: a fresh floor does not glow' + tag);
+  await ev(p, () => window.__eldom.ui.roomGo('screen')); await wait(1900);
+  await p.locator('#rm-acts [data-act="probar"]').click(); await wait(500);
+  s = await rms(); check(s.tries === 1 && !s.nudge, 'Q1 room: one wrong try does not glow yet (tries ' + s.tries + ')' + tag);
+  await p.locator('#rm-acts [data-act="probar"]').click(); await wait(700);
+  s = await rms(); check(s.tries === 2 && s.nudge, 'Q1 room: PISTA glows after two wrong tries (tries ' + s.tries + ')' + tag);
+  await shot('quick-1-pista-glow');
+  const pri = await ev(p, () => { const a = getComputedStyle(document.querySelector('#rm-hint')), b = getComputedStyle(document.querySelector('#cap-invite')); const al = (c) => { const v = c.match(/[\d.]+/g).map(Number); return v.length > 3 ? v[3] : 1; }; return { pista: al(a.color), invite: al(b.color), pistaSize: parseFloat(a.fontSize), inviteSize: parseFloat(b.fontSize) }; });
+  check(pri.pista > pri.invite && pri.pistaSize >= pri.inviteSize, `Q1: PISTA reads as the primary action, brighter than INVITAR (alpha ${pri.pista} vs ${pri.invite}, ${pri.pistaSize}px vs ${pri.inviteSize}px)` + tag);
+  { const r = await reachOf(p, '#rm-hint'); check(!!r && r.inView && r.free && r.h >= 43.5, 'Q1: the glowing PISTA is whole on screen, uncovered and at least 44 px tall (' + JSON.stringify(r) + ')' + tag); }
+  await ev(p, () => window.__eldom.ui.roomHint()); await wait(300);
+  s = await rms(); check(!s.nudge, 'Q1 room: opening PISTA stops the glow' + tag);
+  await wait(800); s = await rms(); check(!s.nudge, 'Q1 room: and it stays quiet while the stage does not change' + tag);
+
+  // ---- Q1: idle time without progress, only while the floor shows with nothing open over it ----
+  await ev(p, () => { window.__eldom.dev.roomReset(); window.__eldom.dev.nudgeIdle(2200); window.__eldom.dev.bookFind(); });
+  await wait(900); s = await rms(); check(!s.nudge, 'Q1 idle: not before its time' + tag);
+  await ev(p, () => window.__eldom.ui.openBook(0)); await wait(3200);
+  check(!(await rms()).nudge, 'Q1 idle: time with the book open does not count' + tag);
+  await ev(p, () => window.__eldom.ui.closeBook()); await wait(500);
+  check(!(await rms()).nudge, 'Q1 idle: back from the book it counts from where it was, not all at once' + tag);
+  s = await until(async () => { const x = await rms(); return x.nudge ? x : null; }, 4500);
+  check(!!s && s.nudge && s.tries === 0, 'Q1 idle: PISTA glows after the idle stretch without a single wrong try' + tag);
+  await ev(p, () => { window.__eldom.dev.nudgeIdle(0); window.__eldom.dev.roomReset(); }); await wait(300);
+  check(!(await rms()).nudge, 'Q1: starting the room again clears the glow' + tag);
+
+  // ---- Q1: the same on the level of the first basement ----
+  await ev(p, () => window.__eldom.dev.levelReset()); await ev(p, () => window.__eldom.dev.levelFloor()); await waitFloor(p, -1); await wait(2600);
+  check(!(await lvs()).nudge, 'Q1 level: a fresh level does not glow' + tag);
+  await ev(p, () => window.__eldom.ui.levelGo('wall')); await wait(1700);
+  await ev(p, () => window.__eldom.ui.levelTap('lv-painting')); await untilNotBusy(p);
+  await ev(p, () => window.__eldom.ui.levelTap('lv-hatch')); await untilNotBusy(p); await wait(1500);
+  for (let i = 0; i < 2; i++) { await ev(p, () => window.__eldom.ui.levelTap('lv-latch')); await wait(800); }
+  s = await lvs(); check(s.stage === 2 && s.tries >= 2 && s.nudge, `Q1 level: PISTA glows after two wrong tries at the box (stage ${s.stage}, tries ${s.tries})` + tag);
+  await shot('quick-2-level-glow');
+  await ev(p, () => window.__eldom.ui.levelHint()); await wait(300);
+  check(!(await lvs()).nudge, 'Q1 level: opening PISTA stops the glow' + tag);
+
+  // ---- Q2: Explotar keeps the three notes on a wrong word ----
+  await ev(p, () => { window.__eldom.dev.progressReset(); localStorage.setItem('eldom.room.explotar.v1', JSON.stringify({ v: 1, rungs: [0, 1, 2, 3, 4, 5], notes: [0, 1, 2], sung: [], done: false, tries: 0, hints: 0 })); });
+  await ev(p, (f) => window.__eldom.dev.arrive(f), 5); await waitFloor(p, 5); await wait(2600);
+  s = await rms(); check(s.phase === 'song' && s.notes === '0,1,2', `Q2: Explotar starts at the song with its three notes (phase ${s.phase}, notes "${s.notes}")` + tag);
+  await ev(p, () => window.__eldom.ui.roomTap('rm-auriculares')); await wait(2000);
+  await p.locator('#rm-acts [data-act="cantar-te"]').click(); await wait(400);
+  await p.locator('#rm-acts [data-act="cantar-abuela"]').click(); await wait(600);
+  s = await rms();
+  check(s.tries === 1 && s.sung === '' && s.notes === '0,1,2' && s.phase === 'song' && s.stage === 2 && s.visual.v.note.join('') === '111', `Q2: a wrong word starts the song again and the three notes stay (sung "${s.sung}", notes "${s.notes}", tries ${s.tries})` + tag);
+  check(/orden de la carta/.test(s.status) && !/dispers/i.test(s.status), `Q2: the line no longer says the notes scatter ("${s.status}")` + tag);
+  await shot('quick-3-notes-stay');
+
+  // ---- Q3: the line on how to move and look, on the first arrival only ----
+  // (Reset and arrival in ONE evaluate: the page keeps drawing frames between two calls, and a visitor standing free on the previous floor would be told how to move there,
+  //  using up the one-time line before the arrival this check is about.)
+  await ev(p, () => { const d = window.__eldom.dev; d.progressReset(); d.roomless(true); d.nudgeIdle(0); d.moveTipReset(); d.arrive(3); }); await waitFloor(p, 3);
+  const want = coarse ? /pulgar[\s\S]*mirar/ : /W, A, S, D[\s\S]*mouse/;
+  const seen = await until(async () => { const t = await hintText(); return want.test(t) ? t : ''; }, 26000);
+  check(!!seen, `Q3: the first arrival says how to move and look ("${seen}")` + tag);
+  if (seen) {
+    const geo = await ev(p, () => {
+      const r = (q) => { const e = document.querySelector(q); if (!e || e.hidden || !e.checkVisibility()) return null; const b = e.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; };
+      const hit = (a, b) => !!a && !!b && a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t;
+      const line = r('#cap-hint');
+      return { ring: !!r('#joy-ghost'), overRow: hit(line, r('#floor-actions')), overPlayer: hit(line, r('.portal')), overRing: hit(line, r('#joy')), inView: !!line && line.l >= -0.5 && line.r <= innerWidth + 0.5 && line.b <= innerHeight + 0.5, h: line ? line.b - line.t : 0 };
+    });
+    check(!geo.ring && !geo.overRow && !geo.overPlayer && !geo.overRing && geo.inView, 'Q3: it never shares the screen with the walking ring, the floor\'s buttons or the player (' + JSON.stringify(geo) + ')' + tag);
+    check(geo.h >= 43.5, `Q3: and it is a target of at least 44 px to tap away (${Math.round(geo.h)} px)` + tag);
+    await shot('quick-4-move-line');
+    await wait(3500); check(want.test(await hintText()), 'Q3: it stays while the visitor does not move' + tag);
+    await ev(p, () => window.__eldom.dev.roamPush(0, 1, 1500)); // walks a little: it goes a few seconds later
+    const gone = await until(async () => (await hintText()) === '', 7000);
+    check(!!gone, 'Q3: a few seconds after the visitor walks, it goes' + tag);
+  }
+  await ev(p, () => { window.__eldom.dev.moveTipReset(); window.__eldom.dev.arrive(4); }); await waitFloor(p, 4); // (one evaluate, for the same reason)
+  const again = await until(async () => { const t = await hintText(); return want.test(t) ? t : ''; }, 26000);
+  if (again) {
+    if (coarse) { const y = await ev(p, () => { const r = document.querySelector('#cap-hint').getBoundingClientRect(); return r.top + r.height / 2; }); await p.touchscreen.tap(vp.width / 2, y); }
+    else await p.locator('#cap-hint').click();
+    await wait(400);
+  }
+  check(!!again && (await hintText()) === '', 'Q3: tapping the line takes it away' + tag);
+  await ev(p, (f) => window.__eldom.dev.arrive(f), 5); await waitFloor(p, 5);
+  let back = false;
+  for (let i = 0; i < 18 && !back; i++) { await wait(500); back = want.test(await hintText()); }
+  check(!back && (await ev(p, () => localStorage.getItem('eldom.moved.v1'))) === '1', 'Q3: a later arrival does not say it again (it is kept as seen)' + tag);
+  await ev(p, () => window.__eldom.dev.roomless(false));
+
+  // ---- Q4: after a freed chapter, the book closes on the next step ----
+  await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.bookAll(4); });
+  await ev(p, (f) => window.__eldom.dev.arrive(f), 5); await waitFloor(p, 5); await wait(2600);
+  await ev(p, () => window.__eldom.dev.trialSolve());
+  const opened = await until(async () => (await state(p)).overlay === 'book', 20000);
+  check(!!opened, 'Q4: the freed chapter opens the book' + tag);
+  await ev(p, () => window.__eldom.ui.closeBook()); await wait(500);
+  const line = await hintText();
+  check(line === COUNT(5) + 'Seguí por el piso 6, «Pato».', `Q4: the book closes on the next step by floor, not by chapter number ("${line}")` + tag);
+  await shot('quick-5-next-step');
+  await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.bookAll(8); });
+  await ev(p, (f) => window.__eldom.dev.arrive(f), 9); await waitFloor(p, 9); await wait(2600);
+  await ev(p, () => window.__eldom.dev.trialSolve());
+  await until(async () => (await state(p)).overlay === 'book', 20000);
+  await ev(p, () => window.__eldom.ui.closeBook()); await wait(600);
+  check((await state(p)).overlay === 'reveal', 'Q4: the ninth chapter keeps its own moment (the reveal), with no extra line over it' + tag);
+  await p.locator('#reveal-stay').click(); await wait(500);
+  const last = await hintText();
+  check(last === COUNT(9) + 'Ya están todos los capítulos en tu libro.', `Q4: with all nine free, a closing line instead ("${last}")` + tag);
+  await ev(p, () => window.__eldom.dev.progressReset());
+
+  // ---- Q5: the small controls are at least 44 px on a touch screen ----
+  if (!coarse) log('Q5: not a touch screen, the 44 px targets are checked on mobile or landscape');
+  else {
+    const size = (q) => ev(p, (sel) => { const e = document.querySelector(sel); if (!e || e.hidden || !e.checkVisibility()) return null; const r = e.getBoundingClientRect(); return { w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 }; }, q);
+    const big = (r, what, both) => check(!!r && r.h >= 43.5 && (!both || r.w >= 43.5), `Q5: ${what} is at least 44 px${both ? ' wide and' : ''} tall (${JSON.stringify(r)})` + tag);
+    await ev(p, (f) => window.__eldom.dev.arrive(f), 1); await waitFloor(p, 1); await wait(2600);
+    big(await size('#sound'), 'SONIDO', true);
+    const mini = await size('.portal-mini');
+    if (mini) big(mini, 'the player\'s AMPLIAR/MINIMIZAR'); else log('Q5: no mini toggle on this player (skipped)');
+    await ev(p, () => window.__eldom.ui.roomHint()); await wait(400);
+    big(await size('#rm-close'), 'CERRAR on a room hint'); big(await size('#rm-more'), 'OTRA PISTA on a room hint');
+    await ev(p, () => window.__eldom.dev.bookFind()); await ev(p, () => window.__eldom.ui.openBook(0)); await wait(1200);
+    big(await size('#bk-close'), 'CERRAR in the book');
+    await ev(p, () => window.__eldom.ui.closeBook()); await wait(400);
+  }
 }
 
 const ROOM_WALKS = {
@@ -3641,6 +3785,7 @@ const SCENARIOS = {
     const fails = [];
     const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
     await dialogDismiss(p, shot, log, check);
+    await quickWins(p, shot, log, check);
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' dismiss check(s) failed: ' + fails.join(' | '));
   },
@@ -4117,6 +4262,8 @@ async function run() {
       await ctx.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
       // The band's real sheet never gets test sign-ups: Google's addresses are answered by the mock sheet, unless
       // --real-leads (the one end-to-end check of the live site, scenario `leadslive`).
+      // The one-time line on how to move and look (Roam.moveTip) starts as seen, so it never lands in a scenario about something else; `dismiss` brings it back on purpose.
+      await ctx.addInitScript(() => { try { localStorage.setItem('eldom.moved.v1', '1'); } catch { /* ignore */ } });
       if (!flag('real-leads')) await ctx.route(/^https:\/\/script\.google(usercontent)?\.com\//, (route) => LeadsMock.fulfill(route));
       if (extUrl || dist) await ctx.addInitScript(() => { window.__csp = []; document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(`${e.effectiveDirective} ${e.blockedURI}`)); });
       const p = await ctx.newPage();

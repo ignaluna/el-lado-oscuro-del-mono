@@ -83,7 +83,15 @@ const Book = {
     const icon = $('#book-open');
     icon.classList.remove('got'); void icon.offsetWidth; icon.classList.add('got');
     live(COPY.bookGotChapter);
+    this.fresh = true; // (the line about what comes next is said when this opening closes)
     this.open(this.leafOf(chapterId));
+  },
+  fresh: false,
+  /** "Capítulo n/9 · Seguí por el piso X, «Title»": X is the lowest floor of the record whose chapter is still closed (chapter numbers do not follow floors). Once all are free, a closing line. */
+  nextLine() {
+    const n = Progress.count(), total = Progress.total();
+    const next = albumTracks(ELODM).filter((t) => !Progress.solved(t.id)).sort((a, b) => a.floor - b.floor)[0];
+    return next ? COPY.nextStep(n, total, next.floor, next.title) : COPY.nextDone(n, total);
   },
 
   /** Everything the book holds, in reading order. A chapter not found yet stays in as a closed leaf that says where
@@ -125,6 +133,8 @@ const Book = {
     syncUI();
     Level.onBookClosed();
     Trial.onBookClosed();
+    const fresh = this.fresh; this.fresh = false;
+    if (fresh && world.phase === 'floor' && !App.overlay) hint(this.nextLine(), 7000); // (the ninth chapter opens the reveal instead: its own words, and the closing line when the visitor stays)
   },
   turn(d) {
     const n = this.leaves().length;
