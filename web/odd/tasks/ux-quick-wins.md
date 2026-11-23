@@ -46,6 +46,9 @@ Strategy: ask-on-risk. Branch `feat/ux-quick-wins` stacked on `fix/dialog-dismis
 - [x] Q4 Next-step line after a chapter.
 - [x] Q5 44 px touch targets for the small controls.
 - [x] Q6 Harness assertions for Q1–Q5 and RECORRIDO notes.
+- [x] Q7 (review R3-001/002) Plates bound their bottom: with the upright top from plateClear, maxHeight keeps CERRAR/OTRA PISTA on screen and above the docked player; long plates scroll inside.
+- [x] Q8 (review R3-003) Explotar resets heardN with the sung order after a wrong word.
+- [x] Q9 (review R3-004/005) Stale tap entries are pruned so dismissTap keeps working; Book.fresh is cleared whenever the book hides, not only in close().
 
 ## Acceptance criteria
 - After 2 wrong tries, or about 90 s without progress, PISTA glows; opening it stops the glow.
@@ -73,3 +76,7 @@ Strategy: ask-on-risk. Branch `feat/ux-quick-wins` stacked on `fix/dialog-dismis
   follow-ups: R3-001/002 plate maxHeight ignores the new upright top (a long plate's CERRAR could fall under the player
   or off screen); R3-003 Explotar `heardN` no longer reset after a wrong word; R3-004 stale tap entry could disable
   dismissTap; R3-005 `Book.fresh` could fire the next-step line on a later unrelated close.
+- 2026-11-23: Q7–Q9 done (delegated writer, same trigger). Q7: `plateMaxH(top, floor)` bounds `Room.place` / `Level.place` between their real top and the docked player (or the screen bottom); `#rm-panel` / `#lv-tip` are now flex columns whose body (`#rm-body`, `#lv-tip-body`) scrolls while the CERRAR / OTRA PISTA bar stays. Q8: `heardN` only drives the "a note is near" line in the notes phase, so after a wrong word (phase stays `song`) it has no visible effect; it is reset with the sung order anyway and exposed as `heard` in `Room.debug()` (asserted in the thorough Explotar walk). Q9: stale `taps` entries are pruned on pointerdown; `Book.fresh` is cleared when the book did not open, on Book.reset, on a phase change and in resetWorld. Harness: `plateAndRobustness()` in `dismiss` (longest hint tier of floors 1–9, ring and clock plates, a 360×640 phone, stale pointerdown, book that never opened). Checked red-green: without the Q9 fixes two checks failed; without the Q7 source the ring plate ended at 418 px over a player at 367 px. All runs exit 0: build; dismiss both x2; smoke,phoneview,landscape,book both; room floor 5 both.
+- 2026-11-23 parent spot check (Q7–Q9): rebuild ok; `dismiss --viewport mobile` all checks passed; the hint plates were
+  made opaque (`rgb(16,14,13)` instead of .95 alpha) because the arrival line showed through a long hint on a
+  360×640 phone; re-run passed and the shot is clean.

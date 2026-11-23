@@ -198,8 +198,9 @@ const Room = {
     if (el.hidden) return;
     const W = window.innerWidth, H = window.innerHeight, port = PlayerPortal.current, clear = plateClear();
     let w = Math.min(340, W - 24), left = 16, top = 16, maxH = H - 32;
-    if (W < 640) { left = (W - w) / 2; top = clear.top || 54; /* under the floor's row of buttons */ if (port) maxH = Math.max(160, port.el.getBoundingClientRect().top - 20); }
+    if (W < 640) { left = (W - w) / 2; top = clear.top || 54; /* under the floor's row of buttons */ }
     else if (clear.left) { left = clear.left; w = plateFit(w, left); /* beside their column (a phone lying down) */ }
+    maxH = plateMaxH(top, W < 640 && port ? port.el.getBoundingClientRect().top : H); // (what is left between its top and the player, or the screen's bottom)
     el.style.width = Math.round(w) + 'px'; el.style.left = Math.round(left) + 'px'; el.style.top = Math.round(top) + 'px'; el.style.maxHeight = Math.round(maxH) + 'px';
   },
   /** A hint over the wide view, or in the status line of the close look. */

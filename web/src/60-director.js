@@ -118,7 +118,7 @@ function syncUI() {
   $('#dev').classList.toggle('shy', !!ov && !Dev.isOpen());
   Dev.refresh();
 }
-function setPhase(p) { world.phase = p; if (p !== 'cabin') SpNotice.close(); syncUI(); }
+function setPhase(p) { if (p !== world.phase) Book.fresh = false; world.phase = p; if (p !== 'cabin') SpNotice.close(); syncUI(); }
 const ROOM_HOTS = [...new Set(Object.values(ROOMS).flatMap((d) => Object.keys(d.hots)))]; // every room's hotspots (each shows only in its own room)
 const LEVEL_HOTS = ['lv-wall', 'lv-stones', 'lv-painting', 'lv-hatch', 'lv-box', 'lv-dial-0', 'lv-dial-1', 'lv-dial-2', 'lv-latch', 'lv-object'];
 let hintTimer = 0, hintPlacer = 0, hintPadded = false;
@@ -418,6 +418,7 @@ function resetWorld() {
   Room.leave();
   setPlace(0);
   Roam.reset();
+  Book.fresh = false;
 }
 function applyPrelaunch() {
   resetWorld();
@@ -855,6 +856,8 @@ const Input = (() => {
     const stage = $('#stage');
     stage.addEventListener('pointerdown', (e) => {
       Sound.unlock();
+      const now = performance.now();
+      for (const [id, t] of taps) if (now - t.t > TAP_MS) taps.delete(id); // (a touch whose pointerup was lost must not keep every later tap from being a lone one)
       taps.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now(), type: e.pointerType, far: false, solo: taps.size === 0 }); // (a short still touch is a tap even where the walking ring would start)
       if (!Joy.claim(e)) drags.set(e.pointerId, { x: e.clientX, y: e.clientY, kind: e.pointerType });
       try { stage.setPointerCapture(e.pointerId); } catch { /* ignore */ }

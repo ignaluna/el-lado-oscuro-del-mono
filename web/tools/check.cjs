@@ -1205,6 +1205,7 @@ async function playExplotar(p, { check, shot, thorough = false }) {
   if (thorough) { // out of order: the song starts again, the notes stay
     const t0 = s.tries; await act('cantar-te').click(); await until((x) => x.sung === 'te', 3000); await act('cantar-abuela').click(); s = await until((x) => x.tries === t0 + 1, 3000);
     check(s.tries === t0 + 1 && s.sung === '' && s.notes === '0,1,2' && s.phase === 'song' && s.stage === 2 && /orden de la carta/.test(s.status) && !/dispers/i.test(s.status), `«abuela» before «amo»: the song starts again and the three notes stay ("${s.status}")`);
+    check(s.heard === 'false,false,false', `«abuela» before «amo»: the walker's memory of announced notes starts again with the sung order (heard "${s.heard}")`);
     await shot('room5-07-wrong-word');
     s = await until((x) => x.view === 'wide', 6000); await wait(500);
     await settle(); await home(); // (nothing to collect again: the notes stayed)
@@ -1805,6 +1806,113 @@ async function quickWins(p, shot, log, check) {
     big(await size('#bk-close'), 'CERRAR in the book');
     await ev(p, () => window.__eldom.ui.closeBook()); await wait(400);
   }
+}
+
+/**
+ * Review follow-ups of ux-quick-wins (Q7–Q9). Run by dismiss, on whatever screen this is.
+ *  Q7 a plate keeps its bottom above the docked player and its CERRAR / OTRA PISTA bar on screen, with the book icon showing (the plate starts lower then);
+ *     the longest hint tier of every floor, and the biggest close-look panels (the ring of eight rays, the clock).
+ *  Q9 a pointerdown whose pointerup was lost does not disable the tap that closes a hint; a book that never opened does not leave its next-step line for a later close.
+ */
+async function plateAndRobustness(p, shot, log, check) {
+  let vp = p.viewportSize(), tag = ` [${vp.width}×${vp.height}]`;
+  const size0 = vp;
+  const rms = () => ev(p, () => window.__eldom.state().room);
+  const hintText = () => ev(p, () => { const e = document.querySelector('#cap-hint'); return e.hidden ? '' : e.textContent; });
+  const rect = (sel) => ev(p, (q) => { const e = document.querySelector(q); if (!e || e.hidden || !e.checkVisibility()) return null; const r = e.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, h: r.height }; }, sel);
+  await ev(p, () => window.__eldom.dev.released());
+
+  // ---- Q7: plates against the book icon and the player ----
+  const plate = async (what) => {
+    const pl = await rect('#rm-panel'), port = await rect('.portal'), book = await rect('#book-open');
+    check(!!pl && pl.top >= 0 && pl.bottom <= vp.height + 0.5, `Q7 ${what}: the plate is whole on screen (${pl && Math.round(pl.top)}–${pl && Math.round(pl.bottom)} of ${vp.height})` + tag);
+    if (pl && port && vp.width < 640) check(pl.bottom <= port.top + 0.5, `Q7 ${what}: the plate ends above the docked player (${Math.round(pl.bottom)} ≤ ${Math.round(port.top)})` + tag);
+    if (pl && book && vp.width < 640) check(pl.top >= book.bottom - 0.5, `Q7 ${what}: and starts below the book icon (${Math.round(pl.top)} ≥ ${Math.round(book.bottom)})` + tag);
+    return pl;
+  };
+  const way = (r, what) => check(!!r && r.inView && r.free && r.h >= 43.5, `Q7 ${what}: whole on screen, uncovered and at least 44 px tall (${JSON.stringify(r)})` + tag);
+  await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.bookFind(); });
+  let longest = 0, longestFloor = 1;
+  for (let f = 1; f <= 9; f++) {
+    await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.roomReset(); });
+    await ev(p, (n) => window.__eldom.dev.arrive(n), f); await waitFloor(p, f); await wait(2400);
+    if (f === 1) check(!!(await reachOf(p, '#book-open')), 'Q7: the book icon is showing on the floor' + tag);
+    await ev(p, () => window.__eldom.ui.roomHint()); await wait(250);
+    way(await reachOf(p, '#rm-more'), `floor ${f}, first hint: OTRA PISTA`);
+    way(await reachOf(p, '#rm-close'), `floor ${f}, first hint: CERRAR`);
+    await ev(p, () => { window.__eldom.ui.roomHint(); window.__eldom.ui.roomHint(); }); await wait(300);
+    const s = await rms();
+    await plate(`floor ${f}, last hint tier (${s.status.length} characters)`);
+    way(await reachOf(p, '#rm-close'), `floor ${f}, last hint tier: CERRAR`);
+    if (s.status.length > longest) { longest = s.status.length; longestFloor = f; await shot('quick-6-long-plate'); }
+  }
+  log(`longest hint tier seen: ${longest} characters`);
+
+  // the close looks with the most to hold: the ring of eight rays (and a wrong-code line), and the clock
+  await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.roomReset(); });
+  await ev(p, (n) => window.__eldom.dev.arrive(n), 1); await waitFloor(p, 1); await wait(2400);
+  await ev(p, () => window.__eldom.ui.roomGo('screen')); await wait(1900);
+  await p.locator('#rm-acts [data-act="probar"]').click(); await wait(400);
+  await ev(p, () => window.__eldom.ui.roomHint()); await wait(300);
+  await plate('the ring of eight rays with a hint');
+  way(await reachOf(p, '#rm-more'), 'the ring with a hint: OTRA PISTA');
+  await shot('quick-7-ring-plate');
+  await ev(p, () => { localStorage.setItem('eldom.room.en-una.v1', JSON.stringify({ v: 1, stage: 1, spokes: [1, 0, 1, 1, 0, 0, 1, 0], clock: [0, 3, 4, 7], cupTurned: false, done: false, tries: 0, hints: 0 })); window.__eldom.dev.arrive(1); });
+  await waitFloor(p, 1); await wait(2400);
+  await ev(p, () => window.__eldom.ui.roomGo('screen')); await wait(1900);
+  await ev(p, () => window.__eldom.ui.roomHint()); await wait(300);
+  await plate('the clock with a hint');
+  way(await reachOf(p, '#rm-more'), 'the clock with a hint: OTRA PISTA');
+  await ev(p, () => { window.__eldom.dev.roomReset(); });
+
+  // a short phone held upright (360 × 640): the plates have less room than the content, so they scroll inside and keep their bar
+  if (size0.width < 640) {
+    await p.setViewportSize({ width: 360, height: 640 }); vp = { width: 360, height: 640 }; tag = ' [360×640]'; await wait(900);
+    const scrolls = (what) => ev(p, () => { const b = document.querySelector('#rm-body'); return !!b && b.scrollHeight > b.clientHeight + 1; }).then((v) => log('Q7 ' + what + ': the content ' + (v ? 'scrolls inside the plate' : 'fits')));
+    await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.roomReset(); });
+    await ev(p, (n) => window.__eldom.dev.arrive(n), longestFloor); await waitFloor(p, longestFloor); await wait(2400);
+    await ev(p, () => { window.__eldom.ui.roomHint(); window.__eldom.ui.roomHint(); window.__eldom.ui.roomHint(); }); await wait(400);
+    await plate('short phone, longest hint (floor ' + longestFloor + ')'); way(await reachOf(p, '#rm-close'), 'short phone, longest hint: CERRAR'); await scrolls('short phone, longest hint');
+    await shot('quick-8-short-phone-plate');
+    await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.roomReset(); });
+    await ev(p, (n) => window.__eldom.dev.arrive(n), 1); await waitFloor(p, 1); await wait(2400);
+    await ev(p, () => window.__eldom.ui.roomGo('screen')); await wait(1900);
+    await p.locator('#rm-acts [data-act="probar"]').click(); await wait(400);
+    await ev(p, () => window.__eldom.ui.roomHint()); await wait(300);
+    await plate('short phone, the ring with a hint'); way(await reachOf(p, '#rm-more'), 'short phone, the ring with a hint: OTRA PISTA'); await scrolls('short phone, the ring');
+    await p.setViewportSize({ width: size0.width, height: size0.height }); vp = size0; tag = ` [${vp.width}×${vp.height}]`; await wait(900);
+    await ev(p, () => { window.__eldom.dev.roomReset(); });
+  }
+
+  // ---- Q9: a lost pointerup must not disable the tap that closes a hint ----
+  await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.roomReset(); });
+  await ev(p, (n) => window.__eldom.dev.arrive(n), 1); await waitFloor(p, 1); await wait(2400);
+  await ev(p, () => window.__eldom.ui.roomHint()); await wait(300);
+  check((await rms()).panel, 'Q9: a hint is open over the wide view' + tag);
+  await ev(p, () => { document.querySelector('#stage').dispatchEvent(new PointerEvent('pointerdown', { pointerId: 77, pointerType: 'touch', clientX: Math.round(innerWidth * 0.9), clientY: Math.round(innerHeight * 0.5), bubbles: true })); }); // (its pointerup never comes)
+  await wait(800);
+  const spot = await bareSpot(p);
+  check(!!spot, 'Q9: there is bare 3D view to tap' + tag);
+  if (spot) {
+    const coarse = await ev(p, () => matchMedia('(pointer: coarse)').matches);
+    if (coarse) await p.touchscreen.tap(spot[0], spot[1]); else await p.mouse.click(spot[0], spot[1]);
+    await wait(600);
+    check(!(await rms()).panel, 'Q9: after a stale touch entry, a tap outside the hint still closes it' + tag);
+  }
+
+  // ---- Q9: a book that did not open leaves no next-step line for a later close ----
+  await ev(p, () => { window.__eldom.dev.progressReset(); window.__eldom.dev.roomReset(); window.__eldom.dev.bookFind(); });
+  await ev(p, (n) => window.__eldom.dev.arrive(n), 1); await waitFloor(p, 1); await wait(2400);
+  await ev(p, () => window.__eldom.ui.invite(1)); await wait(400); // (another dialog holds the screen when the chapter arrives)
+  await ev(p, () => window.__eldom.dev.trialSolve());
+  await wait(4500);
+  check((await state(p)).overlay === 'invite', 'Q9: the chapter arrived while another dialog was open, so the book did not open' + tag);
+  await ev(p, () => window.__eldom.ui.closeInvite()); await wait(400);
+  await ev(p, () => window.__eldom.ui.openBook(0)); await wait(800);
+  await ev(p, () => window.__eldom.ui.closeBook()); await wait(500);
+  const stray = await hintText();
+  check(!/Capítulo \d\/9/.test(stray), `Q9: closing the book later says nothing about the next step ("${stray}")` + tag);
+  await ev(p, () => window.__eldom.dev.progressReset());
 }
 
 const ROOM_WALKS = {
@@ -3786,6 +3894,7 @@ const SCENARIOS = {
     const check = (cond, msg) => { if (!cond) fails.push(msg); log((cond ? 'ok    ' : 'FAIL  ') + msg); };
     await dialogDismiss(p, shot, log, check);
     await quickWins(p, shot, log, check);
+    await plateAndRobustness(p, shot, log, check);
     log(`${fails.length ? 'FAILED CHECKS: ' + fails.length : 'all checks passed'}`);
     if (fails.length) throw new Error(fails.length + ' dismiss check(s) failed: ' + fails.join(' | '));
   },
