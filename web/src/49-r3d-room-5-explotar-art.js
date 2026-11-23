@@ -1,4 +1,4 @@
-// Floor 5 · «Explotar» · the cover's tones, traced from the photo (web/shots/covers/5-explotar.jpg). Generated once, not by hand: the photo is a black paper in a plastic
+// Floor 6 · «Explotar» · the cover's tones, traced from the photo (web/shots/covers/5-explotar.jpg). Generated once, not by hand: the photo is a black paper in a plastic
 // sleeve, so it was first unwarped to a square (the paper's four corners, a homography); the paper's own tone was then estimated outside the figure only (everything bright and the
 // walker's own silhouette, grown) and taken out, so the fur's dark greys stay and the paper's glare and the sleeve's edge are not drawn; the luminance was lifted, lightly blurred and
 // cut at five levels (marching squares), and every contour simplified (about a pixel). Each level is a list of closed loops, nested ones are holes (even-odd), in rectified cover
