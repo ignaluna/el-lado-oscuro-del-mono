@@ -600,11 +600,12 @@ const DEMO_ALBUM = {
 /**
  * The two records of the building. "elodm" fills floors 1–9; "pp" (Pequeño Primate) lives in the basements −1..−9,
  * which open once the nine chapters of the book are found.
- * El Lado Oscuro del Mono is not out yet: its YouTube and Spotify ids stay null until the band publishes them
- * (nothing here is invented). A floor without ids shows a "pending audio" box instead of a player.
+ * El Lado Oscuro del Mono: the band's full-album video (unlisted until the release, 34:38); its Spotify ids stay null
+ * until the band publishes them (nothing here is invented). A floor without ids shows a "pending audio" box.
  */
+const ELODM_VIDEO = "oFGp6q5RD-k";
 const ALBUMS = {
-  elodm: { id: "elodm", title: "El Lado Oscuro del Mono", youtubeVideoId: null, spotifyAlbumId: null },
+  elodm: { id: "elodm", title: "El Lado Oscuro del Mono", youtubeVideoId: ELODM_VIDEO, spotifyAlbumId: null },
   pp: { id: "pp", title: DEMO_ALBUM.title, youtubeVideoId: DEMO_ALBUM.youtubeVideoId, spotifyAlbumId: DEMO_ALBUM.spotifyAlbumId },
 };
 
@@ -631,30 +632,31 @@ const COVER_ELEMENTS = {
  * album: "elodm" (floors 1–9) or "pp" (basements −1..−9). Album order and book order meet through ids (`chapter`),
  *   never through positions in a list.
  * chapter: the book chapter the floor's challenge reveals (BOOK.pages[].id). element: COVER_ELEMENTS key.
- * youtubeStartSeconds: verified 2026-09-28 from the chapters in the public YouTube description.
+ * youtubeStartSeconds: from the chapters in each album video's YouTube description (Pequeño Primate verified
+ *   2026-09-28; El Lado Oscuro del Mono verified 2026-11-23 on oFGp6q5RD-k).
  * spotifyTrackUri: verified 2026-09-28 from the official Spotify album embed. null = album embed fallback.
- * durationSeconds: from Spotify (display only).
+ * durationSeconds: from Spotify (display only); El Lado Oscuro del Mono: the gap between its video chapters.
  */
 const tracks = [
   // El Lado Oscuro del Mono — the band's definitive order (floor ≠ chapter on 7–8, on purpose)
   { album: "elodm", floor: 1, id: "en-una", title: "En una", chapter: "cap-1", element: "realidad-simulada",
-    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#9fb6c9", durationSeconds: null, visual: { kind: "screens" } },
+    youtubeVideoId: ELODM_VIDEO, youtubeStartSeconds: 0, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#9fb6c9", durationSeconds: 229, visual: { kind: "screens" } },
   { album: "elodm", floor: 2, id: "que-te-esta-pasando", title: "¿Qué te está pasando?", chapter: "cap-2", element: "sistema",
-    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#bdb29b", durationSeconds: null, visual: { kind: "machine" } },
+    youtubeVideoId: ELODM_VIDEO, youtubeStartSeconds: 229, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#bdb29b", durationSeconds: 193, visual: { kind: "machine" } },
   { album: "elodm", floor: 3, id: "el-lado-oscuro-del-mono", title: "El lado oscuro del mono", chapter: "cap-3", element: "grito",
-    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#cf8f5c", durationSeconds: null, visual: { kind: "bar" } },
+    youtubeVideoId: ELODM_VIDEO, youtubeStartSeconds: 422, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#cf8f5c", durationSeconds: 260, visual: { kind: "bar" } },
   { album: "elodm", floor: 4, id: "que-carajo", title: "¿Qué carajo?", chapter: "cap-4", element: "manos",
-    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#d9d4c9", durationSeconds: null, visual: { kind: "dove" } },
+    youtubeVideoId: ELODM_VIDEO, youtubeStartSeconds: 682, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#d9d4c9", durationSeconds: 224, visual: { kind: "dove" } },
   { album: "elodm", floor: 5, id: "pato", title: "Pato", chapter: "cap-5", element: "pato",
-    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#dcc36d", durationSeconds: null, visual: { kind: "duck" } },
+    youtubeVideoId: ELODM_VIDEO, youtubeStartSeconds: 906, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#dcc36d", durationSeconds: 269, visual: { kind: "duck" } },
   { album: "elodm", floor: 6, id: "explotar", title: "Explotar", chapter: "cap-6", element: "dolor-heredado",
-    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#bd7f8f", durationSeconds: null, visual: { kind: "letter" } },
+    youtubeVideoId: ELODM_VIDEO, youtubeStartSeconds: 1175, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#bd7f8f", durationSeconds: 245, visual: { kind: "letter" } },
   { album: "elodm", floor: 7, id: "casi-perdido", title: "Casi Perdido", chapter: "cap-8", element: "fuego",
-    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#e3874c", durationSeconds: null, visual: { kind: "fire" } },
+    youtubeVideoId: ELODM_VIDEO, youtubeStartSeconds: 1420, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#e3874c", durationSeconds: 232, visual: { kind: "fire" } },
   { album: "elodm", floor: 8, id: "no-me-perdones", title: "No me perdones", chapter: "cap-7", element: "vacio",
-    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#8d97ad", durationSeconds: null, visual: { kind: "void" } },
+    youtubeVideoId: ELODM_VIDEO, youtubeStartSeconds: 1652, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#8d97ad", durationSeconds: 188, visual: { kind: "void" } },
   { album: "elodm", floor: 9, id: "portales", title: "Portales", chapter: "cap-9", element: "arbol",
-    youtubeVideoId: null, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#93b27c", durationSeconds: null, visual: { kind: "tree" } },
+    youtubeVideoId: ELODM_VIDEO, youtubeStartSeconds: 1840, spotifyTrackUri: null, spotifyAlbumId: null, visualAccent: "#93b27c", durationSeconds: 238, visual: { kind: "tree" } },
   // Pequeño Primate — the basements, in the record's own order (its ids and links stay as they were)
   { album: "pp", floor: -1, id: "tan-buena", title: "Tan Buena", youtubeVideoId: "doxiX5RHT7Q", youtubeStartSeconds: 0,
     spotifyTrackUri: "spotify:track:7xmiGFAeOF15ZN6QAsENFk", spotifyAlbumId: "0p8WjCX93rdndct41myh0x",
