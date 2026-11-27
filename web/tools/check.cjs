@@ -93,6 +93,7 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.jpg': 'image/jpeg', '.svg
  * records when it ran; the pixel is a 1×1 GIF. Every request is kept in `hits`. The browser still applies the page's
  * CSP before a request gets here, so a blocked script or pixel never shows up in `hits`.
  */
+const METRICOOL_HASH = (/const METRICOOL_HASH = '([0-9a-f]+)'/.exec(fs.readFileSync(path.join(__dirname, 'build.cjs'), 'utf8')) || [])[1];
 const TrackerMock = {
   hits: [],
   BE_JS: 'window.__trackerAt = performance.now(); window.beTracker = { t(a) { a = a || {}; a.u = location.href; a.bw = innerWidth; a.bh = innerHeight; ' +
@@ -4352,7 +4353,7 @@ const SCENARIOS = {
       const t = await ev(p, () => ({ load: window.__loadAt, script: window.__trackerAt, pixel: window.__trackerPixel || null }));
       check(t.script != null, 'be.js was loaded');
       check(t.script != null && t.script >= t.load, `be.js started after the load event (load ${Math.round(t.load)} ms, be.js ${Math.round(t.script)} ms)`);
-      check(!!t.pixel && new URL(t.pixel).searchParams.get('hash') === 'c3b8e02167a002f8ff3ce6176a4afbfb', 'the visit pixel carries the site hash');
+      check(!!t.pixel && new URL(t.pixel).searchParams.get('hash') === METRICOOL_HASH, `the visit pixel carries the site hash (${METRICOOL_HASH})`);
       check(TrackerMock.hits.some((u) => /\/resources\/be\.js$/.test(u)) && TrackerMock.hits.some((u) => /\/c3po\.jpg\?/.test(u)), 'both requests reached the network (not blocked by the CSP)');
     } else {
       await wait(6000);
