@@ -89,7 +89,26 @@ function distHeaders(urlPath) {
 const TYPES = { '.html': 'text/html; charset=utf-8', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.js': 'text/javascript', '.png': 'image/png', '.webp': 'image/webp' };
 
 /**
- * The band's sign-up sheet, on another port like Google's: the real Apps Script (tools/leads/Code.gs) on an
+ * Metricool, answered locally: be.js behaves like the real one (beTracker.t() reports with an image pixel) and also
+ * records when it ran; the pixel is a 1×1 GIF. Every request is kept in `hits`. The browser still applies the page's
+ * CSP before a request gets here, so a blocked script or pixel never shows up in `hits`.
+ */
+const TrackerMock = {
+  hits: [],
+  BE_JS: 'window.__trackerAt = performance.now(); window.beTracker = { t(a) { a = a || {}; a.u = location.href; a.bw = innerWidth; a.bh = innerHeight; ' +
+    'const q = Object.keys(a).map((k) => encodeURIComponent(k) + "=" + encodeURIComponent(a[k])).join("&"); ' +
+    'const src = "https://tracker.metricool.com/c3po.jpg?" + q; window.__trackerPixel = src; new Image().src = src; } };',
+  GIF: Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'),
+  fulfill(route) {
+    const u = route.request().url();
+    this.hits.push(u);
+    if (/\/resources\/be\.js$/.test(u)) return route.fulfill({ status: 200, contentType: 'text/javascript', body: this.BE_JS });
+    return route.fulfill({ status: 200, contentType: 'image/gif', body: this.GIF });
+  },
+};
+
+/**
+ * The band's sign-up sheet, on another port like Google's:the real Apps Script (tools/leads/Code.gs) on an
  * in-memory sheet. Like Apps Script it answers a POST with a redirect to the JSON, answers no CORS preflight, and
  * can be made busy (`busy` answers before a success) or unreachable (`down`). Pages opened with ?leads=mock use it.
  */
@@ -4319,6 +4338,29 @@ const SCENARIOS = {
     log('floor portal: ' + JSON.stringify((await state(p)).portal));
     await shot('csp-floor');
   },
+  // Metricool: only the public build (--release) loads it, after the load event, and its pixel carries the site's hash.
+  // Run on dist/ (`--dist`, so the strict CSP applies) built with and without --release; the stub answers both requests.
+  async tracker(p, shot, log) {
+    const fails = [], check = (ok, what) => { log(`${ok ? 'ok' : 'FAIL'} ${what}`); if (!ok) fails.push(what); };
+    const expected = flag('dist') || opt('url', null)
+      ? /tracker\.metricool\.com\/resources\/be\.js/.test(await p.content())
+      : false;
+    log(expected ? 'public build: Metricool expected' : 'preview / Artifact build: no Metricool expected');
+    await p.waitForFunction(() => window.__loadAt != null, null, { timeout: 30000 });
+    if (expected) {
+      await p.waitForFunction(() => window.__trackerPixel, null, { timeout: 15000 }).catch(() => {});
+      const t = await ev(p, () => ({ load: window.__loadAt, script: window.__trackerAt, pixel: window.__trackerPixel || null }));
+      check(t.script != null, 'be.js was loaded');
+      check(t.script != null && t.script >= t.load, `be.js started after the load event (load ${Math.round(t.load)} ms, be.js ${Math.round(t.script)} ms)`);
+      check(!!t.pixel && new URL(t.pixel).searchParams.get('hash') === 'c3b8e02167a002f8ff3ce6176a4afbfb', 'the visit pixel carries the site hash');
+      check(TrackerMock.hits.some((u) => /\/resources\/be\.js$/.test(u)) && TrackerMock.hits.some((u) => /\/c3po\.jpg\?/.test(u)), 'both requests reached the network (not blocked by the CSP)');
+    } else {
+      await wait(6000);
+      check(!(await ev(p, () => window.__trackerAt != null || [...document.scripts].some((s) => /metricool/.test(s.src)))), 'no Metricool script on the page');
+    }
+    await shot('tracker');
+    if (fails.length) throw new Error(fails.length + ' tracker check(s) failed: ' + fails.join(' | '));
+  },
   async fallback2d(p, shot) {
     await ev(p, () => window.__eldom.dev.force2D());
     await wait(2500);
@@ -4392,6 +4434,10 @@ async function run() {
       // The one-time line on how to move and look (Roam.moveTip) starts as seen, so it never lands in a scenario about something else; `dismiss` brings it back on purpose.
       await ctx.addInitScript(() => { try { localStorage.setItem('eldom.moved.v1', '1'); } catch { /* ignore */ } });
       if (!flag('real-leads')) await ctx.route(/^https:\/\/script\.google(usercontent)?\.com\//, (route) => LeadsMock.fulfill(route));
+      // Metricool never counts a test as a visit (not even with --url): its script and pixel are answered here.
+      TrackerMock.hits.length = 0;
+      await ctx.route(/^https:\/\/tracker\.metricool\.com\//, (route) => TrackerMock.fulfill(route));
+      await ctx.addInitScript(() => { addEventListener('load', () => { window.__loadAt = performance.now(); }, { once: true }); });
       if (extUrl || dist) await ctx.addInitScript(() => { window.__csp = []; document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(`${e.effectiveDirective} ${e.blockedURI}`)); });
       const p = await ctx.newPage();
       const errors = [];

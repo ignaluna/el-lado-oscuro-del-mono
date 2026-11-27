@@ -33,7 +33,34 @@ const fonts = (body.match(/^<link rel="stylesheet" href="https:\/\/fonts\.google
 body = body.replace(title, '').replace(fonts, '');
 // invitations point at the domain (or at whatever address the page is opened from)
 swap(/const SHARE_BASE_URL = "[^"]*";/, `const SHARE_BASE_URL = ${SITE ? JSON.stringify(SITE + '/') : 'null'};`, 'SHARE_BASE_URL');
-if (args.includes('--release')) swap(/const SHOW_DEV_TOOLS = true;/, 'const SHOW_DEV_TOOLS = false;', 'SHOW_DEV_TOOLS');
+const RELEASE = args.includes('--release');
+if (RELEASE) swap(/const SHOW_DEV_TOOLS = true;/, 'const SHOW_DEV_TOOLS = false;', 'SHOW_DEV_TOOLS');
+
+// Metricool visit tracking, only in the public site (--release, built from main): never in previews or the Artifact.
+// It waits for the page's load event and then for an idle moment, so it never competes with the 3D world for the
+// network or the main thread on a phone. be.js only defines beTracker; beTracker.t() reports the visit with an image
+// pixel (tracker.metricool.com/c3po.jpg), hence the tracker origin in script-src and img-src below.
+const TRACKER_ORIGIN = 'https://tracker.metricool.com';
+const METRICOOL_HASH = 'c3b8e02167a002f8ff3ce6176a4afbfb';
+if (RELEASE) {
+  const tracker = `
+// Metricool (added by tools/build.cjs --release): after load, when the browser is idle.
+(() => {
+  const start = () => {
+    const s = document.createElement('script');
+    s.src = '${TRACKER_ORIGIN}/resources/be.js';
+    s.async = true;
+    s.onload = () => { try { window.beTracker.t({ hash: '${METRICOOL_HASH}' }); } catch { /* the tracker never breaks the page */ } };
+    document.head.appendChild(s);
+  };
+  const idle = () => (window.requestIdleCallback ? requestIdleCallback(start, { timeout: 5000 }) : setTimeout(start, 2000));
+  if (document.readyState === 'complete') idle(); else addEventListener('load', idle, { once: true });
+})();
+`;
+  const end = body.lastIndexOf('</script>');
+  if (end < 0) { console.error('build: closing </script> not found'); process.exit(1); }
+  body = body.slice(0, end) + tracker + body.slice(end);
+}
 
 // cover image for link previews (WhatsApp, Instagram, X…), taken from the page's own asset
 const cover = /cover:\s*['"]data:image\/jpeg;base64,([A-Za-z0-9+/=]+)['"]/.exec(fs.readFileSync(path.join(dir, '10-assets.js'), 'utf8'));
@@ -102,15 +129,17 @@ if (lead !== 'null') {
   connect.push(u.origin);
   if (u.hostname === 'script.google.com') connect.push('https://script.googleusercontent.com');
 }
+if (RELEASE) connect.push(TRACKER_ORIGIN);
+const tracker = RELEASE ? ' ' + TRACKER_ORIGIN : ''; // Metricool, public site only (see above)
 const CSP = [
   "default-src 'self'",
-  `script-src 'self' ${scripts.join(' ')} https://cdn.jsdelivr.net https://unpkg.com`, // three.js (jsdelivr, unpkg as fallback)
+  `script-src 'self' ${scripts.join(' ')} https://cdn.jsdelivr.net https://unpkg.com${tracker}`, // three.js (jsdelivr, unpkg as fallback)
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
-  "img-src 'self' data: blob:",
+  `img-src 'self' data: blob:${tracker}`,
   "media-src 'self' data: blob:",
   'frame-src https://www.youtube.com https://www.youtube-nocookie.com https://open.spotify.com', // the official players
-  `connect-src ${connect.join(' ')}`, // the page itself and LEAD_ENDPOINT (where sign-ups go)
+  `connect-src ${connect.join(' ')}`, // the page itself, LEAD_ENDPOINT (where sign-ups go) and, on the public site, Metricool
   "worker-src 'self' blob:",
   "base-uri 'self'",
   "form-action 'self'",
@@ -130,4 +159,4 @@ fs.writeFileSync(path.join(DIST, '_headers'), [
   '  Cache-Control: no-cache',
   '',
 ].join('\n'));
-console.log(`dist → index.html ${(Buffer.byteLength(html) / 1024).toFixed(0)} KB, portada.jpg, favicon.svg, _headers${galSrcs.length ? `, galeria/ (${galSrcs.length})` : ''}${artSrcs.length ? `, portadas/ (${artSrcs.length})` : ''}${SITE ? ' · site ' + SITE : ' · invitations use the page address'}${args.includes('--release') ? ' · DEV chip hidden' : ''}`);
+console.log(`dist → index.html ${(Buffer.byteLength(html) / 1024).toFixed(0)} KB, portada.jpg, favicon.svg, _headers${galSrcs.length ? `, galeria/ (${galSrcs.length})` : ''}${artSrcs.length ? `, portadas/ (${artSrcs.length})` : ''}${SITE ? ' · site ' + SITE : ' · invitations use the page address'}${RELEASE ? ' · DEV chip hidden · Metricool on' : ''}`);
