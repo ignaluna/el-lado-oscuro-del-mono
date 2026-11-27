@@ -41,7 +41,7 @@ if (RELEASE) swap(/const SHOW_DEV_TOOLS = true;/, 'const SHOW_DEV_TOOLS = false;
 // network or the main thread on a phone. be.js only defines beTracker; beTracker.t() reports the visit with an image
 // pixel (tracker.metricool.com/c3po.jpg), hence the tracker origin in script-src and img-src below.
 const TRACKER_ORIGIN = 'https://tracker.metricool.com';
-const METRICOOL_HASH = 'c3b8e02167a002f8ff3ce6176a4afbfb';
+const METRICOOL_HASH = '4eeba02d81326de3034165f8d8fb5445'; // the site's id in Metricool (tools/check.cjs reads it from here)
 if (RELEASE) {
   const tracker = `
 // Metricool (added by tools/build.cjs --release): after load, when the browser is idle.
